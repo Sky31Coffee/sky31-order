@@ -1,7 +1,6 @@
 
 export async function onRequestPost(context) {
   const { request, env } = context;
-
   const update = await request.json();
 
   if (update.callback_query) {
@@ -11,7 +10,6 @@ export async function onRequestPost(context) {
     if (data.startsWith("complete:")) {
       const orderNo = data.split(":")[1];
       const raw = await env.ORDERS.get("order:" + orderNo);
-
       if (!raw) {
         await answerCallback(env, cq.id, "找不到訂單");
         return json({ ok: true });
@@ -20,17 +18,46 @@ export async function onRequestPost(context) {
       const order = JSON.parse(raw);
       order.status = "completed";
       order.completedAt = new Date().toISOString();
-      await env.ORDERS.put("order:" + orderNo, JSON.stringify(order));
+      await env.ORDERS.put("order:" + orderNo, JSON.stringify(order), { expirationTtl: 60 * 60 * 24 * 14 });
 
       const text =
         "✅ SKY31 ORDER 已完成\n\n" +
         "訂單號：#" + orderNo + "\n" +
         "完成時間：" + formatDateTime(new Date()) + "\n\n" +
         "客人：" + order.customerName + "\n" +
+        "電話：" + order.phone + "\n\n" +
+        "客人查詢頁：5分鐘後會顯示為已領取。";
+
+      await editTelegramMessage(env, cq.message.chat.id, cq.message.message_id, text, {
+        inline_keyboard: [[
+          { text: "☕ 已領取 #" + orderNo, callback_data: "pickup:" + orderNo }
+        ]]
+      });
+      await answerCallback(env, cq.id, "已標記完成 #" + orderNo);
+    }
+
+    if (data.startsWith("pickup:")) {
+      const orderNo = data.split(":")[1];
+      const raw = await env.ORDERS.get("order:" + orderNo);
+      if (!raw) {
+        await answerCallback(env, cq.id, "找不到訂單");
+        return json({ ok: true });
+      }
+
+      const order = JSON.parse(raw);
+      order.status = "picked_up";
+      order.pickedUpAt = new Date().toISOString();
+      await env.ORDERS.put("order:" + orderNo, JSON.stringify(order), { expirationTtl: 60 * 60 * 24 * 14 });
+
+      const text =
+        "☕ SKY31 ORDER 已領取\n\n" +
+        "訂單號：#" + orderNo + "\n" +
+        "領取時間：" + formatDateTime(new Date()) + "\n\n" +
+        "客人：" + order.customerName + "\n" +
         "電話：" + order.phone;
 
       await editTelegramMessage(env, cq.message.chat.id, cq.message.message_id, text);
-      await answerCallback(env, cq.id, "已標記完成 #" + orderNo);
+      await answerCallback(env, cq.id, "已標記領取 #" + orderNo);
     }
   }
 
@@ -46,12 +73,14 @@ async function answerCallback(env, callbackQueryId, text) {
   });
 }
 
-async function editTelegramMessage(env, chatId, messageId, text) {
+async function editTelegramMessage(env, chatId, messageId, text, replyMarkup) {
   const url = "https://api.telegram.org/bot" + env.TELEGRAM_BOT_TOKEN + "/editMessageText";
+  const body = { chat_id: chatId, message_id: messageId, text };
+  if (replyMarkup) body.reply_markup = replyMarkup;
   await fetch(url, {
     method: "POST",
     headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({ chat_id: chatId, message_id: messageId, text })
+    body: JSON.stringify(body)
   });
 }
 

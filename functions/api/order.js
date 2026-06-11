@@ -12,8 +12,9 @@ export async function onRequestPost(context) {
     const orderNo = await nextOrderNo(env);
     const createdAt = new Date();
     const pickupTime = resolvePickupTime(body.pickup || "", createdAt);
+    const cleanCart = normalizeCart(body.cart);
 
-    let orderText = body.orderText || "";
+    let orderText = body.orderText || makeOrderText(orderNo, body.customerName, body.phone, pickupTime, cleanCart);
     orderText = orderText.replaceAll("{ORDER_NO}", "#" + orderNo);
 
     const order = {
@@ -23,9 +24,11 @@ export async function onRequestPost(context) {
       phone: body.phone,
       pickup: body.pickup || "",
       pickupTime,
-      cart: body.cart,
+      cart: cleanCart,
+      orderText,
       createdAt: createdAt.toISOString(),
       completedAt: null,
+      pickedUpAt: null,
       telegramMessageId: null
     };
 
@@ -34,8 +37,9 @@ export async function onRequestPost(context) {
       order.telegramMessageId = telegram.result.message_id;
     }
 
-    await env.ORDERS.put("order:" + orderNo, JSON.stringify(order));
-    await env.ORDERS.put("phone:" + normalizePhone(body.phone) + ":" + orderNo, orderNo);
+    const ttl = 60 * 60 * 24 * 14;
+    await env.ORDERS.put("order:" + orderNo, JSON.stringify(order), { expirationTtl: ttl });
+    await env.ORDERS.put("phone:" + normalizePhone(body.phone) + ":" + orderNo, orderNo, { expirationTtl: ttl });
 
     return json({ ok: true, orderNo, status: order.status, pickupTime });
   } catch (e) {
@@ -46,12 +50,46 @@ export async function onRequestPost(context) {
 async function nextOrderNo(env) {
   const d = new Date();
   const key = "counter:" + d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
-
   const current = parseInt(await env.ORDERS.get(key) || "0", 10);
   const next = current + 1;
-  await env.ORDERS.put(key, String(next));
-
+  await env.ORDERS.put(key, String(next), { expirationTtl: 60 * 60 * 24 * 30 });
   return "A" + String(next).padStart(3, "0");
+}
+
+function normalizeCart(cart) {
+  return cart.map(item => ({
+    name: item.name || "",
+    cn: item.cn || "",
+    qty: Number(item.qty || 1),
+    bean: item.bean || "",
+    temp: item.temp || "",
+    ice: item.ice || "",
+    milk: item.milk || "",
+    note: item.note || "",
+    pickup: item.pickup || ""
+  }));
+}
+
+function makeOrderText(orderNo, name, phone, pickupTime, cart) {
+  const lines = [];
+  lines.push("☕ SKY31 ORDER");
+  lines.push("");
+  lines.push("訂單號：#" + orderNo);
+  lines.push("取餐時間：" + pickupTime);
+  lines.push("");
+  cart.forEach(item => {
+    const details = [];
+    if (item.bean) details.push(item.bean.split("｜")[0]);
+    if (item.temp) details.push(item.temp);
+    if (item.ice && item.ice !== "不適用") details.push(item.ice);
+    if (item.milk) details.push(item.milk);
+    lines.push("☕ " + (item.name || item.cn || "-") + " ×" + (item.qty || 1));
+    if (details.length) lines.push(details.join("｜"));
+  });
+  lines.push("");
+  lines.push("客人：" + name);
+  lines.push("電話：" + phone);
+  return lines.join("\n");
 }
 
 function resolvePickupTime(pickup, now) {
@@ -81,7 +119,6 @@ function resolvePickupTime(pickup, now) {
 async function sendTelegram(env, text, orderNo) {
   const token = env.TELEGRAM_BOT_TOKEN;
   const chatId = env.TELEGRAM_CHAT_ID;
-
   if (!token || !chatId) throw new Error("Telegram env vars missing");
 
   const url = "https://api.telegram.org/bot" + token + "/sendMessage";
@@ -104,9 +141,7 @@ async function sendTelegram(env, text, orderNo) {
   return await res.json();
 }
 
-function normalizePhone(phone) {
-  return String(phone || "").replace(/\D/g, "");
-}
+function normalizePhone(phone) { return String(phone || "").replace(/\D/g, ""); }
 function pad2(n) { return String(n).padStart(2, "0"); }
 function formatDateOnly(d) { return d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate()); }
 function json(data, status=200) {
