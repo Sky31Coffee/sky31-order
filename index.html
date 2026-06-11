@@ -1427,6 +1427,17 @@ button[type="submit"] span{
   font-weight: 900;
 }
 
+
+/* V52: order lookup details */
+.status-head-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px;}
+.status-head-row strong{font-size:18px;}
+.status-head-row span{font-weight:900;white-space:nowrap;}
+.status-order-list{margin-top:12px;padding-top:10px;border-top:1px solid rgba(0,0,0,.08);}
+.status-order-title{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:rgba(0,0,0,.45);font-weight:800;margin-bottom:8px;}
+.status-order-item{padding:9px 10px;border-radius:14px;background:rgba(255,255,255,.62);border:1px solid rgba(255,255,255,.7);margin-bottom:8px;}
+.status-order-item b{display:block;font-size:14px;color:#111827;margin-bottom:4px;}
+.status-order-item small{display:block;color:rgba(17,24,39,.62);line-height:1.45;}
+
 </style>
 
 <style>
@@ -1577,6 +1588,17 @@ line-height:1.6;
   margin: 5px 0;
   font-weight: 900;
 }
+
+
+/* V52: order lookup details */
+.status-head-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px;}
+.status-head-row strong{font-size:18px;}
+.status-head-row span{font-weight:900;white-space:nowrap;}
+.status-order-list{margin-top:12px;padding-top:10px;border-top:1px solid rgba(0,0,0,.08);}
+.status-order-title{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:rgba(0,0,0,.45);font-weight:800;margin-bottom:8px;}
+.status-order-item{padding:9px 10px;border-radius:14px;background:rgba(255,255,255,.62);border:1px solid rgba(255,255,255,.7);margin-bottom:8px;}
+.status-order-item b{display:block;font-size:14px;color:#111827;margin-bottom:4px;}
+.status-order-item small{display:block;color:rgba(17,24,39,.62);line-height:1.45;}
 
 </style>
 
@@ -1732,14 +1754,23 @@ async function checkOrderStatus() {
     result.innerHTML = orders.map(function(o) {
       const statusText = o.status === "completed" ? "🟢 已完成" : "🟡 製作中";
       const completed = o.completedAt ? '<small>完成時間：' + o.completedAt.replace("T"," ").slice(0,16) + '</small><br>' : "";
-      return (
-        '<div class="status-card">' +
-        '<strong>#' + o.orderNo + '</strong><br>' +
-        '<span>' + statusText + '</span><br>' +
+      const items = Array.isArray(o.cart) ? o.cart.map(function(item) {
+        const details = [];
+        if (item.bean) details.push(item.bean.split("｜")[0]);
+        if (item.temp) details.push(item.temp);
+        if (item.ice && item.ice !== "不適用") details.push(item.ice);
+        if (item.milk && item.milk !== "No Milk 不加奶") details.push(item.milk);
+        if (item.note && item.note !== "無備註") details.push("備註：" + item.note);
+        return '<div class="status-order-item"><b>' + (item.name || "-") + ' × ' + (item.qty || 1) + '</b><small>' + details.join("｜") + '</small></div>';
+      }).join("") : "";
+
+      return '<div class="status-card">' +
+        '<div class="status-head-row"><strong>#' + o.orderNo + '</strong><span>' + statusText + '</span></div>' +
         '<small>取餐時間：' + (o.pickupTime || "-") + '</small><br>' +
         completed +
-        '</div>'
-      );
+        '<div class="status-order-list"><div class="status-order-title">訂單內容</div>' +
+        (items || '<small>沒有訂單內容資料</small>') +
+        '</div></div>';
     }).join("");
   } catch (e) {
     result.innerHTML = '<p class="status-error">暫時無法查詢，請稍後再試。</p>';
