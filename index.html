@@ -1494,6 +1494,34 @@ button[type="submit"] span{
 .status-order-item{padding:11px 12px;border-radius:16px;background:rgba(255,255,255,.72);border:1px solid rgba(255,255,255,.78);margin-bottom:8px;}
 .status-order-text{white-space:pre-wrap;word-break:break-word;margin:0;padding:10px;border-radius:14px;background:rgba(255,255,255,.62);border:1px solid rgba(255,255,255,.7);font-family:inherit;font-size:13px;line-height:1.55;}
 
+
+/* V43 no-alert success notice */
+.sky31-success-toast{
+  position:fixed;
+  left:50%;
+  top:calc(22px + env(safe-area-inset-top));
+  transform:translateX(-50%);
+  z-index:999999;
+  width:min(430px,calc(100vw - 28px));
+  padding:16px 18px;
+  border-radius:22px;
+  background:rgba(255,255,255,.94);
+  color:#111827;
+  box-shadow:0 22px 60px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.85);
+  border:1px solid rgba(255,255,255,.85);
+  font-weight:900;
+  text-align:center;
+  backdrop-filter:blur(18px);
+  -webkit-backdrop-filter:blur(18px);
+}
+.sky31-success-toast small{
+  display:block;
+  margin-top:5px;
+  color:rgba(17,24,39,.58);
+  font-weight:700;
+  font-size:13px;
+}
+
 </style>
 
 <style>
@@ -1712,6 +1740,34 @@ line-height:1.6;
 .status-order-item{padding:11px 12px;border-radius:16px;background:rgba(255,255,255,.72);border:1px solid rgba(255,255,255,.78);margin-bottom:8px;}
 .status-order-text{white-space:pre-wrap;word-break:break-word;margin:0;padding:10px;border-radius:14px;background:rgba(255,255,255,.62);border:1px solid rgba(255,255,255,.7);font-family:inherit;font-size:13px;line-height:1.55;}
 
+
+/* V43 no-alert success notice */
+.sky31-success-toast{
+  position:fixed;
+  left:50%;
+  top:calc(22px + env(safe-area-inset-top));
+  transform:translateX(-50%);
+  z-index:999999;
+  width:min(430px,calc(100vw - 28px));
+  padding:16px 18px;
+  border-radius:22px;
+  background:rgba(255,255,255,.94);
+  color:#111827;
+  box-shadow:0 22px 60px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.85);
+  border:1px solid rgba(255,255,255,.85);
+  font-weight:900;
+  text-align:center;
+  backdrop-filter:blur(18px);
+  -webkit-backdrop-filter:blur(18px);
+}
+.sky31-success-toast small{
+  display:block;
+  margin-top:5px;
+  color:rgba(17,24,39,.58);
+  font-weight:700;
+  font-size:13px;
+}
+
 </style>
 
 </head>
@@ -1819,6 +1875,37 @@ line-height:1.6;
   </div>
 </div>
 <script>
+
+function sky31ShowSuccessToast(orderNo){
+  try{
+    const old = document.querySelector(".sky31-success-toast");
+    if(old) old.remove();
+
+    const div = document.createElement("div");
+    div.className = "sky31-success-toast";
+    div.innerHTML = "✅ 訂單已提交　#" + String(orderNo || "").replace(/^#/,"") +
+      "<small>可用手機號碼查詢訂單狀態</small>";
+    document.body.appendChild(div);
+
+    setTimeout(function(){
+      try{ div.remove(); }catch(e){}
+    }, 4500);
+  }catch(e){}
+}
+
+function sky31ShowSuccessFromUrl(){
+  try{
+    const params = new URLSearchParams(location.search);
+    const orderNo = params.get("success");
+    if(orderNo){
+      sky31ShowSuccessToast(orderNo);
+      history.replaceState(null, "", location.pathname);
+    }
+  }catch(e){}
+}
+
+document.addEventListener("DOMContentLoaded", sky31ShowSuccessFromUrl);
+
 
 function openOrderStatusModal() {
   const modal = document.getElementById("orderStatusModal");
@@ -2508,11 +2595,16 @@ async function submitOrder() {
       return;
     }
 
-    alert("訂單已提交！訂單號：" + data.orderNo);
+    // V43: do not use alert() on iPhone Safari.
+    cart = [];
+    try { updateAll(); } catch(e) {}
+    try { closeCartModal(); } catch(e) {}
+    try { sky31ShowSuccessToast(data.orderNo); } catch(e) {}
 
-    // V42 test: iPhone Safari reload directly after success.
-    // This avoids possible freeze from updateAll() or closeCartModal().
-    location.reload();
+    setTimeout(function(){
+      window.location.href = location.pathname + "?success=" + encodeURIComponent(data.orderNo) + "&t=" + Date.now();
+    }, 600);
+
     return;
   } catch (e) {
     alert("提交失敗，請檢查網絡後再試");
