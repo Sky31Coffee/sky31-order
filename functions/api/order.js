@@ -108,7 +108,7 @@ function buildTelegramText(order) {
 
   if (Array.isArray(order.cart) && order.cart.length) {
     order.cart.forEach(item => {
-      if (item.bean) lines.push("🍫 " + item.bean);
+      if (item.bean) lines.push(beanIcon(item.bean) + " " + cleanBeanName(item.bean));
       const title = item.name || item.cn || "-";
       const parts = [];
       if (item.temp) parts.push(item.temp.includes("Hot") || item.temp.includes("熱") ? "🔥 Hot" : item.temp);
@@ -179,6 +179,18 @@ function resolvePickupTime(pickup, now) {
 
 function normalizePhone(phone) {
   return String(phone || "").replace(/\D/g, "");
+}
+
+
+function beanIcon(bean) {
+  bean = String(bean || "");
+  if (bean.includes("淺烘") || bean.includes("浅烘")) return "🌸";
+  if (bean.includes("中深烘") || bean.includes("拼配")) return "🍫";
+  return "☕";
+}
+
+function cleanBeanName(bean) {
+  return String(bean || "").split("|")[0].split("｜")[0].trim();
 }
 
 function pad2(n) {
