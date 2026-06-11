@@ -2509,9 +2509,11 @@ async function submitOrder() {
     }
 
     alert("訂單已提交！訂單號：" + data.orderNo);
-    cart = [];
-    updateAll();
-    closeCartModal();
+
+    // V42 test: iPhone Safari reload directly after success.
+    // This avoids possible freeze from updateAll() or closeCartModal().
+    location.reload();
+    return;
   } catch (e) {
     alert("提交失敗，請檢查網絡後再試");
   }
