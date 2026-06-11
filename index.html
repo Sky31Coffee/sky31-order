@@ -1487,6 +1487,13 @@ button[type="submit"] span{
   .status-scroll-area{max-height:58vh;}
 }
 
+
+/* V58 cart display polish */
+.status-drink-title{font-size:15px;font-weight:900;color:#111827;margin-bottom:7px;}
+.status-drink-details{font-size:13px;color:rgba(17,24,39,.68);line-height:1.55;}
+.status-order-item{padding:11px 12px;border-radius:16px;background:rgba(255,255,255,.72);border:1px solid rgba(255,255,255,.78);margin-bottom:8px;}
+.status-order-text{white-space:pre-wrap;word-break:break-word;margin:0;padding:10px;border-radius:14px;background:rgba(255,255,255,.62);border:1px solid rgba(255,255,255,.7);font-family:inherit;font-size:13px;line-height:1.55;}
+
 </style>
 
 <style>
@@ -1698,6 +1705,13 @@ line-height:1.6;
   .status-scroll-area{max-height:58vh;}
 }
 
+
+/* V58 cart display polish */
+.status-drink-title{font-size:15px;font-weight:900;color:#111827;margin-bottom:7px;}
+.status-drink-details{font-size:13px;color:rgba(17,24,39,.68);line-height:1.55;}
+.status-order-item{padding:11px 12px;border-radius:16px;background:rgba(255,255,255,.72);border:1px solid rgba(255,255,255,.78);margin-bottom:8px;}
+.status-order-text{white-space:pre-wrap;word-break:break-word;margin:0;padding:10px;border-radius:14px;background:rgba(255,255,255,.62);border:1px solid rgba(255,255,255,.7);font-family:inherit;font-size:13px;line-height:1.55;}
+
 </style>
 
 </head>
@@ -1830,6 +1844,54 @@ function toggleStatusOrder(id) {
   if (btn) btn.textContent = open ? "收起 ▲" : "查看內容 ▼";
 }
 
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, function(c) {
+    return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];
+  });
+}
+
+function toggleStatusOrder(id) {
+  const body = document.getElementById(id);
+  const btn = document.querySelector('[data-toggle-target="' + id + '"]');
+  if (!body) return;
+  const open = body.classList.toggle("open");
+  if (btn) btn.textContent = open ? "收起 ▲" : "查看內容 ▼";
+}
+
+function renderCartItems(cart, orderText) {
+  if (Array.isArray(cart) && cart.length > 0) {
+    return cart.map(function(item) {
+      const title = escapeHtml((item.name || item.cn || item.title || "-"));
+      const cn = item.cn && item.cn !== item.name ? " " + escapeHtml(item.cn) : "";
+      const qty = escapeHtml(item.qty || item.quantity || 1);
+
+      const rows = [];
+      if (item.bean) rows.push("豆子：" + escapeHtml(String(item.bean).split("｜")[0]));
+      if (item.flavor) rows.push("風味：" + escapeHtml(item.flavor));
+      if (item.temp) rows.push("冷熱：" + escapeHtml(item.temp));
+      if (item.ice && item.ice !== "不適用") rows.push("冰量：" + escapeHtml(item.ice));
+      if (item.milk && item.milk !== "No Milk 不加奶") rows.push("奶類：" + escapeHtml(item.milk));
+      if (item.note && item.note !== "無備註") rows.push("備註：" + escapeHtml(item.note));
+
+      return (
+        '<div class="status-order-item">' +
+          '<div class="status-drink-title">☕ ' + title + cn + ' × ' + qty + '</div>' +
+          '<div class="status-drink-details">' +
+            (rows.length ? rows.map(function(r){ return '<div>' + r + '</div>'; }).join("") : '<div>沒有額外選項</div>') +
+          '</div>' +
+        '</div>'
+      );
+    }).join("");
+  }
+
+  if (orderText) {
+    return '<pre class="status-order-text">' + escapeHtml(orderText) + '</pre>';
+  }
+
+  return '<small>此訂單沒有保存飲品明細資料</small>';
+}
+
 async function checkOrderStatus() {
   const orderNoEl = document.getElementById("statusOrderNo");
   const phoneEl = document.getElementById("statusPhone");
@@ -1847,12 +1909,13 @@ async function checkOrderStatus() {
   try {
     let url = "/api/status?phone=" + encodeURIComponent(phone);
     if (orderNo) url += "&orderNo=" + encodeURIComponent(orderNo);
+    url += "&t=" + Date.now();
 
-    const res = await fetch(url);
+    const res = await fetch(url, { cache: "no-store" });
     const data = await res.json();
 
     if (!data.ok) {
-      result.innerHTML = '<p class="status-error">' + (data.error || "查詢不到目前可顯示的訂單") + '</p>';
+      result.innerHTML = '<p class="status-error">' + escapeHtml(data.error || "查詢不到目前可顯示的訂單") + '</p>';
       return;
     }
 
@@ -1866,40 +1929,25 @@ async function checkOrderStatus() {
       const bodyId = "statusOrderBody_" + idx + "_" + String(o.orderNo).replace(/[^a-zA-Z0-9]/g, "");
       const openClass = idx === 0 ? " open" : "";
       const btnText = idx === 0 ? "收起 ▲" : "查看內容 ▼";
-
-      const completed = o.completedAt ? '<small>完成時間：' + o.completedAt.replace("T"," ").slice(0,16) + '</small><br>' : "";
-      let items = "";
-
-      if (Array.isArray(o.cart) && o.cart.length) {
-        items = o.cart.map(function(item) {
-          const details = [];
-          if (item.bean) details.push(String(item.bean).split("｜")[0]);
-          if (item.temp) details.push(item.temp);
-          if (item.ice && item.ice !== "不適用") details.push(item.ice);
-          if (item.milk && item.milk !== "No Milk 不加奶") details.push(item.milk);
-          if (item.note && item.note !== "無備註") details.push("備註：" + item.note);
-          return '<div class="status-order-item"><b>' + (item.name || item.cn || "-") + ' × ' + (item.qty || 1) + '</b><small>' + details.join("｜") + '</small></div>';
-        }).join("");
-      } else if (o.orderText) {
-        items = '<pre class="status-order-text">' + String(o.orderText).replace(/[&<>"']/g, function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];}) + '</pre>';
-      }
+      const completed = o.completedAt ? '<small>完成時間：' + escapeHtml(String(o.completedAt).replace("T"," ").slice(0,16)) + '</small><br>' : "";
 
       return '<div class="status-card">' +
-        '<div class="status-head-row"><strong>#' + o.orderNo + '</strong><span>' + statusText + '</span></div>' +
-        '<small>取餐時間：' + (o.pickupTime || "-") + '</small><br>' +
+        '<div class="status-head-row"><strong>#' + escapeHtml(o.orderNo) + '</strong><span>' + statusText + '</span></div>' +
+        '<small>取餐時間：' + escapeHtml(o.pickupTime || "-") + '</small><br>' +
         completed +
         '<button class="status-toggle-btn" data-toggle-target="' + bodyId + '" onclick="toggleStatusOrder(\'' + bodyId + '\')">' + btnText + '</button>' +
         '<div id="' + bodyId + '" class="status-order-collapse' + openClass + '">' +
           '<div class="status-order-list"><div class="status-order-title">訂單內容</div>' +
-          (items || '<small>此訂單沒有保存飲品明細資料</small>') +
+          renderCartItems(o.cart, o.orderText) +
           '</div>' +
         '</div>' +
-        '</div>';
+      '</div>';
     }).join("") + '</div>';
   } catch (e) {
     result.innerHTML = '<p class="status-error">暫時無法查詢，請稍後再試。</p>';
   }
 }
+
 
 
 function enterOrderPage() {
