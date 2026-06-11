@@ -1669,6 +1669,190 @@ button[type="submit"] span{
   .status-product-name{font-size:18px;}
 }
 
+
+/* V46 stronger status modal layout + Blue Bottle inspired progress */
+#statusModal,
+.status-modal,
+#orderStatusModal{
+  overflow:hidden !important;
+}
+#statusModal .sheet,
+#statusModal .modal-content,
+.status-modal .sheet,
+.status-modal .modal-content,
+#orderStatusModal .sheet,
+#orderStatusModal .modal-content{
+  max-height:92vh !important;
+  overflow-y:auto !important;
+  -webkit-overflow-scrolling:touch !important;
+  padding-top:76px !important;
+}
+#statusModal .close,
+#statusModal .x,
+#statusModal button[aria-label="close"],
+.status-modal .close,
+.status-modal .x,
+.status-modal button[aria-label="close"],
+#orderStatusModal .close,
+#orderStatusModal .x,
+#orderStatusModal button[aria-label="close"]{
+  position:sticky !important;
+  top:12px !important;
+  z-index:999999 !important;
+  float:right;
+}
+#statusResult,
+#status-result,
+.status-result{
+  max-height:62vh !important;
+  overflow-y:auto !important;
+  -webkit-overflow-scrolling:touch !important;
+  padding-right:4px;
+  padding-bottom:24px;
+}
+.bb-status-card{
+  background:#fbfaf7;
+  color:#2f2f2f;
+  border-radius:0;
+  padding:28px 18px 30px;
+  margin:12px 0 18px;
+  box-shadow:none;
+  border:none;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Microsoft JhengHei",sans-serif;
+}
+.bb-brand{
+  font-size:34px;
+  margin-bottom:38px;
+  color:#09a7df;
+  line-height:1;
+}
+.bb-title{
+  font-size:25px;
+  font-weight:800;
+  color:#333;
+  margin-bottom:4px;
+}
+.bb-no{
+  font-size:44px;
+  font-weight:500;
+  letter-spacing:.14em;
+  color:#333;
+  margin-bottom:18px;
+}
+.bb-desc{
+  font-size:16px;
+  color:#9a9a9a;
+  line-height:1.7;
+  margin-bottom:38px;
+}
+.bb-progress{
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr;
+  align-items:end;
+  padding:0 0 18px;
+  margin:0 0 30px;
+  border-bottom:2px solid #333;
+}
+.bb-step{
+  text-align:center;
+  color:#cfcfcf;
+  font-size:16px;
+  font-weight:500;
+}
+.bb-step .ico{
+  display:block;
+  font-size:31px;
+  line-height:1;
+  margin-bottom:18px;
+  filter:grayscale(1);
+  opacity:.35;
+}
+.bb-step.active{
+  color:#2f2f2f;
+  font-weight:700;
+}
+.bb-step.active .ico{
+  opacity:1;
+  filter:none;
+}
+.bb-times{
+  border-top:1px solid #eee8df;
+  border-bottom:1px solid #eee8df;
+  padding:18px 0;
+  margin-bottom:26px;
+}
+.bb-time-row{
+  display:flex;
+  justify-content:space-between;
+  gap:16px;
+  line-height:1.9;
+  color:#8f8f8f;
+  font-size:15px;
+}
+.bb-time-row b{
+  color:#333;
+  text-align:right;
+  font-weight:650;
+}
+.bb-section-title{
+  font-size:20px;
+  color:#222;
+  font-weight:800;
+  margin:0 0 16px;
+}
+.bb-item{
+  display:grid;
+  grid-template-columns:68px 1fr 44px;
+  gap:16px;
+  align-items:center;
+  padding:18px 0;
+  border-top:1px solid #eee8df;
+}
+.bb-img{
+  width:56px;
+  height:80px;
+  border-radius:8px;
+  background:#f0ece4 center/cover no-repeat;
+}
+.bb-name{
+  font-size:19px;
+  color:#333;
+  font-weight:650;
+  margin-bottom:8px;
+}
+.bb-meta{
+  font-size:15px;
+  line-height:1.55;
+  color:#999;
+}
+.bb-qty{
+  font-size:18px;
+  color:#333;
+  font-weight:800;
+  align-self:end;
+  padding-bottom:6px;
+}
+.bb-badge{
+  display:inline-block;
+  padding:6px 10px;
+  border-radius:999px;
+  background:#f1f1f1;
+  font-size:13px;
+  font-weight:800;
+  color:#555;
+  margin-top:10px;
+}
+.bb-badge.pending{background:#fff7d6;color:#9a6700;}
+.bb-badge.completed{background:#eaf8ef;color:#15803d;}
+.bb-badge.picked_up{background:#eaf1ff;color:#1d4ed8;}
+@media(max-width:520px){
+  .bb-status-card{padding:22px 8px 26px;}
+  .bb-no{font-size:40px;}
+  .bb-item{grid-template-columns:58px 1fr 38px;gap:13px;}
+  .bb-img{width:50px;height:70px;}
+  .bb-name{font-size:18px;}
+}
+
 </style>
 
 <style>
@@ -3032,6 +3216,119 @@ document.addEventListener("DOMContentLoaded", sky31OpenMenuAfterSuccess);
     };
   }
 })();
+
+
+/* V46 force status query renderer */
+function bbDateTime(s){
+  if(!s) return "-";
+  try{
+    const d = new Date(s);
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,"0");
+    const day = String(d.getDate()).padStart(2,"0");
+    const h = String(d.getHours()).padStart(2,"0");
+    const min = String(d.getMinutes()).padStart(2,"0");
+    return y + "-" + m + "-" + day + " " + h + ":" + min;
+  }catch(e){ return s; }
+}
+function bbStatusText(status){
+  if(status === "picked_up") return "已領取";
+  if(status === "completed") return "已完成";
+  return "製作中";
+}
+function bbOrderCard(o){
+  const status = o.displayStatus || o.status || "pending";
+  const done = status === "completed" || status === "picked_up";
+  const picked = status === "picked_up";
+  const no = String(o.orderNo || "").replace(/^#/,"");
+  const desc = picked ? "訂單已領取，感謝你的信賴，期待你的再次選擇" :
+               done ? "訂單已完成，請前往取餐" :
+               "訂單已收到，Sky31 正在為你準備";
+  let itemHtml = "";
+  if(Array.isArray(o.cart) && o.cart.length){
+    itemHtml = o.cart.map(function(item){
+      const name = item.name || item.cn || "-";
+      const meta = [
+        item.bean ? String(item.bean).split("|")[0].split("｜")[0].trim() : "",
+        item.temp || "",
+        item.ice && item.ice !== "不適用" ? item.ice : "",
+        item.milk || "",
+        item.pickup || ""
+      ].filter(Boolean).join("、");
+      const img = item.image ? "background-image:url('" + item.image + "')" : "";
+      return '<div class="bb-item">' +
+        '<div class="bb-img" style="' + img + '"></div>' +
+        '<div><div class="bb-name">' + name + '</div><div class="bb-meta">' + meta + '</div></div>' +
+        '<div class="bb-qty">x' + (item.qty || 1) + '</div>' +
+      '</div>';
+    }).join("");
+  }else{
+    itemHtml = '<div class="bb-meta">此訂單沒有保存飲品明細資料</div>';
+  }
+  return '<div class="bb-status-card">' +
+    '<div class="bb-brand">☕</div>' +
+    '<div class="bb-title">取餐號</div>' +
+    '<div class="bb-no">' + no + '</div>' +
+    '<div class="bb-desc">' + desc + '</div>' +
+    '<div class="bb-progress">' +
+      '<div class="bb-step active"><span class="ico">🧾</span>已下單</div>' +
+      '<div class="bb-step ' + (!done ? "active" : "") + '"><span class="ico">☕</span>製作中</div>' +
+      '<div class="bb-step ' + (done ? "active" : "") + '"><span class="ico">✅</span>' + (picked ? "已領取" : "已完成") + '</div>' +
+    '</div>' +
+    '<div class="bb-times">' +
+      '<div class="bb-time-row"><span>取餐時間</span><b>' + (o.pickupTime || "-") + '</b></div>' +
+      (o.createdAt ? '<div class="bb-time-row"><span>下單時間</span><b>' + bbDateTime(o.createdAt) + '</b></div>' : '') +
+      (o.completedAt ? '<div class="bb-time-row"><span>完成時間</span><b>' + bbDateTime(o.completedAt) + '</b></div>' : '') +
+      (o.pickedUpAt ? '<div class="bb-time-row"><span>領取時間</span><b>' + bbDateTime(o.pickedUpAt) + '</b></div>' : '') +
+      '<span class="bb-badge ' + status + '">' + bbStatusText(status) + '</span>' +
+    '</div>' +
+    '<div class="bb-section-title">訂單內容</div>' +
+    itemHtml +
+  '</div>';
+}
+async function sky31ForceCheckStatus(){
+  const result = document.getElementById("statusResult") || document.getElementById("status-result") || document.querySelector(".status-result") || document.querySelector("[data-status-result]");
+  const phoneInput = document.getElementById("statusPhone") || document.getElementById("phoneStatus") || document.getElementById("checkPhone") || document.querySelector("input[name='statusPhone']") || document.querySelector("input[placeholder*='Phone']") || document.querySelector("input[placeholder*='手機']");
+  const orderInput = document.getElementById("statusOrderNo") || document.getElementById("orderNo") || document.getElementById("checkOrderNo") || document.querySelector("input[name='orderNo']") || document.querySelector("input[placeholder*='訂單']");
+  const phone = phoneInput ? phoneInput.value.trim() : "";
+  const orderNo = orderInput ? orderInput.value.trim() : "";
+  if(!phone){
+    alert("請輸入手機號碼");
+    return;
+  }
+  if(result) result.innerHTML = "<p class='bb-meta'>查詢中...</p>";
+  try{
+    const url = "/api/status?phone=" + encodeURIComponent(phone) + (orderNo ? "&orderNo=" + encodeURIComponent(orderNo) : "") + "&t=" + Date.now();
+    const res = await fetch(url, {cache:"no-store"});
+    const data = await res.json();
+    if(!data.ok){
+      if(result) result.innerHTML = "<p class='bb-meta'>" + (data.error || "查詢不到目前可顯示的訂單") + "</p>";
+      return;
+    }
+    const orders = Array.isArray(data.orders) ? data.orders : [data];
+    if(result) result.innerHTML = orders.map(bbOrderCard).join("");
+  }catch(e){
+    if(result) result.innerHTML = "<p class='bb-meta'>暫時無法查詢，請稍後再試。</p>";
+  }
+}
+document.addEventListener("DOMContentLoaded", function(){
+  window.checkStatus = sky31ForceCheckStatus;
+  window.queryOrder = sky31ForceCheckStatus;
+  window.searchOrder = sky31ForceCheckStatus;
+  document.addEventListener("click", function(e){
+    const btn = e.target.closest && e.target.closest("button");
+    if(!btn) return;
+    const txt = btn.textContent || "";
+    if(txt.includes("Check Status") || txt.includes("查詢")){
+      const maybeModal = btn.closest("#statusModal,.status-modal,#orderStatusModal,[data-status-modal]");
+      if(maybeModal || txt.includes("Check Status")){
+        e.preventDefault();
+        e.stopPropagation();
+        sky31ForceCheckStatus();
+      }
+    }
+  }, true);
+});
 
 </script>
 </div>
