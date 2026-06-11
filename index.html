@@ -1777,7 +1777,7 @@ line-height:1.6;
     <div id="checkoutCustomerInfo" class="checkout-customer-info"></div>
     <div id="cartModalList"></div>
     <div id="summary" class="customer-summary">請先選擇餐品。</div><div class="cart-note">確認後訂單會直接發送到 Sky31 Coffee。</div>
-    <button class="primary" onclick="submitOrder()">確認訂單 Checkout</button>
+    <button class="primary" type="button" onclick="submitOrder()">確認訂單 Checkout</button>
     <button class="danger" onclick="clearCart()">清空訂單 Clear Order</button>
     <div id="successMsg" class="msg success">✓ 訂單已送出，Sky31 Coffee 已收到你的訂單。</div>
     <div id="errorMsg" class="msg error">提交失敗，請檢查網絡或稍後再試。</div>
@@ -2480,36 +2480,50 @@ function saveCustomerAndSubmit() {
 }
 
 async function submitOrder() {
-  if (!cart.length) return alert("請先選擇餐品");
-  if (!val("name") || !val("phone")) { openCustomerModal(true); return; }
+  if (window.__sky31Submitting) return;
+  window.__sky31Submitting = true;
 
-  const checkoutBtn = document.querySelector('[onclick="submitOrder()"]') || document.querySelector(".primary");
-  const oldBtnText = checkoutBtn ? checkoutBtn.innerHTML : "";
-  if (checkoutBtn) {
-    checkoutBtn.disabled = true;
-    checkoutBtn.innerHTML = "提交中 Sending...";
-    checkoutBtn.style.opacity = "0.72";
-    checkoutBtn.style.pointerEvents = "none";
-  }
+  const buttons = Array.from(document.querySelectorAll("button"));
+  const submitBtns = buttons.filter(function(btn) {
+    return (btn.textContent || "").includes("Checkout") || (btn.textContent || "").includes("確認訂單");
+  });
 
-  const orderText = makeRobotOrder();
-
-  const payload = {
-    customerName: val("name"),
-    phone: val("phone"),
-    orderText: orderText,
-    cart: cart,
-    pickup: cart[0] && cart[0].pickup ? cart[0].pickup : "",
-    createdAt: new Date().toISOString()
-  };
-
-  let finished = false;
+  submitBtns.forEach(function(btn) {
+    btn.disabled = true;
+    btn.dataset.oldText = btn.innerHTML;
+    btn.innerHTML = "提交中...";
+    btn.style.opacity = "0.65";
+  });
 
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(function(){ controller.abort(); }, 12000);
+    if (!cart || !cart.length) {
+      alert("請先選擇餐品");
+      return;
+    }
 
-    const res = await fetch("/api/order", {
+    const customerName = val("name");
+    const phone = val("phone");
+
+    if (!customerName || !phone) {
+      openCustomerModal(true);
+      return;
+    }
+
+    const payload = {
+      customerName: customerName,
+      phone: phone,
+      orderText: makeRobotOrder(),
+      cart: cart,
+      pickup: cart[0] && cart[0].pickup ? cart[0].pickup : "",
+      createdAt: new Date().toISOString()
+    };
+
+    const controller = new AbortController();
+    const timer = setTimeout(function() {
+      controller.abort();
+    }, 15000);
+
+    const res = await fetch("/api/order?t=" + Date.now(), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -2522,7 +2536,7 @@ async function submitOrder() {
     let data = {};
     try {
       data = await res.json();
-    } catch (_) {
+    } catch (e) {
       data = {};
     }
 
@@ -2531,44 +2545,29 @@ async function submitOrder() {
       return;
     }
 
-    finished = true;
-
-    const orderNo = data.orderNo ? "#" + data.orderNo : "";
-    alert("訂單已提交！
-訂單號：" + orderNo + "
-請到查詢訂單頁輸入手機號碼查看狀態。");
+    alert("訂單已提交！\n訂單號：#" + data.orderNo);
 
     cart = [];
-    try { localStorage.removeItem("sky31_cart"); } catch (_) {}
-    updateAll();
+    try {
+      localStorage.removeItem("sky31_cart");
+      localStorage.removeItem("cart");
+    } catch (e) {}
 
-    closeCartModal();
-    closeCustomerModal();
-
-    const overlay = document.querySelector(".overlay");
-    if (overlay) overlay.classList.remove("show");
-
-    document.body.style.overflow = "";
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    // Direct reload is the most stable way on mobile Safari.
+    window.location.href = window.location.origin + window.location.pathname + "?done=" + Date.now();
   } catch (e) {
-    alert("提交失敗，請檢查網絡後再試");
+    if (String(e && e.name) === "AbortError") {
+      alert("提交時間較長，請到查詢訂單輸入手機號碼確認是否已成功。");
+    } else {
+      alert("提交失敗，請檢查網絡後再試。");
+    }
   } finally {
-    if (checkoutBtn) {
-      checkoutBtn.disabled = false;
-      checkoutBtn.innerHTML = oldBtnText || "確認訂單 Checkout";
-      checkoutBtn.style.opacity = "";
-      checkoutBtn.style.pointerEvents = "";
-    }
-
-    if (finished) {
-      setTimeout(function() {
-        closeCartModal();
-        closeCustomerModal();
-        const overlay = document.querySelector(".overlay");
-        if (overlay) overlay.classList.remove("show");
-        document.body.style.overflow = "";
-      }, 150);
-    }
+    window.__sky31Submitting = false;
+    submitBtns.forEach(function(btn) {
+      btn.disabled = false;
+      btn.innerHTML = btn.dataset.oldText || "確認訂單 Checkout";
+      btn.style.opacity = "";
+    });
   }
 }
 async function copyOrder() {
