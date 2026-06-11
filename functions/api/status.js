@@ -3,7 +3,7 @@ export async function onRequestGet(context) {
   const { request, env } = context;
   const url = new URL(request.url);
 
-  let orderNo = (url.searchParams.get("orderNo") || "").trim().replace(/^#/, "").toUpperCase();
+  const orderNo = (url.searchParams.get("orderNo") || "").trim().replace(/^#/, "").toUpperCase();
   const phone = normalizePhone(url.searchParams.get("phone") || "");
 
   if (!phone) {
@@ -19,6 +19,10 @@ export async function onRequestGet(context) {
       return json({ ok: false, error: "手機號碼不正確" }, 403);
     }
 
+    if (!shouldShowToCustomer(order)) {
+      return json({ ok: false, error: "此訂單已領取或已完成超過1小時" }, 404);
+    }
+
     return json(formatOrder(order));
   }
 
@@ -26,40 +30,91 @@ export async function onRequestGet(context) {
   const listed = await env.ORDERS.list({ prefix });
 
   if (!listed.keys || !listed.keys.length) {
-    return json({ ok: false, error: "查詢不到此手機號碼的訂單" }, 404);
+    return json({ ok: false, error: "查詢不到目前可顯示的訂單" }, 404);
   }
 
   const orderNos = listed.keys
     .map(k => k.name.replace(prefix, ""))
     .filter(Boolean)
     .sort()
-    .reverse()
-    .slice(0, 5);
+    .reverse();
 
   const orders = [];
 
   for (const no of orderNos) {
+    if (orders.length >= 3) break;
+
     const raw = await env.ORDERS.get("order:" + no);
     if (!raw) continue;
+
     const order = JSON.parse(raw);
+    if (!shouldShowToCustomer(order)) continue;
+
     orders.push(formatOrder(order));
   }
 
   if (!orders.length) {
-    return json({ ok: false, error: "查詢不到此手機號碼的訂單" }, 404);
+    return json({ ok: false, error: "目前沒有可顯示的訂單" }, 404);
   }
 
   return json({ ok: true, orders });
 }
 
+function shouldShowToCustomer(order) {
+  if (!order) return false;
+  if (order.status === "picked_up") return false;
+
+  if (order.status === "completed" && order.completedAt) {
+    const completedAt = new Date(order.completedAt).getTime();
+    if (!completedAt) return true;
+
+    const oneHour = 60 * 60 * 1000;
+    return Date.now() - completedAt <= oneHour;
+  }
+
+  return true;
+}
+
+function displayStatus(order) {
+  if (order.status === "completed" && order.completedAt) {
+    const completedAt = new Date(order.completedAt).getTime();
+    const fiveMin = 5 * 60 * 1000;
+    if (completedAt && Date.now() - completedAt >= fiveMin) {
+      return "picked_up";
+    }
+  }
+  return order.status || "pending";
+}
+
 function formatOrder(order) {
+  const cart = Array.isArray(order.cart) ? order.cart : [];
+
   return {
     ok: true,
     orderNo: order.orderNo,
-    status: order.status,
-    pickupTime: order.pickupTime,
-    createdAt: order.createdAt,
-    completedAt: order.completedAt
+    status: order.status || "pending",
+    displayStatus: displayStatus(order),
+    pickupTime: order.pickupTime || order.pickup || "",
+    createdAt: order.createdAt || "",
+    completedAt: order.completedAt || null,
+    pickedUpAt: order.pickedUpAt || null,
+    customerName: order.customerName || "",
+    phone: order.phone || "",
+    pickup: order.pickup || "",
+    orderText: order.orderText || "",
+    cart: cart.map(item => ({
+      name: item.name || item.title || "",
+      cn: item.cn || item.zh || "",
+      qty: Number(item.qty || item.quantity || 1),
+      image: item.image || "",
+      bean: item.bean || "",
+      flavor: item.flavor || "",
+      temp: item.temp || item.temperature || "",
+      ice: item.ice || "",
+      milk: item.milk || "",
+      pickup: item.pickup || "",
+      note: item.note || ""
+    }))
   };
 }
 
@@ -67,9 +122,12 @@ function normalizePhone(phone) {
   return String(phone || "").replace(/\D/g, "");
 }
 
-function json(data, status=200) {
+function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { "Content-Type": "application/json" }
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store"
+    }
   });
 }
