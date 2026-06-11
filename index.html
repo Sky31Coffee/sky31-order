@@ -1777,7 +1777,7 @@ line-height:1.6;
     <div id="checkoutCustomerInfo" class="checkout-customer-info"></div>
     <div id="cartModalList"></div>
     <div id="summary" class="customer-summary">請先選擇餐品。</div><div class="cart-note">確認後訂單會直接發送到 Sky31 Coffee。</div>
-    <button class="primary" type="button" onclick="submitOrder()">確認訂單 Checkout</button>
+    <button class="primary" id="checkoutSubmitBtn" type="button" onclick="submitOrder()">確認訂單 Checkout</button>
     <button class="danger" onclick="clearCart()">清空訂單 Clear Order</button>
     <div id="successMsg" class="msg success">✓ 訂單已送出，Sky31 Coffee 已收到你的訂單。</div>
     <div id="errorMsg" class="msg error">提交失敗，請檢查網絡或稍後再試。</div>
@@ -2481,108 +2481,96 @@ function saveCustomerAndSubmit() {
 
 async function submitOrder() {
   if (window.__sky31Submitting) return;
+
+  if (!cart || !cart.length) {
+    alert("請先選擇餐品");
+    return;
+  }
+
+  if (!val("name") || !val("phone")) {
+    openCustomerModal(true);
+    return;
+  }
+
   window.__sky31Submitting = true;
 
-  const btns = Array.from(document.querySelectorAll("button"));
-  const submitBtns = btns.filter(function(btn) {
-    const t = btn.textContent || "";
-    return t.includes("Checkout") || t.includes("確認訂單") || t.includes("提交中");
-  });
+  const btn = document.getElementById("checkoutSubmitBtn") || document.querySelector(".checkout-submit-btn");
+  const oldText = btn ? btn.innerHTML : "";
 
-  submitBtns.forEach(function(btn) {
+  if (btn) {
     btn.disabled = true;
-    btn.dataset.oldText = btn.dataset.oldText || btn.innerHTML;
     btn.innerHTML = "提交中...";
     btn.style.opacity = "0.65";
-    btn.style.pointerEvents = "none";
-  });
-
-  function restoreButtons() {
-    submitBtns.forEach(function(btn) {
-      btn.disabled = false;
-      btn.innerHTML = btn.dataset.oldText || "確認訂單 Checkout";
-      btn.style.opacity = "";
-      btn.style.pointerEvents = "";
-    });
-    window.__sky31Submitting = false;
   }
 
-  function hardExit(message) {
-    try { alert(message); } catch (_) {}
-    try {
-      cart = [];
-      localStorage.removeItem("sky31_cart");
-      localStorage.removeItem("cart");
-    } catch (_) {}
-    setTimeout(function() {
-      window.location.href = window.location.origin + window.location.pathname + "?r=" + Date.now();
-    }, 250);
-  }
+  const payload = {
+    customerName: val("name"),
+    phone: val("phone"),
+    orderText: makeRobotOrder(),
+    cart: cart,
+    pickup: cart[0] && cart[0].pickup ? cart[0].pickup : "",
+    createdAt: new Date().toISOString()
+  };
 
   try {
-    if (!cart || !cart.length) {
-      alert("請先選擇餐品");
-      restoreButtons();
-      return;
-    }
+    const timeout = new Promise(function(_, reject) {
+      setTimeout(function() {
+        reject(new Error("timeout"));
+      }, 12000);
+    });
 
-    const customerName = val("name");
-    const phone = val("phone");
-
-    if (!customerName || !phone) {
-      openCustomerModal(true);
-      restoreButtons();
-      return;
-    }
-
-    const payload = {
-      customerName: customerName,
-      phone: phone,
-      orderText: makeRobotOrder(),
-      cart: cart,
-      pickup: cart[0] && cart[0].pickup ? cart[0].pickup : "",
-      createdAt: new Date().toISOString()
-    };
-
-    const orderPromise = fetch("/api/order?t=" + Date.now(), {
+    const request = fetch("/api/order?t=" + Date.now(), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
-      cache: "no-store",
-      keepalive: false
-    }).then(function(res) {
-      return res.text().then(function(text) {
-        let data = {};
-        try { data = JSON.parse(text); } catch (_) {}
-        return { res: res, data: data, text: text };
-      });
+      cache: "no-store"
     });
 
-    const timeoutPromise = new Promise(function(resolve) {
-      setTimeout(function() {
-        resolve({ timeout: true });
-      }, 8000);
-    });
-
-    const result = await Promise.race([orderPromise, timeoutPromise]);
-
-    if (result && result.timeout) {
-      hardExit("訂單可能已提交。\n如未收到提示，請到「查詢訂單」輸入手機號碼確認。");
-      return;
-    }
-
-    const res = result.res;
-    const data = result.data || {};
+    const res = await Promise.race([request, timeout]);
+    const data = await res.json();
 
     if (!res.ok || !data.ok) {
-      alert(data.error || "提交失敗，請稍後再試");
-      restoreButtons();
+      alert((data && data.error) || "提交失敗，請稍後再試");
       return;
     }
 
-    hardExit("訂單已提交！\n訂單號：#" + data.orderNo);
+    alert("訂單已提交！\n訂單號：#" + data.orderNo);
+
+    cart = [];
+    try {
+      localStorage.removeItem("sky31_cart");
+      localStorage.removeItem("cart");
+    } catch (e) {}
+
+    updateAll();
+
+    // Close checkout safely
+    const overlay = document.querySelector(".overlay");
+    if (overlay) overlay.classList.remove("show");
+
+    const sheets = document.querySelectorAll(".sheet, .modal, .checkout-modal, .cart-modal");
+    sheets.forEach(function(el) {
+      el.classList.remove("show");
+      el.classList.add("hidden");
+    });
+
+    document.body.style.overflow = "";
+
+    setTimeout(function() {
+      window.location.href = window.location.origin + window.location.pathname + "?ok=" + Date.now();
+    }, 300);
   } catch (e) {
-    hardExit("訂單可能已提交。\n請到「查詢訂單」輸入手機號碼確認。");
+    alert("訂單可能已提交。\n請到查詢訂單輸入手機號碼確認。");
+    setTimeout(function() {
+      window.location.href = window.location.origin + window.location.pathname + "?check=" + Date.now();
+    }, 300);
+  } finally {
+    window.__sky31Submitting = false;
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = oldText || "確認訂單 Checkout";
+      btn.style.opacity = "";
+    }
   }
 }
 async function copyOrder() {
@@ -2741,6 +2729,11 @@ function sky31ApplyLattePhotoOverride() {
   } catch(e) {}
 }
 sky31ApplyLattePhotoOverride();
+
+
+window.addEventListener("error", function(e) {
+  console.error("Sky31 frontend error:", e.message, e.filename, e.lineno);
+});
 
 </script>
 </div>
