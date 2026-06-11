@@ -2093,6 +2093,22 @@ button[type="submit"] span{
   object-position:center!important;
 }
 
+
+/* V53 cancel status */
+.bb-step.cancel,
+.bb-step.active.cancel{
+  color:#ef4444!important;
+}
+.bb-step.cancel .ico,
+.bb-step.active.cancel .ico{
+  opacity:1!important;
+  filter:none!important;
+}
+.bb-badge.cancelled{
+  background:#fee2e2!important;
+  color:#dc2626!important;
+}
+
 </style>
 
 <style>
@@ -2466,6 +2482,7 @@ line-height:1.6;
 <script>
 
 function sky31StatusText(status){
+  if(status === "cancelled") return "已取消";
   if(status === "picked_up") return "已領取";
   if(status === "completed") return "已完成";
   if(status === "pending") return "製作中";
@@ -3490,16 +3507,19 @@ function bbDateTime(s){
   }catch(e){ return s; }
 }
 function bbStatusText(status){
+  if(status === "cancelled") return "已取消";
   if(status === "picked_up") return "已領取";
   if(status === "completed") return "已完成";
   return "製作中";
 }
 function bbOrderCard(o){
   const status = o.displayStatus || o.status || "pending";
-  const done = status === "completed" || status === "picked_up";
+  const cancelled = status === "cancelled";
+  const done = status === "completed" || status === "picked_up" || cancelled;
   const picked = status === "picked_up";
   const no = String(o.orderNo || "").replace(/^#/,"");
-  const desc = picked ? "已領取，感謝支持 ☕" :
+  const desc = cancelled ? "訂單已取消，如有疑問請聯絡 Sky31" :
+               picked ? "已領取，感謝支持 ☕" :
                done ? "咖啡已完成，歡迎取餐" :
                "咖啡正在製作中";
   let itemHtml = "";
@@ -3531,7 +3551,7 @@ function bbOrderCard(o){
     '<div class="bb-progress">' +
       '<div class="bb-step order done"><span class="ico">📝</span>已下單</div>' +
       '<div class="bb-step make ' + (!done ? "active" : "done") + '"><span class="ico">☕</span>製作中</div>' +
-      '<div class="bb-step ' + (picked ? "pickup active" : (done ? "complete active" : "")) + '"><span class="ico">' + (picked ? "🎉" : "✅") + '</span>' + (picked ? "已領取" : "已完成") + '</div>' +
+      '<div class="bb-step ' + (cancelled ? "cancel active" : (picked ? "pickup active" : (done ? "complete active" : ""))) + '"><span class="ico">' + (cancelled ? "❌" : (picked ? "🎉" : "✅")) + '</span>' + (cancelled ? "已取消" : (picked ? "已領取" : "已完成")) + '</div>' +
     '</div>' +
     '<button type="button" class="bb-detail-toggle" data-bb-toggle="bbDetail_' + no + '">查看訂單詳情 ▼</button>' +
     '<div id="bbDetail_' + no + '" class="bb-detail-panel">' +
@@ -3540,6 +3560,7 @@ function bbOrderCard(o){
         (o.createdAt ? '<div class="bb-time-row"><span>下單時間</span><b>' + bbDateTime(o.createdAt) + '</b></div>' : '') +
         (o.completedAt ? '<div class="bb-time-row"><span>完成時間</span><b>' + bbDateTime(o.completedAt) + '</b></div>' : '') +
         (o.pickedUpAt ? '<div class="bb-time-row"><span>領取時間</span><b>' + bbDateTime(o.pickedUpAt) + '</b></div>' : '') +
+      (o.cancelledAt ? '<div class="bb-time-row"><span>取消時間</span><b>' + bbDateTime(o.cancelledAt) + '</b></div>' : '') +
         '<span class="bb-badge ' + status + '">' + bbStatusText(status) + '</span>' +
       '</div>' +
       '<div class="bb-section-title">訂單內容</div>' +
