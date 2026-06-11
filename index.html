@@ -1948,6 +1948,96 @@ button[type="submit"] span{
   opacity:1 !important;
 }
 
+
+/* V49 final web order status: no top icon + colorful progress */
+.bb-brand{
+  display:none !important;
+}
+.bb-status-card{
+  background:#fbfaf7 !important;
+  color:#303030 !important;
+}
+.bb-title{
+  margin-top:4px !important;
+  font-size:28px !important;
+  font-weight:800 !important;
+}
+.bb-no{
+  font-size:44px !important;
+  font-weight:600 !important;
+  letter-spacing:.14em !important;
+  color:#303030 !important;
+  margin-bottom:10px !important;
+}
+.bb-order-ref{
+  font-size:15px;
+  color:#8f8f8f;
+  margin:0 0 22px;
+}
+.bb-order-ref b{
+  color:#303030;
+  font-weight:800;
+}
+.bb-desc{
+  color:#969696 !important;
+  font-size:17px !important;
+  line-height:1.65 !important;
+  margin-bottom:36px !important;
+}
+.bb-progress{
+  border-bottom:2px solid #333 !important;
+  margin:36px 0 30px !important;
+  padding-bottom:18px !important;
+}
+.bb-step{
+  color:#d5d5d5 !important;
+  font-size:16px !important;
+  font-weight:600 !important;
+}
+.bb-step .ico{
+  display:block !important;
+  font-size:32px !important;
+  line-height:1 !important;
+  margin-bottom:18px !important;
+  filter:grayscale(1) saturate(0) !important;
+  opacity:.24 !important;
+}
+.bb-step.done,
+.bb-step.active{
+  font-weight:800 !important;
+}
+.bb-step.done.order,
+.bb-step.active.order{
+  color:#3b82f6 !important;
+}
+.bb-step.done.make,
+.bb-step.active.make{
+  color:#8b5e3c !important;
+}
+.bb-step.done.complete,
+.bb-step.active.complete{
+  color:#22c55e !important;
+}
+.bb-step.done.pickup,
+.bb-step.active.pickup{
+  color:#16a34a !important;
+}
+.bb-step.done .ico,
+.bb-step.active .ico{
+  filter:none !important;
+  opacity:1 !important;
+}
+.bb-step:not(.done):not(.active) .ico{
+  filter:grayscale(1) saturate(0) !important;
+  opacity:.22 !important;
+}
+.bb-times{
+  margin-top:18px !important;
+}
+.bb-badge.pending{background:#fff7d6 !important;color:#9a6700 !important;}
+.bb-badge.completed{background:#eaf8ef !important;color:#15803d !important;}
+.bb-badge.picked_up{background:#eaf1ff !important;color:#16a34a !important;}
+
 </style>
 
 <style>
@@ -3354,9 +3444,9 @@ function bbOrderCard(o){
   const done = status === "completed" || status === "picked_up";
   const picked = status === "picked_up";
   const no = String(o.orderNo || "").replace(/^#/,"");
-  const desc = picked ? "訂單已領取，感謝你的信賴，期待你的再次選擇" :
-               done ? "訂單已完成，請前往取餐" :
-               "訂單已收到，Sky31 正在為你準備";
+  const desc = picked ? "已領取，感謝支持 ☕" :
+               done ? "咖啡已完成，歡迎取餐" :
+               "咖啡正在製作中";
   let itemHtml = "";
   if(Array.isArray(o.cart) && o.cart.length){
     itemHtml = o.cart.map(function(item){
@@ -3379,14 +3469,14 @@ function bbOrderCard(o){
     itemHtml = '<div class="bb-meta">此訂單沒有保存飲品明細資料</div>';
   }
   return '<div class="bb-status-card">' +
-    '<div class="bb-brand">☕</div>' +
+    
     '<div class="bb-title">取餐號</div>' +
     '<div class="bb-no">' + no + '</div>' +
     '<div class="bb-desc">' + desc + '</div>' +
     '<div class="bb-progress">' +
-      '<div class="bb-step done"><span class="ico">📝</span>已下單</div>' +
-      '<div class="bb-step ' + (!done ? "active current" : "done") + '"><span class="ico">☕</span>製作中</div>' +
-      '<div class="bb-step ' + (done ? "active current" : "") + '"><span class="ico">✅</span>' + (picked ? "已領取" : "已完成") + '</div>' +
+      '<div class="bb-step order done"><span class="ico">📝</span>已下單</div>' +
+      '<div class="bb-step make ' + (!done ? "active" : "done") + '"><span class="ico">☕</span>製作中</div>' +
+      '<div class="bb-step ' + (picked ? "pickup active" : (done ? "complete active" : "")) + '"><span class="ico">' + (picked ? "🎉" : "✅") + '</span>' + (picked ? "已領取" : "已完成") + '</div>' +
     '</div>' +
     '<div class="bb-times">' +
       '<div class="bb-time-row"><span>取餐時間</span><b>' + (o.pickupTime || "-") + '</b></div>' +
