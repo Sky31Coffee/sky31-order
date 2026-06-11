@@ -15,6 +15,10 @@ export async function onRequestPost(context) {
     const rawCart = Array.isArray(body.cart) ? body.cart : [];
     const cleanCart = normalizeCart(rawCart);
 
+    if (!cleanCart.length && !String(body.orderText || "").trim()) {
+      return json({ ok: false, error: "請先選擇飲品" }, 400);
+    }
+
     const orderNo = await nextOrderNo(env);
     const createdAt = new Date();
     const pickup = body.pickup || getPickupFromCart(cleanCart) || "Now 即取";
@@ -43,19 +47,40 @@ export async function onRequestPost(context) {
       createdAt: createdAt.toISOString(),
       completedAt: null,
       pickedUpAt: null,
-      telegramMessageId: null
+      telegramMessageId: null,
+      telegramOk: false,
+      telegramError: null
     };
 
-    const telegram = await sendTelegram(env, orderText, orderNo);
-    if (telegram && telegram.ok && telegram.result && telegram.result.message_id) {
-      order.telegramMessageId = telegram.result.message_id;
-    }
-
     const ttl = 60 * 60 * 24 * 14;
+
+    // Save first. This prevents the webpage from freezing if Telegram is slow.
     await env.ORDERS.put("order:" + orderNo, JSON.stringify(order), { expirationTtl: ttl });
     await env.ORDERS.put("phone:" + normalizePhone(phone) + ":" + orderNo, orderNo, { expirationTtl: ttl });
 
-    return json({ ok: true, orderNo, status: order.status, pickupTime });
+    // Telegram is best-effort. It has a timeout and will not block customer checkout forever.
+    try {
+      const telegram = await sendTelegramWithTimeout(env, orderText, orderNo, 6000);
+      if (telegram && telegram.ok && telegram.result && telegram.result.message_id) {
+        order.telegramOk = true;
+        order.telegramMessageId = telegram.result.message_id;
+        await env.ORDERS.put("order:" + orderNo, JSON.stringify(order), { expirationTtl: ttl });
+      } else {
+        order.telegramError = telegram ? JSON.stringify(telegram).slice(0, 500) : "Telegram no response";
+        await env.ORDERS.put("order:" + orderNo, JSON.stringify(order), { expirationTtl: ttl });
+      }
+    } catch (telegramError) {
+      order.telegramError = telegramError.message || "Telegram failed";
+      await env.ORDERS.put("order:" + orderNo, JSON.stringify(order), { expirationTtl: ttl });
+    }
+
+    return json({
+      ok: true,
+      orderNo,
+      status: order.status,
+      pickupTime,
+      telegramOk: order.telegramOk
+    });
   } catch (e) {
     return json({ ok: false, error: e.message || "提交失敗，請稍後再試" }, 500);
   }
@@ -105,20 +130,22 @@ function makeOrderText(orderNo, name, phone, pickupTime, cart) {
       lines.push("☕ " + title + " ×" + (item.qty || 1));
 
       const details = [];
+      if (item.cn && item.cn !== item.name) details.push(item.cn);
       if (item.bean) details.push(item.bean);
       if (item.flavor) details.push("風味：" + item.flavor);
       if (item.temp) details.push(item.temp);
       if (item.ice && item.ice !== "不適用") details.push(item.ice);
       if (item.milk) details.push(item.milk);
+      if (item.pickup) details.push(item.pickup);
       if (item.note && item.note !== "無備註") details.push("備註：" + item.note);
       if (details.length) lines.push(details.join("｜"));
+      lines.push("");
     });
-    lines.push("");
   }
 
   lines.push("客人：" + name);
   lines.push("電話：" + phone);
-  return lines.join("\n");
+  return lines.join("\n").trim();
 }
 
 function resolvePickupTime(pickup, now) {
@@ -145,29 +172,37 @@ function resolvePickupTime(pickup, now) {
   return label;
 }
 
-async function sendTelegram(env, text, orderNo) {
+async function sendTelegramWithTimeout(env, text, orderNo, timeoutMs) {
   const token = env.TELEGRAM_BOT_TOKEN;
   const chatId = env.TELEGRAM_CHAT_ID;
   if (!token || !chatId) throw new Error("Telegram env vars missing");
 
-  const url = "https://api.telegram.org/bot" + token + "/sendMessage";
-  const payload = {
-    chat_id: chatId,
-    text,
-    reply_markup: {
-      inline_keyboard: [[
-        { text: "✅ 完成訂單 #" + orderNo, callback_data: "complete:" + orderNo }
-      ]]
-    }
-  };
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
+  try {
+    const url = "https://api.telegram.org/bot" + token + "/sendMessage";
+    const payload = {
+      chat_id: chatId,
+      text,
+      reply_markup: {
+        inline_keyboard: [[
+          { text: "✅ 完成訂單 #" + orderNo, callback_data: "complete:" + orderNo }
+        ]]
+      }
+    };
 
-  return await res.json();
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+
+    return await res.json();
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function normalizePhone(phone) {
