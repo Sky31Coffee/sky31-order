@@ -12,15 +12,11 @@ export async function onRequestGet(context) {
 
   if (orderNo) {
     const raw = await env.ORDERS.get("order:" + orderNo);
-    if (!raw) return json({ ok: false, error: "查詢不到訂單" }, 404);
+    if (!raw) return json({ ok: false, error: "查詢不到此訂單號" }, 404);
 
     const order = JSON.parse(raw);
     if (normalizePhone(order.phone) !== phone) {
       return json({ ok: false, error: "手機號碼不正確" }, 403);
-    }
-
-    if (!shouldShowToCustomer(order)) {
-      return json({ ok: false, error: "此訂單已領取或已完成超過1小時" }, 404);
     }
 
     return json(formatOrder(order));
@@ -43,47 +39,16 @@ export async function onRequestGet(context) {
 
   for (const no of orderNos) {
     if (orders.length >= 3) break;
-
     const raw = await env.ORDERS.get("order:" + no);
     if (!raw) continue;
-
-    const order = JSON.parse(raw);
-    if (!shouldShowToCustomer(order)) continue;
-
-    orders.push(formatOrder(order));
+    orders.push(formatOrder(JSON.parse(raw)));
   }
 
   if (!orders.length) {
-    return json({ ok: false, error: "目前沒有可顯示的訂單" }, 404);
+    return json({ ok: false, error: "查詢不到目前可顯示的訂單" }, 404);
   }
 
   return json({ ok: true, orders });
-}
-
-function shouldShowToCustomer(order) {
-  if (!order) return false;
-  if (order.status === "picked_up") return false;
-
-  if (order.status === "completed" && order.completedAt) {
-    const completedAt = new Date(order.completedAt).getTime();
-    if (!completedAt) return true;
-
-    const oneHour = 60 * 60 * 1000;
-    return Date.now() - completedAt <= oneHour;
-  }
-
-  return true;
-}
-
-function displayStatus(order) {
-  if (order.status === "completed" && order.completedAt) {
-    const completedAt = new Date(order.completedAt).getTime();
-    const fiveMin = 5 * 60 * 1000;
-    if (completedAt && Date.now() - completedAt >= fiveMin) {
-      return "picked_up";
-    }
-  }
-  return order.status || "pending";
 }
 
 function formatOrder(order) {
@@ -93,7 +58,7 @@ function formatOrder(order) {
     ok: true,
     orderNo: order.orderNo,
     status: order.status || "pending",
-    displayStatus: displayStatus(order),
+    displayStatus: order.status || "pending",
     pickupTime: order.pickupTime || order.pickup || "",
     createdAt: order.createdAt || "",
     completedAt: order.completedAt || null,
