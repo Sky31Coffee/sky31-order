@@ -1912,6 +1912,42 @@ button[type="submit"] span{
   color:#333;
 }
 
+
+/* V48 web status icons + cleaner Blue Bottle style */
+.bb-brand{
+  font-size:52px !important;
+  color:#2f2f2f !important;
+  text-align:left !important;
+  margin:0 0 42px !important;
+  filter:none !important;
+  opacity:.9 !important;
+}
+.bb-progress{
+  border-bottom:2px solid #333 !important;
+  margin-top:34px !important;
+}
+.bb-step{
+  color:#d4d4d4 !important;
+}
+.bb-step .ico{
+  font-size:32px !important;
+  opacity:.24 !important;
+  filter:grayscale(1) saturate(0) !important;
+}
+.bb-step.done,
+.bb-step.active{
+  color:#2f2f2f !important;
+  font-weight:700 !important;
+}
+.bb-step.done .ico,
+.bb-step.active .ico{
+  opacity:.92 !important;
+  filter:grayscale(1) saturate(0) !important;
+}
+.bb-step.current .ico{
+  opacity:1 !important;
+}
+
 </style>
 
 <style>
@@ -2159,6 +2195,24 @@ line-height:1.6;
 }
 
 </style>
+
+
+<!-- V48 WeChat / social share preview -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="Sky31 Coffee">
+<meta property="og:description" content="Sky31 Coffee To Go｜線上點餐">
+<meta property="og:url" content="https://sky31-order.pages.dev/">
+<meta property="og:image" content="https://sky31-order.pages.dev/sky31-logo.png">
+<meta property="og:image:secure_url" content="https://sky31-order.pages.dev/sky31-logo.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Sky31 Coffee">
+<meta name="twitter:description" content="Sky31 Coffee To Go｜線上點餐">
+<meta name="twitter:image" content="https://sky31-order.pages.dev/sky31-logo.png">
+<link rel="apple-touch-icon" href="/sky31-logo.png">
+<link rel="icon" href="/sky31-logo.png">
 
 </head>
 <body>
@@ -3330,9 +3384,9 @@ function bbOrderCard(o){
     '<div class="bb-no">' + no + '</div>' +
     '<div class="bb-desc">' + desc + '</div>' +
     '<div class="bb-progress">' +
-      '<div class="bb-step done"><span class="ico">▧</span>已下單</div>' +
-      '<div class="bb-step ' + (!done ? "active" : "done") + '"><span class="ico">▱</span>製作中</div>' +
-      '<div class="bb-step ' + (done ? "active" : "") + '"><span class="ico">▣</span>' + (picked ? "已領取" : "已完成") + '</div>' +
+      '<div class="bb-step done"><span class="ico">📝</span>已下單</div>' +
+      '<div class="bb-step ' + (!done ? "active current" : "done") + '"><span class="ico">☕</span>製作中</div>' +
+      '<div class="bb-step ' + (done ? "active current" : "") + '"><span class="ico">✅</span>' + (picked ? "已領取" : "已完成") + '</div>' +
     '</div>' +
     '<div class="bb-times">' +
       '<div class="bb-time-row"><span>取餐時間</span><b>' + (o.pickupTime || "-") + '</b></div>' +
