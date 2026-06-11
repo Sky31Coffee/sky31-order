@@ -10,22 +10,23 @@ export async function onRequestGet(context) {
     return json({ ok: false, error: "請輸入手機號碼" }, 400);
   }
 
+  // Exact order lookup:
+  // If the customer has an order number and phone number, always show the order
+  // as long as it still exists in KV. Do not hide completed / picked up orders here.
   if (orderNo) {
     const raw = await env.ORDERS.get("order:" + orderNo);
-    if (!raw) return json({ ok: false, error: "查詢不到訂單" }, 404);
+    if (!raw) return json({ ok: false, error: "查詢不到此訂單號" }, 404);
 
     const order = JSON.parse(raw);
     if (normalizePhone(order.phone) !== phone) {
       return json({ ok: false, error: "手機號碼不正確" }, 403);
     }
 
-    if (!shouldShowToCustomer(order)) {
-      return json({ ok: false, error: "此訂單已領取或已完成超過1小時" }, 404);
-    }
-
     return json(formatOrder(order));
   }
 
+  // Phone-only lookup:
+  // Show only currently useful orders, max 3.
   const prefix = "phone:" + phone + ":";
   const listed = await env.ORDERS.list({ prefix });
 
@@ -48,22 +49,25 @@ export async function onRequestGet(context) {
     if (!raw) continue;
 
     const order = JSON.parse(raw);
-    if (!shouldShowToCustomer(order)) continue;
+    if (!shouldShowInPhoneList(order)) continue;
 
     orders.push(formatOrder(order));
   }
 
   if (!orders.length) {
-    return json({ ok: false, error: "目前沒有可顯示的訂單" }, 404);
+    return json({ ok: false, error: "目前沒有製作中或近期已完成的訂單。如需查詢舊訂單，請輸入訂單號。" }, 404);
   }
 
   return json({ ok: true, orders });
 }
 
-function shouldShowToCustomer(order) {
+function shouldShowInPhoneList(order) {
   if (!order) return false;
+
+  // Manually marked as picked up: hide in phone-only list.
   if (order.status === "picked_up") return false;
 
+  // Completed orders: show only within 1 hour in phone-only list.
   if (order.status === "completed" && order.completedAt) {
     const completedAt = new Date(order.completedAt).getTime();
     if (!completedAt) return true;
