@@ -63,6 +63,7 @@ function formatOrder(order) {
     createdAt: order.createdAt || "",
     completedAt: order.completedAt || null,
     pickedUpAt: order.pickedUpAt || null,
+    cancelledAt: order.cancelledAt || null,
     customerName: order.customerName || "",
     phone: order.phone || "",
     pickup: order.pickup || "",

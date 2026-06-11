@@ -140,7 +140,8 @@ async function sendTelegram(env, text, orderNo) {
     text,
     reply_markup: {
       inline_keyboard: [[
-        { text: "✅ 完成訂單 #" + orderNo, callback_data: "complete:" + orderNo }
+        { text: "✅ 完成訂單 #" + orderNo, callback_data: "complete:" + orderNo },
+        { text: "❌ 取消訂單 #" + orderNo, callback_data: "cancel:" + orderNo }
       ]]
     }
   };
