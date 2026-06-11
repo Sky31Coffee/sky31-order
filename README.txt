@@ -1,12 +1,14 @@
-Sky31 V49 Telegram Order Format
+Sky31 V63 Checkout Exit Fix
 
-更新內容：
-- Telegram 訂單格式重新整理，更易讀
-- 顯示訂單號、下單完整日期時間
-- 取餐時間顯示完整日期，例如 2026-06-12 08:30-09:00（明天早上）
-- 飲品按豆子分組
-- 顯示冷熱、冰量、奶類、備註
-- 一鍵完成訂單 / 網站查詢需下一步 Cloudflare Worker 版本
+修正內容：
+- 修復手機按確認訂單後卡在 checkout 畫面
+- 成功下單後顯示訂單號
+- 自動清空購物車
+- 自動關閉確認訂單視窗
+- 按鈕會恢復可點擊狀態
+- fetch 加 12 秒 timeout，避免前端長時間卡死
 
-測試：https://你的網址.pages.dev/?v=v49telegram
-Test
+GitHub 最少只需要覆蓋：
+- index.html
+
+如果仍有手機提交問題，請同時覆蓋 V62 的 functions/api/order.js。
