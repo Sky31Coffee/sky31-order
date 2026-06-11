@@ -28,6 +28,7 @@ export async function onRequestPost(context) {
       orderText,
       createdAt: createdAt.toISOString(),
       completedAt: null,
+      pickedUpAt: null,
       telegramMessageId: null
     };
 
@@ -36,8 +37,9 @@ export async function onRequestPost(context) {
       order.telegramMessageId = telegram.result.message_id;
     }
 
-    await env.ORDERS.put("order:" + orderNo, JSON.stringify(order));
-    await env.ORDERS.put("phone:" + normalizePhone(body.phone) + ":" + orderNo, orderNo);
+    const ttl = 60 * 60 * 24 * 14;
+    await env.ORDERS.put("order:" + orderNo, JSON.stringify(order), { expirationTtl: ttl });
+    await env.ORDERS.put("phone:" + normalizePhone(body.phone) + ":" + orderNo, orderNo, { expirationTtl: ttl });
 
     return json({ ok: true, orderNo, status: order.status, pickupTime });
   } catch (e) {
@@ -50,7 +52,7 @@ async function nextOrderNo(env) {
   const key = "counter:" + d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
   const current = parseInt(await env.ORDERS.get(key) || "0", 10);
   const next = current + 1;
-  await env.ORDERS.put(key, String(next));
+  await env.ORDERS.put(key, String(next), { expirationTtl: 60 * 60 * 24 * 30 });
   return "A" + String(next).padStart(3, "0");
 }
 
