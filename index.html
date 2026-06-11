@@ -1853,6 +1853,65 @@ button[type="submit"] span{
   .bb-name{font-size:18px;}
 }
 
+
+/* V47 refined order status progress */
+.bb-status-card{
+  background:#fbfaf7 !important;
+}
+.bb-brand{
+  font-size:34px !important;
+  margin-bottom:38px !important;
+  color:#2f2f2f !important;
+  line-height:1 !important;
+  filter:grayscale(1) saturate(0) !important;
+  opacity:.88 !important;
+}
+.bb-progress{
+  position:relative;
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr;
+  align-items:end;
+  padding:0 0 20px;
+  margin:0 0 30px;
+  border-bottom:2px solid #2f2f2f;
+}
+.bb-step{
+  text-align:center;
+  color:#d8d8d8;
+  font-size:16px;
+  font-weight:500;
+}
+.bb-step .ico{
+  display:block;
+  font-size:31px;
+  line-height:1;
+  margin-bottom:18px;
+  filter:grayscale(1) saturate(0);
+  opacity:.22;
+}
+.bb-step.done,
+.bb-step.active{
+  color:#2f2f2f;
+  font-weight:700;
+}
+.bb-step.done .ico,
+.bb-step.active .ico{
+  opacity:1;
+  filter:grayscale(1) saturate(0);
+}
+.bb-step.done .ico{
+  opacity:.72;
+}
+.bb-step.active .ico{
+  opacity:1;
+}
+.bb-desc{
+  color:#9d9d9d;
+}
+.bb-no{
+  color:#333;
+}
+
 </style>
 
 <style>
@@ -3271,9 +3330,9 @@ function bbOrderCard(o){
     '<div class="bb-no">' + no + '</div>' +
     '<div class="bb-desc">' + desc + '</div>' +
     '<div class="bb-progress">' +
-      '<div class="bb-step active"><span class="ico">🧾</span>已下單</div>' +
-      '<div class="bb-step ' + (!done ? "active" : "") + '"><span class="ico">☕</span>製作中</div>' +
-      '<div class="bb-step ' + (done ? "active" : "") + '"><span class="ico">✅</span>' + (picked ? "已領取" : "已完成") + '</div>' +
+      '<div class="bb-step done"><span class="ico">▧</span>已下單</div>' +
+      '<div class="bb-step ' + (!done ? "active" : "done") + '"><span class="ico">▱</span>製作中</div>' +
+      '<div class="bb-step ' + (done ? "active" : "") + '"><span class="ico">▣</span>' + (picked ? "已領取" : "已完成") + '</div>' +
     '</div>' +
     '<div class="bb-times">' +
       '<div class="bb-time-row"><span>取餐時間</span><b>' + (o.pickupTime || "-") + '</b></div>' +
