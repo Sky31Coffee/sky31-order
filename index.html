@@ -1745,31 +1745,40 @@ async function checkOrderStatus() {
     const data = await res.json();
 
     if (!data.ok) {
-      result.innerHTML = '<p class="status-error">' + (data.error || "查詢不到訂單") + '</p>';
+      result.innerHTML = '<p class="status-error">' + (data.error || "查詢不到目前可顯示的訂單") + '</p>';
       return;
     }
 
     const orders = data.orders || [data];
 
     result.innerHTML = orders.map(function(o) {
-      const statusText = o.status === "completed" ? "🟢 已完成" : "🟡 製作中";
+      let statusText = "🟡 製作中";
+      if (o.status === "completed") statusText = "🟢 已完成";
+      if (o.status === "picked_up") statusText = "🔵 已領取";
+
       const completed = o.completedAt ? '<small>完成時間：' + o.completedAt.replace("T"," ").slice(0,16) + '</small><br>' : "";
-      const items = Array.isArray(o.cart) ? o.cart.map(function(item) {
-        const details = [];
-        if (item.bean) details.push(item.bean.split("｜")[0]);
-        if (item.temp) details.push(item.temp);
-        if (item.ice && item.ice !== "不適用") details.push(item.ice);
-        if (item.milk && item.milk !== "No Milk 不加奶") details.push(item.milk);
-        if (item.note && item.note !== "無備註") details.push("備註：" + item.note);
-        return '<div class="status-order-item"><b>' + (item.name || "-") + ' × ' + (item.qty || 1) + '</b><small>' + details.join("｜") + '</small></div>';
-      }).join("") : "";
+      let items = "";
+
+      if (Array.isArray(o.cart) && o.cart.length) {
+        items = o.cart.map(function(item) {
+          const details = [];
+          if (item.bean) details.push(String(item.bean).split("｜")[0]);
+          if (item.temp) details.push(item.temp);
+          if (item.ice && item.ice !== "不適用") details.push(item.ice);
+          if (item.milk && item.milk !== "No Milk 不加奶") details.push(item.milk);
+          if (item.note && item.note !== "無備註") details.push("備註：" + item.note);
+          return '<div class="status-order-item"><b>' + (item.name || item.cn || "-") + ' × ' + (item.qty || 1) + '</b><small>' + details.join("｜") + '</small></div>';
+        }).join("");
+      } else if (o.orderText) {
+        items = '<pre class="status-order-text">' + String(o.orderText).replace(/[&<>"']/g, function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];}) + '</pre>';
+      }
 
       return '<div class="status-card">' +
         '<div class="status-head-row"><strong>#' + o.orderNo + '</strong><span>' + statusText + '</span></div>' +
         '<small>取餐時間：' + (o.pickupTime || "-") + '</small><br>' +
         completed +
         '<div class="status-order-list"><div class="status-order-title">訂單內容</div>' +
-        (items || '<small>沒有訂單內容資料</small>') +
+        (items || '<small>此訂單沒有保存飲品明細資料</small>') +
         '</div></div>';
     }).join("");
   } catch (e) {
