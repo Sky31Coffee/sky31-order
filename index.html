@@ -2038,6 +2038,71 @@ button[type="submit"] span{
 .bb-badge.completed{background:#eaf8ef !important;color:#15803d !important;}
 .bb-badge.picked_up{background:#eaf1ff !important;color:#16a34a !important;}
 
+
+/* V50 collapse order details + image cover fix */
+.bb-detail-toggle{
+  width:100%;
+  margin:6px 0 18px;
+  padding:13px 14px;
+  border:1px solid rgba(0,0,0,.08);
+  border-radius:18px;
+  background:rgba(255,255,255,.72);
+  color:#333;
+  font-weight:900;
+  font-size:15px;
+  box-shadow:0 10px 22px rgba(0,0,0,.045), inset 0 1px 0 rgba(255,255,255,.9);
+}
+.bb-detail-toggle:active{transform:scale(.985);}
+.bb-detail-panel{
+  display:none;
+}
+.bb-detail-panel.open{
+  display:block;
+}
+.bb-detail-panel .bb-times{
+  margin-top:0!important;
+}
+/* Product option modal top image: fill white border without stretching */
+.option-modal img,
+.option-sheet img,
+.product-modal img,
+.drink-modal img,
+#optionModal img,
+#drinkModal img,
+#productModal img,
+.modal img.menu-detail-image,
+.modal img.product-detail-image{
+  object-fit:cover!important;
+  object-position:center!important;
+}
+.option-modal .hero img,
+.option-sheet .hero img,
+.product-modal .hero img,
+.drink-modal .hero img,
+#optionModal .hero img,
+#drinkModal .hero img,
+#productModal .hero img,
+.modal .hero img{
+  width:100%!important;
+  height:100%!important;
+  object-fit:cover!important;
+  object-position:center!important;
+}
+.option-modal .hero,
+.option-sheet .hero,
+.product-modal .hero,
+.drink-modal .hero,
+#optionModal .hero,
+#drinkModal .hero,
+#productModal .hero,
+.modal .hero,
+.option-image,
+.product-image-large,
+.drink-image-large{
+  overflow:hidden!important;
+  background:#f5f2eb!important;
+}
+
 </style>
 
 <style>
@@ -2409,6 +2474,15 @@ line-height:1.6;
   </div>
 </div>
 <script>
+
+function bbToggleDetails(id){
+  const panel = document.getElementById(id);
+  const btn = document.querySelector('[data-bb-toggle="' + id + '"]');
+  if(!panel) return;
+  const open = panel.classList.toggle("open");
+  if(btn) btn.textContent = open ? "收起訂單詳情 ▲" : "查看訂單詳情 ▼";
+}
+
 
 function sky31StatusText(status){
   if(status === "picked_up") return "已領取";
@@ -3478,15 +3552,18 @@ function bbOrderCard(o){
       '<div class="bb-step make ' + (!done ? "active" : "done") + '"><span class="ico">☕</span>製作中</div>' +
       '<div class="bb-step ' + (picked ? "pickup active" : (done ? "complete active" : "")) + '"><span class="ico">' + (picked ? "🎉" : "✅") + '</span>' + (picked ? "已領取" : "已完成") + '</div>' +
     '</div>' +
-    '<div class="bb-times">' +
-      '<div class="bb-time-row"><span>取餐時間</span><b>' + (o.pickupTime || "-") + '</b></div>' +
-      (o.createdAt ? '<div class="bb-time-row"><span>下單時間</span><b>' + bbDateTime(o.createdAt) + '</b></div>' : '') +
-      (o.completedAt ? '<div class="bb-time-row"><span>完成時間</span><b>' + bbDateTime(o.completedAt) + '</b></div>' : '') +
-      (o.pickedUpAt ? '<div class="bb-time-row"><span>領取時間</span><b>' + bbDateTime(o.pickedUpAt) + '</b></div>' : '') +
-      '<span class="bb-badge ' + status + '">' + bbStatusText(status) + '</span>' +
+    '<button type="button" class="bb-detail-toggle" data-bb-toggle="bbDetail_' + no + '" onclick="bbToggleDetails(\\'bbDetail_' + no + '\\')">查看訂單詳情 ▼</button>' +
+    '<div id="bbDetail_' + no + '" class="bb-detail-panel">' +
+      '<div class="bb-times">' +
+        '<div class="bb-time-row"><span>取餐時間</span><b>' + (o.pickupTime || "-") + '</b></div>' +
+        (o.createdAt ? '<div class="bb-time-row"><span>下單時間</span><b>' + bbDateTime(o.createdAt) + '</b></div>' : '') +
+        (o.completedAt ? '<div class="bb-time-row"><span>完成時間</span><b>' + bbDateTime(o.completedAt) + '</b></div>' : '') +
+        (o.pickedUpAt ? '<div class="bb-time-row"><span>領取時間</span><b>' + bbDateTime(o.pickedUpAt) + '</b></div>' : '') +
+        '<span class="bb-badge ' + status + '">' + bbStatusText(status) + '</span>' +
+      '</div>' +
+      '<div class="bb-section-title">訂單內容</div>' +
+      itemHtml +
     '</div>' +
-    '<div class="bb-section-title">訂單內容</div>' +
-    itemHtml +
   '</div>';
 }
 async function sky31ForceCheckStatus(){
