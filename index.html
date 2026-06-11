@@ -89,6 +89,74 @@ label{display:block;margin:14px 0 7px;font-weight:900}
   .sheet h2{font-size:27px}
   .detail-img{height:190px}
 }
+
+/* V68: order success modal + bean recommendation labels */
+.order-success-modal{
+  position:fixed;
+  inset:0;
+  z-index:99999;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  padding:20px;
+  background:rgba(0,0,0,.34);
+  backdrop-filter:blur(18px) saturate(1.2);
+  -webkit-backdrop-filter:blur(18px) saturate(1.2);
+}
+.order-success-modal.show{display:flex;}
+.order-success-card{
+  width:min(390px,92vw);
+  border-radius:28px;
+  padding:28px 22px 24px;
+  text-align:center;
+  background:rgba(255,255,255,.92);
+  border:1px solid rgba(255,255,255,.85);
+  box-shadow:0 28px 80px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.9);
+}
+.order-success-icon{font-size:42px;margin-bottom:8px;}
+.order-success-card h2{margin:0 0 6px;font-size:24px;color:#111827;}
+.order-success-sub{margin:0;color:rgba(17,24,39,.58);font-size:14px;}
+.order-success-no{
+  margin:18px auto 12px;
+  padding:14px 16px;
+  border-radius:18px;
+  background:rgba(17,24,39,.06);
+  color:#111827;
+  font-size:26px;
+  font-weight:900;
+  letter-spacing:.04em;
+}
+.order-success-note{margin:0 0 16px;color:rgba(17,24,39,.58);font-size:13px;}
+.order-success-btn{
+  width:100%;
+  border:0;
+  border-radius:18px;
+  padding:14px 16px;
+  background:linear-gradient(135deg,rgba(28,34,44,.96),rgba(52,62,78,.92));
+  color:#fff;
+  font-weight:900;
+  font-size:15px;
+  box-shadow:0 12px 24px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.15);
+}
+.order-success-btn:active{transform:scale(.98);}
+.bean-recommend-badge,
+.recommend-badge{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  margin-top:7px;
+  padding:5px 9px;
+  border-radius:999px;
+  font-size:12px;
+  font-weight:900;
+  color:#1f2937;
+  background:rgba(255,255,255,.72);
+  border:1px solid rgba(255,255,255,.82);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 6px 14px rgba(0,0,0,.05);
+}
+.bean-recommend-badge.light{color:#7c2d12;}
+.bean-recommend-badge.dark{color:#3f2f1f;}
+
 </style>
 </head>
 <body>
@@ -200,6 +268,36 @@ label{display:block;margin:14px 0 7px;font-weight:900}
 </section>
 
 <script>
+
+function showOrderSuccessModal(orderNo){
+  const modal = document.getElementById("orderSuccessModal");
+  const no = document.getElementById("orderSuccessNo");
+  if(no) no.textContent = orderNo ? ("#" + String(orderNo).replace(/^#/,"")) : "#----";
+  if(modal){
+    modal.classList.add("show");
+    modal.setAttribute("aria-hidden","false");
+    document.body.style.overflow = "hidden";
+  }
+}
+function closeOrderSuccessModal(){
+  const modal = document.getElementById("orderSuccessModal");
+  if(modal){
+    modal.classList.remove("show");
+    modal.setAttribute("aria-hidden","true");
+  }
+  document.body.style.overflow = "";
+}
+function sky31ResetCheckoutUI(){
+  try{
+    const overlays = document.querySelectorAll(".overlay,.modal,.sheet,.cart-modal,.checkout-modal");
+    overlays.forEach(function(el){
+      el.classList.remove("show");
+      if(el.classList.contains("checkout-modal") || el.classList.contains("cart-modal")) el.style.display = "";
+    });
+    document.body.style.overflow = "";
+  }catch(e){}
+}
+
 "use strict";
 
 const PRODUCTS = [
@@ -371,28 +469,87 @@ function makeRobotOrder(){
   lines.push("電話："+val("phone"));
   return lines.join("\n").trim();
 }
-async function submitOrder(){
-  if(submitting)return;
-  if(!cart.length){alert("請先選擇餐品");return}
-  if(!val("name")||!val("phone")){show("customerSheet");return}
-  submitting=true;
-  const btn=$("checkoutSubmitBtn"); const old=btn.innerHTML;
-  btn.disabled=true; btn.innerHTML="提交中...";
-  try{
-    const payload={customerName:val("name"),phone:val("phone"),orderText:makeRobotOrder(),cart:cart,pickup:cart[0]?.pickup||"",createdAt:new Date().toISOString()};
-    const timeout=new Promise((_,rej)=>setTimeout(()=>rej(new Error("timeout")),12000));
-    const req=fetch("/api/order?t="+Date.now(),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload),cache:"no-store"});
-    const res=await Promise.race([req,timeout]);
-    const data=await res.json();
-    if(!res.ok||!data.ok){alert(data.error||"提交失敗，請稍後再試");return}
-    alert("訂單已提交！\n訂單號：#"+data.orderNo);
-    cart=[]; saveState(); updateAll(); closeAll();
-    window.location.href=location.pathname+"?ok="+Date.now();
-  }catch(e){
-    alert("提交時間較長。\n請到查詢訂單輸入手機號碼確認是否已成功。");
-    closeAll();
-  }finally{
-    submitting=false; btn.disabled=false; btn.innerHTML=old;
+async function submitOrder() {
+  if (window.__sky31Submitting) return;
+
+  if (!cart || !cart.length) {
+    alert("請先選擇餐品");
+    return;
+  }
+
+  if (!val("name") || !val("phone")) {
+    openCustomerModal(true);
+    return;
+  }
+
+  window.__sky31Submitting = true;
+
+  const submitBtns = Array.from(document.querySelectorAll("button")).filter(function(btn){
+    const t = btn.textContent || "";
+    return t.includes("確認訂單") || t.includes("Checkout") || t.includes("提交中");
+  });
+
+  submitBtns.forEach(function(btn){
+    btn.dataset.oldText = btn.dataset.oldText || btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = "提交中...";
+    btn.style.opacity = "0.65";
+    btn.style.pointerEvents = "none";
+  });
+
+  try {
+    const payload = {
+      customerName: val("name"),
+      phone: val("phone"),
+      orderText: makeRobotOrder(),
+      cart: cart,
+      pickup: cart[0] && cart[0].pickup ? cart[0].pickup : "",
+      createdAt: new Date().toISOString()
+    };
+
+    const controller = new AbortController();
+    const timer = setTimeout(function(){ controller.abort(); }, 12000);
+
+    const res = await fetch("/api/order?t=" + Date.now(), {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+      cache: "no-store"
+    });
+
+    clearTimeout(timer);
+
+    let data = {};
+    try { data = await res.json(); } catch(e) {}
+
+    if (!res.ok || !data.ok) {
+      alert((data && data.error) || "提交失敗，請稍後再試");
+      return;
+    }
+
+    cart = [];
+    try {
+      localStorage.removeItem("sky31_cart");
+      localStorage.removeItem("cart");
+    } catch(e) {}
+
+    try { saveState && saveState(); } catch(e) {}
+    try { updateAll && updateAll(); } catch(e) {}
+
+    sky31ResetCheckoutUI();
+    showOrderSuccessModal(data.orderNo);
+
+  } catch(e) {
+    alert("訂單可能已提交。\n請到「查詢訂單」輸入手機號碼確認。");
+  } finally {
+    window.__sky31Submitting = false;
+    submitBtns.forEach(function(btn){
+      btn.disabled = false;
+      btn.innerHTML = btn.dataset.oldText || "確認訂單 Checkout";
+      btn.style.opacity = "";
+      btn.style.pointerEvents = "";
+    });
   }
 }
 function updateAll(){updateCustomer();updateCart()}
@@ -436,6 +593,49 @@ document.addEventListener("DOMContentLoaded",()=>{
   loadState(); renderMenu(); bindChips(document); updateAll();
 });
 window.addEventListener("error",e=>console.error("Sky31 error:",e.message,e.filename,e.lineno));
+
+function sky31BeanRecommendationForName(name){
+  name = String(name || "").toLowerCase();
+  if(name.includes("americano") || name.includes("美式")) return {text:"推薦：淺烘精品豆", cls:"light"};
+  if(name.includes("latte") || name.includes("拿鐵") || name.includes("cappuccino") || name.includes("卡布") || name.includes("mocha") || name.includes("摩卡") || name.includes("dirty") || name.includes("髒")) return {text:"推薦：中深烘拼配豆", cls:"dark"};
+  return null;
+}
+function sky31ApplyBeanRecommendations(){
+  const cards = document.querySelectorAll(".product,.product-card,.drink-card,.menu-card,[data-name]");
+  cards.forEach(function(card){
+    if(card.querySelector(".bean-recommend-badge")) return;
+    const name = card.getAttribute("data-name") || card.querySelector("h3,h2,strong,.product-title,.name")?.textContent || card.textContent || "";
+    const rec = sky31BeanRecommendationForName(name);
+    if(!rec) return;
+    const badge = document.createElement("div");
+    badge.className = "bean-recommend-badge " + rec.cls;
+    badge.textContent = rec.text;
+    const target = card.querySelector("h3,h2,.product-title,.name,strong") || card.firstElementChild || card;
+    if(target && target.parentNode){
+      target.insertAdjacentElement("afterend", badge);
+    }else{
+      card.appendChild(badge);
+    }
+  });
+}
+document.addEventListener("DOMContentLoaded", function(){
+  sky31ApplyBeanRecommendations();
+  setTimeout(sky31ApplyBeanRecommendations, 300);
+  setTimeout(sky31ApplyBeanRecommendations, 1000);
+});
+
 </script>
+
+<div id="orderSuccessModal" class="order-success-modal" aria-hidden="true">
+  <div class="order-success-card">
+    <div class="order-success-icon">✅</div>
+    <h2>訂單已提交</h2>
+    <p class="order-success-sub">Sky31 已收到你的訂單</p>
+    <div class="order-success-no" id="orderSuccessNo">#----</div>
+    <p class="order-success-note">可使用手機號碼查詢訂單狀態</p>
+    <button type="button" class="order-success-btn" onclick="closeOrderSuccessModal()">知道了</button>
+  </div>
+</div>
+
 </body>
 </html>
