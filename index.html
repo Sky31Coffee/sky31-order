@@ -1522,6 +1522,153 @@ button[type="submit"] span{
   font-size:13px;
 }
 
+
+/* V45 order status page style */
+.status-card{
+  background:rgba(255,255,255,.88);
+  border:1px solid rgba(230,226,218,.88);
+  border-radius:26px;
+  padding:24px 22px;
+  margin:18px 0;
+  box-shadow:0 18px 45px rgba(0,0,0,.055);
+}
+.status-top-brand{
+  font-size:30px;
+  line-height:1;
+  margin-bottom:28px;
+}
+.status-order-label{
+  color:#222;
+  font-size:24px;
+  font-weight:900;
+  line-height:1.15;
+  margin-bottom:4px;
+}
+.status-order-no{
+  font-size:42px;
+  letter-spacing:.12em;
+  font-weight:900;
+  color:#2f2f2f;
+  margin-bottom:16px;
+}
+.status-desc{
+  color:#9a9a9a;
+  font-size:17px;
+  line-height:1.5;
+  margin-bottom:30px;
+}
+.status-flow{
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr;
+  gap:0;
+  border-bottom:2px solid #333;
+  padding:10px 0 16px;
+  margin:0 0 24px;
+}
+.status-step{
+  text-align:center;
+  color:#d4d4d4;
+  font-weight:800;
+  font-size:15px;
+}
+.status-step-icon{
+  display:block;
+  font-size:28px;
+  margin-bottom:10px;
+  opacity:.45;
+}
+.status-step.active{
+  color:#252525;
+}
+.status-step.active .status-step-icon{
+  opacity:1;
+}
+.status-time-box{
+  border-bottom:1px solid rgba(0,0,0,.08);
+  padding:0 0 22px;
+  margin-bottom:20px;
+}
+.status-time-row{
+  display:flex;
+  justify-content:space-between;
+  gap:16px;
+  color:#555;
+  font-size:15px;
+  line-height:1.7;
+}
+.status-time-row strong{
+  color:#222;
+}
+.status-section-title{
+  font-size:20px;
+  font-weight:900;
+  color:#222;
+  margin:20px 0 14px;
+}
+.status-product-row{
+  display:grid;
+  grid-template-columns:68px 1fr auto;
+  gap:14px;
+  align-items:center;
+  padding:18px 0;
+  border-top:1px solid rgba(0,0,0,.08);
+}
+.status-product-img{
+  width:58px;
+  height:78px;
+  border-radius:14px;
+  background:#f5f2eb;
+  background-size:cover;
+  background-position:center;
+}
+.status-product-name{
+  font-size:20px;
+  font-weight:900;
+  color:#333;
+  margin-bottom:7px;
+}
+.status-product-meta{
+  color:#8b8b8b;
+  font-size:15px;
+  line-height:1.55;
+}
+.status-product-qty{
+  font-size:18px;
+  font-weight:900;
+  color:#333;
+  align-self:end;
+  padding-bottom:5px;
+}
+.status-badge{
+  display:inline-block;
+  padding:7px 11px;
+  border-radius:999px;
+  font-size:13px;
+  font-weight:900;
+  background:#f3f4f6;
+  color:#333;
+  margin-top:8px;
+}
+.status-badge.done{background:#ecfdf5;color:#047857;}
+.status-badge.pending{background:#fef9c3;color:#a16207;}
+.status-badge.picked{background:#eff6ff;color:#1d4ed8;}
+.status-order-text{
+  white-space:pre-wrap;
+  font-size:14px;
+  color:#555;
+  line-height:1.6;
+  background:#fafafa;
+  border-radius:16px;
+  padding:14px;
+}
+@media(max-width:520px){
+  .status-card{padding:24px 18px;border-radius:24px;}
+  .status-order-no{font-size:38px;}
+  .status-product-row{grid-template-columns:58px 1fr auto;gap:12px;}
+  .status-product-img{width:50px;height:68px;}
+  .status-product-name{font-size:18px;}
+}
+
 </style>
 
 <style>
@@ -1875,6 +2022,77 @@ line-height:1.6;
   </div>
 </div>
 <script>
+
+function sky31StatusText(status){
+  if(status === "picked_up") return "已領取";
+  if(status === "completed") return "已完成";
+  if(status === "pending") return "製作中";
+  return status || "製作中";
+}
+function sky31DateTimeText(s){
+  if(!s) return "-";
+  try{
+    const d = new Date(s);
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,"0");
+    const day = String(d.getDate()).padStart(2,"0");
+    const h = String(d.getHours()).padStart(2,"0");
+    const min = String(d.getMinutes()).padStart(2,"0");
+    return y + "-" + m + "-" + day + " " + h + ":" + min;
+  }catch(e){return s;}
+}
+function sky31OrderStatusCard(o){
+  const status = o.displayStatus || o.status || "pending";
+  const isDone = status === "completed" || status === "picked_up";
+  const isPicked = status === "picked_up";
+  const statusClass = isPicked ? "picked" : (isDone ? "done" : "pending");
+  const desc = isPicked ? "訂單已領取，感謝你的信賴，期待你的再次選擇" :
+               isDone ? "訂單已完成，請到取餐位置領取" :
+               "訂單已收到，Sky31 正在為你準備";
+  let items = "";
+  if(Array.isArray(o.cart) && o.cart.length){
+    items = o.cart.map(function(item){
+      const name = item.name || item.cn || "-";
+      const meta = [
+        item.bean ? String(item.bean).split("|")[0].split("｜")[0].trim() : "",
+        item.temp || "",
+        item.ice && item.ice !== "不適用" ? item.ice : "",
+        item.milk || "",
+        item.pickup || ""
+      ].filter(Boolean).join("、");
+      const img = item.image ? "background-image:url('" + item.image + "')" : "";
+      return '<div class="status-product-row">' +
+        '<div class="status-product-img" style="' + img + '"></div>' +
+        '<div><div class="status-product-name">' + name + '</div><div class="status-product-meta">' + meta + '</div></div>' +
+        '<div class="status-product-qty">x' + (item.qty || 1) + '</div>' +
+      '</div>';
+    }).join("");
+  }else if(o.orderText){
+    items = '<div class="status-order-text">' + String(o.orderText).replace(/[&<>]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;"}[c];}) + '</div>';
+  }else{
+    items = '<div class="status-product-meta">此訂單沒有保存飲品明細資料</div>';
+  }
+  return '<div class="status-card">' +
+    '<div class="status-top-brand">☕</div>' +
+    '<div class="status-order-label">取餐號</div>' +
+    '<div class="status-order-no">' + (o.orderNo || "").replace(/^#/,"") + '</div>' +
+    '<div class="status-desc">' + desc + '</div>' +
+    '<div class="status-flow">' +
+      '<div class="status-step active"><span class="status-step-icon">🧾</span>已下單</div>' +
+      '<div class="status-step ' + (!isDone && !isPicked ? "active" : "") + '"><span class="status-step-icon">☕</span>製作中</div>' +
+      '<div class="status-step ' + (isDone || isPicked ? "active" : "") + '"><span class="status-step-icon">✅</span>' + (isPicked ? "已領取" : "已完成") + '</div>' +
+    '</div>' +
+    '<div class="status-time-box">' +
+      '<div class="status-time-row"><span>取餐時間</span><strong>' + (o.pickupTime || "-") + '</strong></div>' +
+      (o.completedAt ? '<div class="status-time-row"><span>完成時間</span><strong>' + sky31DateTimeText(o.completedAt) + '</strong></div>' : '') +
+      (o.pickedUpAt ? '<div class="status-time-row"><span>領取時間</span><strong>' + sky31DateTimeText(o.pickedUpAt) + '</strong></div>' : '') +
+      '<span class="status-badge ' + statusClass + '">' + sky31StatusText(status) + '</span>' +
+    '</div>' +
+    '<div class="status-section-title">訂單內容</div>' +
+    items +
+  '</div>';
+}
+
 
 function sky31ShowSuccessToast(orderNo){
   try{
@@ -2781,6 +2999,39 @@ function sky31OpenMenuAfterSuccess(){
   }catch(e){}
 }
 document.addEventListener("DOMContentLoaded", sky31OpenMenuAfterSuccess);
+
+
+(function(){
+  const originalCheckStatus = window.checkStatus;
+  if(typeof originalCheckStatus === "function" && !window.__sky31StatusWrapped){
+    window.__sky31StatusWrapped = true;
+    window.checkStatus = async function(){
+      const result = document.getElementById("statusResult") || document.getElementById("status-result") || document.querySelector(".status-result");
+      const orderInput = document.getElementById("statusOrderNo") || document.getElementById("orderNo") || document.querySelector("[name='orderNo']");
+      const phoneInput = document.getElementById("statusPhone") || document.getElementById("phoneStatus") || document.querySelector("[name='statusPhone']");
+      const orderNo = orderInput ? orderInput.value.trim() : "";
+      const phone = phoneInput ? phoneInput.value.trim() : "";
+      if(!phone){
+        alert("請輸入手機號碼");
+        return;
+      }
+      if(result) result.innerHTML = "<p class='status-product-meta'>查詢中...</p>";
+      try{
+        const url = "/api/status?phone=" + encodeURIComponent(phone) + (orderNo ? "&orderNo=" + encodeURIComponent(orderNo) : "") + "&t=" + Date.now();
+        const res = await fetch(url, {cache:"no-store"});
+        const data = await res.json();
+        if(!data.ok){
+          if(result) result.innerHTML = "<p class='status-product-meta'>" + (data.error || "查詢不到目前可顯示的訂單") + "</p>";
+          return;
+        }
+        const orders = Array.isArray(data.orders) ? data.orders : [data];
+        if(result) result.innerHTML = orders.map(sky31OrderStatusCard).join("");
+      }catch(e){
+        if(result) result.innerHTML = "<p class='status-product-meta'>暫時無法查詢，請稍後再試。</p>";
+      }
+    };
+  }
+})();
 
 </script>
 </div>
