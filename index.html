@@ -1899,7 +1899,7 @@ function sky31ShowSuccessFromUrl(){
     const orderNo = params.get("success");
     if(orderNo){
       sky31ShowSuccessToast(orderNo);
-      history.replaceState(null, "", location.pathname);
+      history.replaceState(null, "", location.pathname + "?menu=1");
     }
   }catch(e){}
 }
@@ -2602,7 +2602,7 @@ async function submitOrder() {
     try { sky31ShowSuccessToast(data.orderNo); } catch(e) {}
 
     setTimeout(function(){
-      window.location.href = location.pathname + "?success=" + encodeURIComponent(data.orderNo) + "&t=" + Date.now();
+      window.location.href = location.pathname + "?menu=1&success=" + encodeURIComponent(data.orderNo) + "&t=" + Date.now();
     }, 600);
 
     return;
@@ -2766,6 +2766,21 @@ function sky31ApplyLattePhotoOverride() {
   } catch(e) {}
 }
 sky31ApplyLattePhotoOverride();
+
+
+function sky31OpenMenuAfterSuccess(){
+  try{
+    const params = new URLSearchParams(location.search);
+    if(params.get("menu") === "1"){
+      const landing = document.getElementById("landingPage");
+      const app = document.getElementById("orderApp");
+      if(landing) landing.classList.add("hidden");
+      if(app) app.classList.remove("hidden");
+      window.scrollTo({top:0, behavior:"auto"});
+    }
+  }catch(e){}
+}
+document.addEventListener("DOMContentLoaded", sky31OpenMenuAfterSuccess);
 
 </script>
 </div>
