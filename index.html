@@ -2871,6 +2871,184 @@ input.input-error{
   }
 }
 
+
+/* V92 price system */
+.menu-price-line{
+  margin-top:8px;
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:6px 9px;
+  border-radius:999px;
+  background:rgba(255,255,255,.58);
+  border:1px solid rgba(255,255,255,.68);
+  font-size:12px;
+  font-weight:720;
+  color:#2f2a24;
+  letter-spacing:-.01em;
+}
+.detail-price-box{
+  margin:14px 0 4px;
+  padding:12px 14px;
+  border-radius:18px;
+  background:rgba(255,255,255,.56);
+  border:1px solid rgba(255,255,255,.70);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.75);
+  font-weight:760;
+  color:#2f2a24;
+}
+.detail-price-sub{
+  margin-top:4px;
+  font-size:12px;
+  font-weight:520;
+  color:rgba(47,42,36,.62);
+}
+.cart-price-line,
+.status-price-line,
+.bb-price-line{
+  display:block;
+  margin-top:4px;
+  font-weight:720;
+  color:#2f2a24;
+}
+.cart-total-line,
+.status-total-line,
+.bb-total-line{
+  margin-top:12px;
+  padding:12px 0 0;
+  border-top:1px solid rgba(47,42,36,.12);
+  display:flex;
+  justify-content:space-between;
+  gap:14px;
+  font-weight:820;
+  color:#2f2a24;
+}
+.status-product-price,
+.bb-item-price{
+  text-align:right;
+  font-weight:780;
+  font-variant-numeric:tabular-nums;
+  white-space:nowrap;
+}
+@media(max-width:430px){
+  .menu-price-line{font-size:11px;padding:5px 8px;}
+  .detail-price-box{padding:11px 12px;}
+  .status-product-price,.bb-item-price{font-size:12px;}
+}
+
+
+/* V97 clean detail price no flash */
+/* Clean version: no intervals, no duplicate detail price renderer. */
+
+.product{
+  position:relative !important;
+}
+
+.product-body{
+  position:relative !important;
+  padding-bottom:38px !important;
+}
+
+.product .menu-price-line{
+  position:absolute !important;
+  right:14px !important;
+  bottom:14px !important;
+  margin-top:0 !important;
+  z-index:3 !important;
+  display:inline-flex !important;
+  white-space:nowrap !important;
+  padding:6px 10px !important;
+  border-radius:999px !important;
+  background:rgba(255,255,255,.72) !important;
+  border:1px solid rgba(255,255,255,.82) !important;
+  box-shadow:0 8px 20px rgba(0,0,0,.08), inset 0 1px 0 rgba(255,255,255,.86) !important;
+  backdrop-filter:blur(14px) saturate(1.25) !important;
+  -webkit-backdrop-filter:blur(14px) saturate(1.25) !important;
+  font-size:12px !important;
+  font-weight:780 !important;
+  color:#2f2a24 !important;
+}
+
+#detailPriceBox.detail-price-box{
+  display:block !important;
+  visibility:visible !important;
+  opacity:1 !important;
+  margin:10px 0 14px !important;
+  padding:13px 14px !important;
+  border-radius:16px !important;
+  background:rgba(255,255,255,.58) !important;
+  border:1px solid rgba(255,255,255,.72) !important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.78) !important;
+}
+
+#detailPriceBox .detail-price-title{
+  font-size:13px;
+  font-weight:850;
+  color:#2f2a24;
+  margin-bottom:9px;
+  letter-spacing:-.01em;
+}
+
+#detailPriceBox .detail-price-grid{
+  display:grid !important;
+  grid-template-columns:88px 1fr;
+  gap:7px 12px;
+  align-items:center;
+}
+
+#detailPriceBox .detail-price-grid span{
+  font-size:12px;
+  font-weight:620;
+  color:rgba(47,42,36,.58);
+}
+
+#detailPriceBox .detail-price-grid strong{
+  text-align:right;
+  font-size:13px;
+  font-weight:820;
+  color:#2f2a24;
+  font-variant-numeric:tabular-nums;
+}
+
+#detailPriceBox .detail-price-grid .detail-subtotal{
+  font-size:15px;
+  font-weight:900;
+}
+
+@media(max-width:430px){
+  .product-body{
+    padding-bottom:34px !important;
+  }
+
+  .product .menu-price-line{
+    right:12px !important;
+    bottom:12px !important;
+    font-size:10.5px !important;
+    padding:5px 8px !important;
+  }
+
+  #detailPriceBox.detail-price-box{
+    padding:12px 13px !important;
+  }
+
+  #detailPriceBox .detail-price-grid{
+    grid-template-columns:78px 1fr;
+    gap:6px 10px;
+  }
+
+  #detailPriceBox .detail-price-grid span{
+    font-size:11.5px;
+  }
+
+  #detailPriceBox .detail-price-grid strong{
+    font-size:12.5px;
+  }
+
+  #detailPriceBox .detail-price-grid .detail-subtotal{
+    font-size:14.5px;
+  }
+}
+
 </style>
 
 <style>
@@ -4785,6 +4963,544 @@ window.addEventListener("load", function() {
     setTimeout(replaceConfirmedIcon, 300);
     setTimeout(replaceConfirmedIcon, 1000);
   }, true);
+})();
+</script>
+
+
+<script>
+/* V92 price system */
+(function(){
+  var PRICE_TABLE = {
+    americano: { hot:28, iced:35 },
+    latte: { hot:40, iced:45 },
+    cappuccino: { hot:40, iced:45 },
+    mocha: { hot:38, iced:43 },
+    chocolate: { hot:30, iced:35 },
+    dirty: { fixed:38 }
+  };
+
+  function norm(s){
+    return String(s || "").toLowerCase().replace(/\s+/g,"");
+  }
+
+  function productKeyByName(name, cn){
+    var n = norm(name) + " " + norm(cn);
+    if(n.indexOf("dirty") >= 0 || n.indexOf("髒") >= 0 || n.indexOf("脏") >= 0) return "dirty";
+    if(n.indexOf("americano") >= 0 || n.indexOf("美式") >= 0) return "americano";
+    if(n.indexOf("latte") >= 0 || n.indexOf("拿鐵") >= 0 || n.indexOf("拿铁") >= 0) return "latte";
+    if(n.indexOf("cappuccino") >= 0 || n.indexOf("卡布") >= 0) return "cappuccino";
+    if(n.indexOf("mocha") >= 0 || n.indexOf("摩卡") >= 0) return "mocha";
+    if(n.indexOf("chocolate") >= 0 || n.indexOf("可可") >= 0) return "chocolate";
+    return "";
+  }
+
+  function isIced(temp){
+    temp = String(temp || "");
+    return temp.indexOf("Iced") >= 0 || temp.indexOf("凍") >= 0 || temp.indexOf("冻") >= 0;
+  }
+
+  window.sky31PriceForItem = function(item){
+    item = item || {};
+    var key = productKeyByName(item.name, item.cn);
+    var table = PRICE_TABLE[key];
+    if(!table) return 0;
+    if(table.fixed) return table.fixed;
+    return isIced(item.temp) ? table.iced : table.hot;
+  };
+
+  window.sky31PriceForProduct = function(product, temp){
+    product = product || {};
+    var key = productKeyByName(product.name, product.cn);
+    var table = PRICE_TABLE[key];
+    if(!table) return 0;
+    if(table.fixed) return table.fixed;
+    return isIced(temp) ? table.iced : table.hot;
+  };
+
+  window.sky31PriceLabelForProduct = function(product){
+    product = product || {};
+    var key = productKeyByName(product.name, product.cn);
+    var table = PRICE_TABLE[key];
+    if(!table) return "";
+    if(table.fixed) return "MOP " + table.fixed;
+    return "熱 MOP " + table.hot + " / 凍 MOP " + table.iced;
+  };
+
+  function money(n){
+    n = Number(n || 0);
+    return "MOP " + (Math.round(n * 100) / 100).toString();
+  }
+  window.sky31Money = money;
+
+  function enrichedItem(item){
+    var x = Object.assign({}, item || {});
+    var unit = Number(x.unitPrice || x.price || sky31PriceForItem(x) || 0);
+    var qty = Number(x.qty || x.quantity || 1);
+    x.unitPrice = unit;
+    x.price = unit;
+    x.subtotal = unit * qty;
+    x.currency = "MOP";
+    return x;
+  }
+  window.sky31EnrichedItem = enrichedItem;
+
+  function enrichedCart(){
+    return (Array.isArray(window.cart) ? window.cart : cart).map(enrichedItem);
+  }
+  window.sky31EnrichedCart = enrichedCart;
+
+  function cartTotal(c){
+    return (c || enrichedCart()).reduce(function(s,x){
+      return s + Number(x.subtotal || (Number(x.unitPrice || x.price || 0) * Number(x.qty || 1)) || 0);
+    },0);
+  }
+  window.sky31CartTotal = cartTotal;
+
+  function ensureDetailPriceBox(){
+    var qty = document.getElementById("detailQty");
+    var desc = document.getElementById("detailDesc");
+    var box = document.getElementById("detailPriceBox");
+    if(!box){
+      box = document.createElement("div");
+      box.id = "detailPriceBox";
+      box.className = "detail-price-box";
+    }
+
+    var qtyBlock = qty ? qty.parentElement : null;
+    if(qtyBlock && qtyBlock.parentNode){
+      if(qtyBlock.nextSibling !== box){
+        qtyBlock.parentNode.insertBefore(box, qtyBlock.nextSibling);
+      }
+    }else if(desc && desc.parentNode && desc.nextSibling !== box){
+      desc.parentNode.insertBefore(box, desc.nextSibling);
+    }
+    return box;
+  }
+
+  function updateDetailPrice(){
+    if(typeof current === "undefined" || !current) return;
+    var box = ensureDetailPriceBox();
+    if(!box) return;
+
+    var temp = current.forceIced ? "Iced 凍" : (typeof chipValue === "function" ? chipValue("temp") : "Hot 熱");
+    var unit = sky31PriceForProduct(current, temp);
+    var qty = Number((document.getElementById("detailQty") || {}).textContent || detailQty || 1);
+    if(!qty || isNaN(qty)) qty = 1;
+
+    box.innerHTML =
+      '<div class="detail-price-title">價格明細 Price Details</div>' +
+      '<div class="detail-price-grid">' +
+        '<span>飲品</span><strong>' + (current.name || current.cn || "飲品") + '</strong>' +
+        '<span>規格</span><strong>' + (temp || "-") + '</strong>' +
+        '<span>杯量</span><strong>' + qty + ' 杯</strong>' +
+        '<span>單價</span><strong>' + money(unit) + '</strong>' +
+        '<span>小計</span><strong class="detail-subtotal">' + money(unit * qty) + '</strong>' +
+      '</div>';
+  }
+  window.sky31UpdateDetailPrice = updateDetailPrice;
+
+  var oldRenderMenu = window.renderMenu;
+  window.renderMenu = function(){
+    var menu = document.getElementById("menu");
+    if(!menu || typeof products === "undefined") {
+      if(typeof oldRenderMenu === "function") oldRenderMenu();
+      return;
+    }
+    menu.innerHTML = "";
+    products.forEach(function(p,i){
+      var item = document.createElement("div");
+      item.className = "product";
+      item.onclick = function(){ openDetail(i); };
+      item.innerHTML =
+        '<div class="product-img" style="background-image:url(' + p.image + ')"></div>' +
+        '<div class="product-body">' +
+          '<h3>' + esc(p.name) + '</h3>' +
+          '<p>' + esc(p.cn) + '</p>' +
+          '<div class="menu-price-line">' + sky31PriceLabelForProduct(p) + '</div>' +
+        '</div>';
+      menu.appendChild(item);
+    });
+  };
+
+  var oldOpenDetail = window.openDetail;
+  window.openDetail = function(i){
+    if(typeof oldOpenDetail === "function") oldOpenDetail(i);
+    requestAnimationFrame(updateDetailPrice);
+  };
+
+  var oldHandleTempChange = window.handleTempChange;
+  window.handleTempChange = function(){
+    if(typeof oldHandleTempChange === "function") oldHandleTempChange();
+    requestAnimationFrame(updateDetailPrice);
+  };
+
+  var oldChangeDetailQty = window.changeDetailQty;
+  window.changeDetailQty = function(delta){
+    if(typeof oldChangeDetailQty === "function") oldChangeDetailQty(delta);
+    requestAnimationFrame(updateDetailPrice);
+  };
+
+  window.addToCart = function(){
+    var temp = chipValue("temp");
+    if(current && current.forceIced) temp = "Iced 凍";
+    var ice = document.getElementById("iceBox").classList.contains("hidden") ? "不適用" : chipValue("ice");
+    var unit = sky31PriceForProduct(current, temp);
+    var item = {
+      name: current.name,
+      cn: current.cn,
+      image: current.image,
+      temp: temp,
+      ice: ice,
+      milk: current.milk ? chipValue("milk") : "No Milk 不加奶",
+      bean: selectedBeanText(),
+      pickup: chipValue("pickup"),
+      note: val("note") || "無備註",
+      qty: Number((document.getElementById("detailQty") || {}).textContent || detailQty || 1),
+      unitPrice: unit,
+      price: unit,
+      subtotal: unit * Number((document.getElementById("detailQty") || {}).textContent || detailQty || 1),
+      currency: "MOP"
+    };
+    cart.push(item);
+    updateAll();
+    closeDetail();
+  };
+
+  window.changeCartQty = function(i, delta){
+    if(!cart[i]) return;
+    var currentQty = Number(cart[i].qty || 1);
+    var nextQty = currentQty + delta;
+    if(nextQty <= 0){
+      cart.splice(i,1);
+    }else{
+      cart[i].qty = nextQty;
+      var unit = Number(cart[i].unitPrice || cart[i].price || sky31PriceForItem(cart[i]) || 0);
+      cart[i].unitPrice = unit;
+      cart[i].price = unit;
+      cart[i].subtotal = unit * nextQty;
+      cart[i].currency = "MOP";
+    }
+    updateAll();
+  };
+
+  window.updateCartList = function(){
+    var list = document.getElementById("cartList");
+    var modalList = document.getElementById("cartModalList");
+    if(!list) return;
+
+    if(!cart.length){
+      list.innerHTML = '<p style="color:#777;">尚未加入飲品。</p>';
+      if(modalList) modalList.innerHTML = '<p style="color:#777;">尚未加入飲品。</p>';
+      return;
+    }
+
+    list.innerHTML = "";
+    if(modalList) modalList.innerHTML = "";
+
+    cart.forEach(function(raw,i){
+      var x = enrichedItem(raw);
+      cart[i] = Object.assign(cart[i], x);
+      var beanText = x.bean ? esc(String(x.bean).split("｜")[0]) + "・" : "";
+      var info = esc(x.cn) + "<br>" + beanText + esc(x.temp) + "・" + esc(x.pickup) +
+        '<span class="cart-price-line">' + money(x.unitPrice) + ' × ' + (x.qty || 1) + ' = ' + money(x.subtotal) + '</span>';
+      var controls =
+        '<div class="cart-qty-controls">' +
+          '<button class="cart-qty-btn" onclick="changeCartQty(' + i + ', -1)">−</button>' +
+          '<span class="cart-qty-num">' + (x.qty || 1) + '</span>' +
+          '<button class="cart-qty-btn" onclick="changeCartQty(' + i + ', 1)">＋</button>' +
+        '</div>';
+
+      var htmlRow =
+        '<div class="cart-item">' +
+          '<div class="cart-thumb" style="background-image:url(' + x.image + ')"></div>' +
+          '<div class="cart-info"><strong>' + esc(x.name) + '</strong><small>' + info + '</small></div>' +
+          controls +
+        '</div>';
+
+      var row = document.createElement("div");
+      row.innerHTML = htmlRow;
+      list.appendChild(row.firstChild);
+
+      if(modalList){
+        var modalRow = document.createElement("div");
+        modalRow.innerHTML = htmlRow;
+        modalList.appendChild(modalRow.firstChild);
+      }
+    });
+
+    var total = cartTotal();
+    var totalHtml = '<div class="cart-total-line"><span>總額 Total</span><strong>' + money(total) + '</strong></div>';
+    list.insertAdjacentHTML("beforeend", totalHtml);
+    if(modalList) modalList.insertAdjacentHTML("beforeend", totalHtml);
+  };
+
+  window.makeCustomerSummary = function(){
+    var summary = document.getElementById("summary");
+    if(!cart.length){
+      if(summary) summary.innerHTML = "請先選擇餐品。";
+      return "";
+    }
+    var c = enrichedCart();
+    var totalQty = c.reduce(function(s,x){ return s + Number(x.qty || 1); },0);
+    var total = cartTotal(c);
+    var rows = "";
+    c.forEach(function(x){
+      var iceText = x.ice === "不適用" ? "" : "・" + x.ice;
+      rows += '<div class="row"><div><strong>' + esc(x.name) + ' × ' + x.qty + '</strong><br><small>' +
+        esc(x.cn) + (x.bean ? '｜' + esc(String(x.bean).split("｜")[0]) : '') + '｜' + esc(x.temp) + iceText + '｜' + esc(x.pickup) +
+        '<span class="cart-price-line">' + money(x.unitPrice) + ' × ' + x.qty + ' = ' + money(x.subtotal) + '</span>' +
+        '</small></div></div>';
+    });
+    if(summary){
+      summary.innerHTML =
+        '<div class="row"><strong>總杯數</strong><strong>' + totalQty + ' 杯</strong></div>' +
+        '<div class="row"><strong>總額</strong><strong>' + money(total) + '</strong></div>' +
+        rows;
+    }
+    return summary ? summary.innerText : "";
+  };
+
+  window.makeRobotOrder = function(){
+    if(!cart.length) return "";
+    var now = new Date();
+    var c = enrichedCart();
+    var rawPickup = c[0] && c[0].pickup ? c[0].pickup : "-";
+    var pickupResolved = typeof resolvePickupTimeLabel === "function" ? resolvePickupTimeLabel(rawPickup) : rawPickup;
+    var groups = {};
+    c.forEach(function(x){
+      var b = typeof shortBean === "function" ? shortBean(x.bean) : (x.bean || "未選豆");
+      if(!groups[b]) groups[b] = [];
+      var parts = [];
+      parts.push("☕ " + x.name + " ×" + (x.qty || 1));
+      if(x.temp && typeof tempIcon === "function") parts.push(tempIcon(x.temp));
+      else if(x.temp) parts.push(x.temp);
+      var ice = typeof iceShort === "function" ? iceShort(x.ice) : x.ice;
+      if(ice && ice !== "不適用") parts.push(ice);
+      if(x.milk && x.milk.indexOf("不加奶") < 0 && x.milk.indexOf("No Milk") < 0) parts.push("鮮牛乳");
+      parts.push(money(x.unitPrice) + " × " + (x.qty || 1) + " = " + money(x.subtotal));
+      if(x.note && x.note !== "無備註") parts.push("備註：" + x.note);
+      groups[b].push(parts.join("｜"));
+    });
+
+    var lines = [];
+    lines.push("☕ SKY31 ORDER");
+    lines.push("");
+    lines.push("訂單號：{ORDER_NO}");
+    if(typeof formatDateTime === "function") lines.push("下單時間：" + formatDateTime(now));
+    lines.push("");
+    lines.push("取餐時間：");
+    lines.push(pickupResolved);
+    lines.push("");
+    lines.push("━━━━━━━━━━");
+    Object.keys(groups).forEach(function(bean){
+      if(!groups[bean].length) return;
+      lines.push("");
+      lines.push(bean);
+      groups[bean].forEach(function(item){ lines.push(item); });
+    });
+    lines.push("");
+    lines.push("━━━━━━━━━━");
+    lines.push("總額：" + money(cartTotal(c)));
+    lines.push("客人：" + (val("name") || "-"));
+    lines.push("電話：" + (val("phone") || "-"));
+    lines.push("");
+    lines.push("提示：收到訂單後可在 Telegram 按「確認訂單」。");
+    return lines.join("\n");
+  };
+
+  window.submitOrder = async function(){
+    if(!cart.length){
+      var err = document.getElementById("errorMsg");
+      if(err){ err.textContent = "請先選擇餐品"; err.style.display = "block"; }
+      return;
+    }
+    if(!val("name") || !val("phone")){
+      openCustomerModal(true);
+      return;
+    }
+
+    var c = enrichedCart();
+    var total = cartTotal(c);
+    var payload = {
+      customerName: val("name"),
+      phone: val("phone"),
+      orderText: makeRobotOrder(),
+      cart: c,
+      totalAmount: total,
+      currency: "MOP",
+      pickup: c[0] && c[0].pickup ? c[0].pickup : "",
+      createdAt: new Date().toISOString()
+    };
+
+    try{
+      var res = await fetch("/api/order", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify(payload)
+      });
+      var data = await res.json();
+      if(!data.ok){
+        var e = document.getElementById("errorMsg");
+        if(e){ e.textContent = data.error || "提交失敗，請稍後再試"; e.style.display = "block"; }
+        return;
+      }
+
+      cart = [];
+      try{ updateAll(); }catch(e){}
+      try{ closeCartModal(); }catch(e){}
+      try{ sky31ShowSuccessToast(data.orderNo); }catch(e){}
+      setTimeout(function(){
+        window.location.href = location.pathname + "?menu=1&success=" + encodeURIComponent(data.orderNo) + "&t=" + Date.now();
+      },600);
+    }catch(e){
+      var er = document.getElementById("errorMsg");
+      if(er){ er.textContent = "提交失敗，請檢查網絡後再試"; er.style.display = "block"; }
+    }
+  };
+
+  function priceHtmlForStatusItem(item){
+    var x = enrichedItem(item);
+    return '<span class="status-price-line">' + money(x.unitPrice) + ' × ' + (x.qty || 1) + ' = ' + money(x.subtotal) + '</span>';
+  }
+
+  window.sky31StatusItemPriceHtml = priceHtmlForStatusItem;
+
+  // Override status cards to show item prices and total in query detail
+  if(typeof window.sky31OrderStatusCard === "function"){
+    window.sky31OrderStatusCard = function(o){
+      var status = o.displayStatus || o.status || "pending";
+      var isPicked = status === "picked_up";
+      var isDone = status === "completed" || status === "picked_up";
+      var cancelled = status === "cancelled";
+      var statusClass = cancelled ? "cancelled" : (isPicked ? "picked" : (isDone ? "done" : "pending"));
+      var desc = cancelled ? "訂單已取消，如有疑問請聯絡 Sky31" :
+                 isPicked ? "訂單已領取，感謝你的信賴，期待你的再次選擇" :
+                 status === "completed" ? "訂單已完成，請到取餐位置領取" :
+                 status === "making" ? "咖啡正在製作中" :
+                 status === "confirmed" ? "訂單已確認，準備開始製作" :
+                 "已下單，等待確定";
+      var items = "";
+      var total = Number(o.totalAmount || 0);
+      if(Array.isArray(o.cart) && o.cart.length){
+        items = o.cart.map(function(raw){
+          var item = enrichedItem(raw);
+          total += o.totalAmount ? 0 : Number(item.subtotal || 0);
+          var name = item.name || item.cn || "-";
+          var meta = [
+            item.bean ? String(item.bean).split("|")[0].split("｜")[0].trim() : "",
+            item.temp || "",
+            item.ice && item.ice !== "不適用" ? item.ice : "",
+            item.milk || "",
+            item.pickup || ""
+          ].filter(Boolean).join("、");
+          var img = item.image ? "background-image:url('" + item.image + "')" : "";
+          return '<div class="status-product-row">' +
+            '<div class="status-product-img" style="' + img + '"></div>' +
+            '<div><div class="status-product-name">' + name + '</div><div class="status-product-meta">' + meta + priceHtmlForStatusItem(item) + '</div></div>' +
+            '<div class="status-product-price">' + money(item.subtotal) + '</div>' +
+          '</div>';
+        }).join("");
+        items += '<div class="status-total-line"><span>總額 Total</span><strong>' + money(total) + '</strong></div>';
+      }else if(o.orderText){
+        items = '<div class="status-order-text">' + String(o.orderText).replace(/[&<>]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;"}[c];}) + '</div>';
+      }else{
+        items = '<div class="status-product-meta">此訂單沒有保存飲品明細資料</div>';
+      }
+      return '<div class="status-card">' +
+        '<div class="status-top-brand">☕</div>' +
+        '<div class="status-order-label">取餐號</div>' +
+        '<div class="status-order-no">' + (o.orderNo || "").replace(/^#/,"") + '</div>' +
+        '<div class="status-desc">' + desc + '</div>' +
+        (typeof sky31NativeProgressHtml === "function" ? sky31NativeProgressHtml(o) : "") +
+        '<div class="status-time-box">' +
+          '<div class="status-time-row"><span>取餐時間</span><strong>' + (o.pickupTime || "-") + '</strong></div>' +
+          (o.createdAt ? '<div class="status-time-row"><span>下單時間</span><strong>' + sky31DateTimeText(o.createdAt) + '</strong></div>' : '') +
+          (o.confirmedAt ? '<div class="status-time-row"><span>確認時間</span><strong>' + sky31DateTimeText(o.confirmedAt) + '</strong></div>' : '') +
+          (o.makingAt ? '<div class="status-time-row"><span>製作時間</span><strong>' + sky31DateTimeText(o.makingAt) + '</strong></div>' : '') +
+          (o.completedAt ? '<div class="status-time-row"><span>完成時間</span><strong>' + sky31DateTimeText(o.completedAt) + '</strong></div>' : '') +
+          (o.pickedUpAt ? '<div class="status-time-row"><span>領取時間</span><strong>' + sky31DateTimeText(o.pickedUpAt) + '</strong></div>' : '') +
+          '<span class="status-badge ' + statusClass + '">' + sky31StatusText(status) + '</span>' +
+        '</div>' +
+        '<div class="status-section-title">訂單內容</div>' +
+        items +
+      '</div>';
+    };
+  }
+
+  if(typeof window.bbOrderCard === "function"){
+    window.bbOrderCard = function(o){
+      var status = o.displayStatus || o.status || "pending";
+      var cancelled = status === "cancelled";
+      var picked = status === "picked_up";
+      var no = String(o.orderNo || "").replace(/^#/,"");
+      var desc = cancelled ? "訂單已取消，如有疑問請聯絡 Sky31" :
+                 picked ? "已領取，感謝支持 ☕" :
+                 status === "completed" ? "咖啡已完成，歡迎取餐" :
+                 status === "making" ? "咖啡正在製作中" :
+                 status === "confirmed" ? "訂單已確認，準備開始製作" :
+                 "已下單，等待確定";
+      var itemHtml = "";
+      var total = Number(o.totalAmount || 0);
+      if(Array.isArray(o.cart) && o.cart.length){
+        itemHtml = o.cart.map(function(raw){
+          var item = enrichedItem(raw);
+          total += o.totalAmount ? 0 : Number(item.subtotal || 0);
+          var name = item.name || item.cn || "-";
+          var meta = [
+            item.bean ? String(item.bean).split("|")[0].split("｜")[0].trim() : "",
+            item.temp || "",
+            item.ice && item.ice !== "不適用" ? item.ice : "",
+            item.milk || "",
+            item.pickup || ""
+          ].filter(Boolean).join("、");
+          var img = item.image ? "background-image:url('" + item.image + "')" : "";
+          return '<div class="bb-item">' +
+            '<div class="bb-img" style="' + img + '"></div>' +
+            '<div><div class="bb-name">' + name + '</div><div class="bb-meta">' + meta + '<span class="bb-price-line">' + money(item.unitPrice) + ' × ' + (item.qty || 1) + ' = ' + money(item.subtotal) + '</span></div></div>' +
+            '<div class="bb-item-price">' + money(item.subtotal) + '</div>' +
+          '</div>';
+        }).join("");
+        itemHtml += '<div class="bb-total-line"><span>總額 Total</span><strong>' + money(total) + '</strong></div>';
+      }else{
+        itemHtml = '<div class="bb-meta">此訂單沒有保存飲品明細資料</div>';
+      }
+      return '<div class="bb-status-card">' +
+        '<div class="bb-title">取餐號</div>' +
+        '<div class="bb-no">' + no + '</div>' +
+        '<div class="bb-desc">' + desc + '</div>' +
+        (typeof sky31NativeProgressHtml === "function" ? sky31NativeProgressHtml(o) : "") +
+        '<button type="button" class="bb-detail-toggle" data-bb-toggle="bbDetail_' + no + '">查看訂單詳情 ▼</button>' +
+        '<div id="bbDetail_' + no + '" class="bb-detail-panel">' +
+          '<div class="bb-times">' +
+            '<div class="bb-time-row"><span>取餐時間</span><b>' + (o.pickupTime || "-") + '</b></div>' +
+            (o.createdAt ? '<div class="bb-time-row"><span>下單時間</span><b>' + bbDateTime(o.createdAt) + '</b></div>' : '') +
+            (o.confirmedAt ? '<div class="bb-time-row"><span>確認時間</span><b>' + bbDateTime(o.confirmedAt) + '</b></div>' : '') +
+            (o.makingAt ? '<div class="bb-time-row"><span>製作時間</span><b>' + bbDateTime(o.makingAt) + '</b></div>' : '') +
+            (o.completedAt ? '<div class="bb-time-row"><span>完成時間</span><b>' + bbDateTime(o.completedAt) + '</b></div>' : '') +
+            (o.pickedUpAt ? '<div class="bb-time-row"><span>領取時間</span><b>' + bbDateTime(o.pickedUpAt) + '</b></div>' : '') +
+            (o.cancelledAt ? '<div class="bb-time-row"><span>取消時間</span><b>' + bbDateTime(o.cancelledAt) + '</b></div>' : '') +
+            '<span class="bb-badge ' + status + '">' + bbStatusText(status) + '</span>' +
+          '</div>' +
+          '<div class="bb-section-title">訂單內容</div>' +
+          itemHtml +
+        '</div>' +
+      '</div>';
+    };
+  }
+
+  function boot(){
+    try{ renderMenu(); }catch(e){}
+    try{ updateAll(); }catch(e){}
+  }
+  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
+
+  document.addEventListener("click", function(e){
+    if(e.target && e.target.closest && e.target.closest('[data-field="temp"] .chip,[data-field="pickup"] .chip,.qty-btn')){
+      setTimeout(updateDetailPrice, 40);
+    }
+  }, true);
+
 })();
 </script>
 
