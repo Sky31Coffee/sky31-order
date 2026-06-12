@@ -2706,11 +2706,118 @@ input.input-error{
 
 
 
-/* V84 single progress fix */
-/* Keep only the original order-status progress UI. Hide duplicated V82/V83 injected bars if cached. */
-.sky31-progress-v82,
-.sky31-progress-v83{
+
+/* V85 status five step single progress */
+/* Only affects order status query page. Keeps Telegram / API untouched. */
+
+/* Hide old 3-step/old injected progress blocks inside status results only */
+#statusResult .sky31-progress-v82,
+#statusResult .sky31-progress-v83,
+#statusResult .status-progress,
+#statusResult .progress,
+#statusResult .order-progress,
+#statusResult .progress-steps{
   display:none !important;
+}
+
+/* New single five-step progress */
+#statusResult .sky31-progress-v85{
+  margin:18px 0 18px;
+  padding:14px 10px 12px;
+  border-radius:20px;
+  background:rgba(255,255,255,.44);
+  border:1px solid rgba(255,255,255,.58);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.66), 0 12px 28px rgba(0,0,0,.06);
+}
+
+#statusResult .sky31-status-pill-v85{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:7px 12px;
+  border-radius:999px;
+  background:rgba(255,255,255,.68);
+  border:1px solid rgba(255,255,255,.72);
+  font-size:13px;
+  font-weight:720;
+  color:#2f2a24;
+}
+
+#statusResult .sky31-progress-v85-row{
+  display:grid;
+  grid-template-columns:repeat(5,1fr);
+  gap:6px;
+  align-items:start;
+  margin-top:12px;
+}
+
+#statusResult .sky31-progress-v85-step{
+  text-align:center;
+  opacity:.30;
+  position:relative;
+  color:#2f2a24;
+}
+
+#statusResult .sky31-progress-v85-step.is-on{
+  opacity:1;
+}
+
+#statusResult .sky31-progress-v85-dot{
+  width:32px;
+  height:32px;
+  border-radius:999px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  margin:0 auto 6px;
+  background:rgba(255,255,255,.54);
+  border:1px solid rgba(255,255,255,.70);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.82), 0 8px 18px rgba(0,0,0,.08);
+  font-size:16px;
+}
+
+#statusResult .sky31-progress-v85-step.is-on .sky31-progress-v85-dot{
+  background:linear-gradient(145deg, rgba(255,255,255,.96), rgba(255,255,255,.58));
+  box-shadow:0 10px 24px rgba(0,0,0,.12), inset 0 1px 0 rgba(255,255,255,.95);
+}
+
+#statusResult .sky31-progress-v85-label{
+  font-size:10.5px;
+  line-height:1.18;
+  font-weight:680;
+  color:#2f2a24;
+  word-break:keep-all;
+}
+
+#statusResult .sky31-progress-v85-time{
+  margin-top:2px;
+  min-height:12px;
+  font-size:9px;
+  line-height:1.15;
+  color:rgba(47,42,36,.60);
+}
+
+@media(max-width:430px){
+  #statusResult .sky31-progress-v85{
+    margin:15px 0 16px;
+    padding:12px 7px 10px;
+  }
+  #statusResult .sky31-progress-v85-row{
+    gap:3px;
+  }
+  #statusResult .sky31-progress-v85-dot{
+    width:28px;
+    height:28px;
+    font-size:14px;
+    margin-bottom:5px;
+  }
+  #statusResult .sky31-progress-v85-label{
+    font-size:9.5px;
+    line-height:1.14;
+  }
+  #statusResult .sky31-progress-v85-time{
+    font-size:8px;
+  }
 }
 
 </style>
@@ -4527,27 +4634,161 @@ window.addEventListener("load", function() {
 
 
 
+
+
 <script>
-/* V84 single progress fix */
+/* V85 status five step single progress */
 (function(){
-  function normalizeStatusText(){
-    document.querySelectorAll("*").forEach(function(el){
-      if(!el || !el.childNodes || el.childNodes.length !== 1) return;
-      var t = el.textContent || "";
-      if(t.trim() === "等待確認") el.textContent = "已下單，等待確認";
-      if(t.trim() === "咖啡正在製作中") el.textContent = "製作中";
-      if(t.trim() === "已完成") el.textContent = "已完成，等待領取";
+  function rank(status){
+    if(status === "confirmed") return 2;
+    if(status === "making") return 3;
+    if(status === "completed") return 4;
+    if(status === "picked_up") return 5;
+    if(status === "cancelled") return -1;
+    return 1; // pending / empty = already ordered
+  }
+
+  function label(status){
+    if(status === "confirmed") return "已確認訂單";
+    if(status === "making") return "製作中";
+    if(status === "completed") return "已完成，等待領取";
+    if(status === "picked_up") return "已領取";
+    if(status === "cancelled") return "已取消";
+    return "已下單，等待確定";
+  }
+
+  function icon(status){
+    if(status === "confirmed") return "✅";
+    if(status === "making") return "👨‍🍳";
+    if(status === "completed") return "✅";
+    if(status === "picked_up") return "☕";
+    if(status === "cancelled") return "❌";
+    return "🧾";
+  }
+
+  function fmt(t){
+    try{
+      if(!t) return "";
+      var d = new Date(t);
+      if(isNaN(d.getTime())) return "";
+      return String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0");
+    }catch(e){ return ""; }
+  }
+
+  function progressHtml(order){
+    order = order || {};
+    var s = order.status || "pending";
+
+    if(s === "cancelled"){
+      return '<div class="sky31-progress-v85"><span class="sky31-status-pill-v85">❌ 已取消</span></div>';
+    }
+
+    var r = rank(s);
+    var steps = [
+      {k:"pending",   i:"🧾", l:"已下單<br><span style=\"font-weight:520;opacity:.72\">等待確定</span>", t:order.createdAt},
+      {k:"confirmed", i:"✅", l:"確定訂單", t:order.confirmedAt},
+      {k:"making",    i:"👨‍🍳", l:"製作中", t:order.makingAt},
+      {k:"completed", i:"✅", l:"已完成", t:order.completedAt},
+      {k:"picked_up", i:"☕", l:"已領取", t:order.pickedUpAt}
+    ];
+
+    var h = '<div class="sky31-progress-v85" data-sky31-progress-v85="1">';
+    h += '<div><span class="sky31-status-pill-v85">' + icon(s) + ' ' + label(s) + '</span></div>';
+    h += '<div class="sky31-progress-v85-row">';
+
+    steps.forEach(function(step){
+      var on = rank(step.k) <= r && r > 0;
+      h += '<div class="sky31-progress-v85-step ' + (on ? "is-on" : "") + '">';
+      h += '<div class="sky31-progress-v85-dot">' + step.i + '</div>';
+      h += '<div class="sky31-progress-v85-label">' + step.l + '</div>';
+      h += '<div class="sky31-progress-v85-time">' + (fmt(step.t) || '&nbsp;') + '</div>';
+      h += '</div>';
+    });
+
+    h += '</div></div>';
+    return h;
+  }
+
+  window.sky31ProgressHtmlV85 = progressHtml;
+
+  function stripOldProgress(html){
+    if(!html || typeof html !== "string") return html;
+    html = html.replace(/<div class="sky31-progress-v82[\s\S]*?<\/div><\/div>/g, "");
+    html = html.replace(/<div class="sky31-progress-v83[\s\S]*?<\/div><\/div>/g, "");
+    html = html.replace(/<div class="sky31-progress-v85[\s\S]*?<\/div><\/div>/g, "");
+    return html;
+  }
+
+  function patchCardHtml(html, order){
+    html = stripOldProgress(html);
+    var progress = progressHtml(order || {});
+
+    // Insert after title if possible, otherwise put it before existing content
+    if(html && html.indexOf("</h3>") >= 0){
+      return html.replace("</h3>", "</h3>" + progress);
+    }
+    if(html && html.indexOf("</h2>") >= 0){
+      return html.replace("</h2>", "</h2>" + progress);
+    }
+    return progress + (html || "");
+  }
+
+  function wrapCardFunction(name){
+    var old = window[name];
+    if(typeof old !== "function" || old.__sky31v85) return;
+    var fn = function(order){
+      var html = old.apply(this, arguments);
+      return patchCardHtml(html, order || {});
+    };
+    fn.__sky31v85 = true;
+    window[name] = fn;
+  }
+
+  function install(){
+    wrapCardFunction("bbOrderCard");
+    wrapCardFunction("sky31OrderStatusCard");
+    wrapCardFunction("orderStatusCard");
+  }
+
+  function cleanupDuplicatedProgress(){
+    var result = document.getElementById("statusResult");
+    if(!result) return;
+
+    // If multiple new bars appear, keep first one per card/result section.
+    var cards = result.querySelectorAll(".order-card,.bb-order-card,.status-card,.card");
+    if(cards.length){
+      cards.forEach(function(card){
+        var bars = card.querySelectorAll(".sky31-progress-v85");
+        bars.forEach(function(bar, idx){
+          if(idx > 0) bar.remove();
+        });
+      });
+    }else{
+      var bars = result.querySelectorAll(".sky31-progress-v85");
+      bars.forEach(function(bar, idx){
+        if(idx > 0) bar.remove();
+      });
+    }
+
+    // Hide old progress styles if they still exist.
+    result.querySelectorAll(".sky31-progress-v82,.sky31-progress-v83,.status-progress,.progress,.order-progress,.progress-steps").forEach(function(el){
+      if(!el.classList.contains("sky31-progress-v85")) el.style.display = "none";
     });
   }
 
   document.addEventListener("DOMContentLoaded", function(){
-    normalizeStatusText();
-    setInterval(normalizeStatusText, 800);
+    install();
+    setInterval(cleanupDuplicatedProgress, 700);
   });
 
+  setTimeout(install, 300);
+  setTimeout(install, 1000);
+
   document.addEventListener("click", function(){
-    setTimeout(normalizeStatusText, 300);
-    setTimeout(normalizeStatusText, 1000);
+    setTimeout(function(){
+      install();
+      cleanupDuplicatedProgress();
+    }, 500);
   }, true);
 })();
 </script>
