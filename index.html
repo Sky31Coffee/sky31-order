@@ -2152,111 +2152,13 @@ body::before{
 
 
 
-/* V61 visual-only: live background motion + iPhone icon support */
-@keyframes sky31LandingBreathV61{
-  0%{ transform:scale(1.00) translate3d(-1.1%, -.8%, 0); }
-  50%{ transform:scale(1.055) translate3d(.7%, .35%, 0); }
-  100%{ transform:scale(1.09) translate3d(1.1%, .8%, 0); }
-}
-@keyframes sky31MenuDriftV61{
-  0%{ background-position:48% 48%; transform:scale(1.02); }
-  50%{ background-position:53% 51%; transform:scale(1.045); }
-  100%{ background-position:50% 54%; transform:scale(1.065); }
-}
-.landing-bg{
-  position:absolute !important;
-  inset:-5% !important;
-  background-image:url("./landing-bg.jpg") !important;
-  background-size:cover !important;
-  background-repeat:no-repeat !important;
-  background-position:center center !important;
-  filter:none !important;
-  animation:sky31LandingBreathV61 24s ease-in-out infinite alternate !important;
-  transform-origin:center center !important;
-  will-change:transform !important;
-}
-.landing-overlay{
-  background:linear-gradient(180deg, rgba(0,0,0,.18), rgba(0,0,0,.08)) !important;
-  backdrop-filter:none !important;
-  -webkit-backdrop-filter:none !important;
-}
-.landing-content{
-  background:rgba(255,255,255,.70) !important;
-  border:1px solid rgba(255,255,255,.82) !important;
-  box-shadow:0 28px 80px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.88) !important;
-  backdrop-filter:none !important;
-  -webkit-backdrop-filter:none !important;
-}
-.landing-subtitle,
-.landing-desc,
-.business-hours,
-.business-hours span,
-.business-hours b,
-.bean-preview b,
-.bean-preview span{
-  color:rgba(20,18,16,.90) !important;
-}
-#orderApp,
-.order-app{
-  position:relative !important;
-  isolation:isolate !important;
-}
-.order-app::before,
-#orderApp::before{
-  content:"" !important;
-  position:fixed !important;
-  inset:-6% !important;
-  z-index:-2 !important;
-  background-image:url("./landing-bg.jpg") !important;
-  background-size:cover !important;
-  background-position:center center !important;
-  background-repeat:no-repeat !important;
-  opacity:.30 !important;
-  filter:none !important;
-  backdrop-filter:none !important;
-  -webkit-backdrop-filter:none !important;
-  animation:sky31MenuDriftV61 32s ease-in-out infinite alternate !important;
-  transform-origin:center center !important;
-  pointer-events:none !important;
-  will-change:transform, background-position !important;
-}
-.order-app::after,
-#orderApp::after{
-  content:"" !important;
-  position:fixed !important;
-  inset:0 !important;
-  z-index:-1 !important;
-  background:rgba(251,250,247,.28) !important;
-  backdrop-filter:none !important;
-  -webkit-backdrop-filter:none !important;
-  pointer-events:none !important;
-}
-.product,
-.card,
-.cart-sheet,
-.order-status-sheet,
-.customer-sheet{
-  background:rgba(255,255,255,.84) !important;
-}
-@media (prefers-reduced-motion: reduce){
-  .landing-bg,
-  .order-app::before,
-  #orderApp::before{
-    animation:none !important;
-    transform:none !important;
-  }
-}
 
 
+/* V75 clean mobile fixed visual background */
 
+/* Landing Page: keep original design. This block only controls menu-page background. */
 
-
-
-/* V71 fixed body background, no inner image/refraction */
-
-/* Do not touch Landing Page. */
-
-/* Disable every old menu background layer and pseudo-layer */
+/* Disable old duplicate pseudo background layers */
 html::before,
 html::after,
 body::before,
@@ -2269,7 +2171,8 @@ body::after,
 #orderApp::after,
 .order-app::before,
 .order-app::after,
-#sky31MenuBg{
+#sky31MenuBg,
+#sky31MobileBg{
   content:none !important;
   display:none !important;
   background:none !important;
@@ -2281,72 +2184,78 @@ body::after,
   -webkit-backdrop-filter:none !important;
 }
 
-/* Normal pages keep default plain background */
+/* Default page background while Landing Page is showing */
 body{
   background:#fbfaf7 !important;
 }
 
-/* Menu page: only ONE fixed background on body. It never scrolls with the frame. */
-body.sky31-menu-page{
+/* One and only one menu background layer. Works on iPhone Safari because it is a real fixed div. */
+#sky31FixedMenuBg{
+  display:none;
+  position:fixed;
+  inset:0;
+  z-index:-9999;
+  pointer-events:none;
   background:
-    linear-gradient(rgba(251,250,247,.22), rgba(251,250,247,.22)),
-    url("./landing-bg.jpg") center center / cover fixed no-repeat !important;
+    linear-gradient(rgba(251,250,247,.16), rgba(251,250,247,.16)),
+    url("./landing-bg.jpg") center center / cover no-repeat;
+  filter:none;
+  transform:none;
+  animation:none;
 }
 
-/* The app and wrap must not contain any image layer */
+/* Show the fixed background only after entering the menu page */
+body.sky31-menu-page #sky31FixedMenuBg{
+  display:block !important;
+}
+
+/* App itself contains no background image */
 #orderApp,
 .order-app{
   position:relative !important;
-  isolation:auto !important;
   background:transparent !important;
   background-image:none !important;
+  isolation:auto !important;
 }
 
+/* Center menu frame: transparent glass look without backdrop-refraction duplicate image */
 #orderApp .wrap,
 .order-app .wrap{
-  width:min(760px, calc(100% - 34px)) !important;
+  width:min(760px, calc(100% - 32px)) !important;
   max-width:760px !important;
   margin:18px auto 34px !important;
   padding:22px 18px 116px !important;
+  min-height:calc(100vh - 36px) !important;
+  position:relative !important;
+  overflow:hidden !important;
 
-  /* transparent frame only; no blur/refracted background image */
   background:
     linear-gradient(145deg,
-      rgba(255,255,255,.38),
-      rgba(255,255,255,.22) 50%,
-      rgba(255,255,255,.16)
+      rgba(255,255,255,.34),
+      rgba(255,255,255,.20) 50%,
+      rgba(255,255,255,.12)
     ) !important;
   background-image:
     linear-gradient(145deg,
-      rgba(255,255,255,.38),
-      rgba(255,255,255,.22) 50%,
-      rgba(255,255,255,.16)
+      rgba(255,255,255,.34),
+      rgba(255,255,255,.20) 50%,
+      rgba(255,255,255,.12)
     ) !important;
 
-  border:1px solid rgba(255,255,255,.55) !important;
+  border:1px solid rgba(255,255,255,.56) !important;
   border-radius:42px !important;
 
   box-shadow:
-    0 22px 70px rgba(0,0,0,.12),
-    inset 0 1px 0 rgba(255,255,255,.75),
-    inset 0 -1px 0 rgba(255,255,255,.18) !important;
+    0 22px 70px rgba(0,0,0,.13),
+    inset 0 1px 0 rgba(255,255,255,.78),
+    inset 0 -1px 0 rgba(255,255,255,.16),
+    inset 1px 0 0 rgba(255,255,255,.22) !important;
 
   backdrop-filter:none !important;
   -webkit-backdrop-filter:none !important;
-
-  min-height:calc(100vh - 36px) !important;
-  overflow:hidden !important;
-  position:relative !important;
 }
 
-/* Keep highlight, but no pseudo-element background photo */
-#orderApp .wrap::before,
-.order-app .wrap::before,
-#orderApp .wrap::after,
-.order-app .wrap::after{
-  background-image:none !important;
-}
-
+/* Liquid-glass highlight only; no photo background and no blur */
 #orderApp .wrap::before,
 .order-app .wrap::before{
   content:"" !important;
@@ -2357,16 +2266,16 @@ body.sky31-menu-page{
   border-radius:42px !important;
   background:
     radial-gradient(circle at 20% 0%,
-      rgba(255,255,255,.52),
-      rgba(255,255,255,.18) 25%,
+      rgba(255,255,255,.48),
+      rgba(255,255,255,.15) 25%,
       rgba(255,255,255,0) 48%
     ),
     linear-gradient(135deg,
-      rgba(255,255,255,.30),
+      rgba(255,255,255,.26),
       rgba(255,255,255,0) 42%,
-      rgba(255,255,255,.16)
+      rgba(255,255,255,.12)
     ) !important;
-  opacity:.78 !important;
+  opacity:.72 !important;
 }
 
 #orderApp .wrap::after,
@@ -2377,31 +2286,32 @@ body.sky31-menu-page{
   inset:1px !important;
   pointer-events:none !important;
   border-radius:40px !important;
-  border:1px solid rgba(255,255,255,.30) !important;
+  border:1px solid rgba(255,255,255,.28) !important;
+  background:none !important;
+  background-image:none !important;
 }
 
-/* Keep menu content above highlight */
 #orderApp .wrap > *,
 .order-app .wrap > *{
   position:relative !important;
   z-index:1 !important;
 }
 
-/* Product cards: translucent, but no backdrop-filter to avoid second moving image */
+/* Product cards: translucent and readable */
 #orderApp .product,
 .order-app .product{
   background:
     linear-gradient(180deg,
-      rgba(255,255,255,.74),
-      rgba(255,255,255,.58)
+      rgba(255,255,255,.64),
+      rgba(255,255,255,.46)
     ) !important;
   background-image:
     linear-gradient(180deg,
-      rgba(255,255,255,.74),
-      rgba(255,255,255,.58)
+      rgba(255,255,255,.64),
+      rgba(255,255,255,.46)
     ) !important;
 
-  border:1px solid rgba(255,255,255,.78) !important;
+  border:1px solid rgba(255,255,255,.74) !important;
   border-radius:26px !important;
   box-shadow:
     0 16px 38px rgba(0,0,0,.10),
@@ -2412,27 +2322,25 @@ body.sky31-menu-page{
   overflow:hidden !important;
 }
 
-/* Product info area */
 #orderApp .product-body,
 .order-app .product-body{
   background:
     linear-gradient(180deg,
-      rgba(255,255,255,.68),
-      rgba(255,255,255,.52)
+      rgba(255,255,255,.62),
+      rgba(255,255,255,.42)
     ) !important;
   backdrop-filter:none !important;
   -webkit-backdrop-filter:none !important;
 }
 
-/* Other cards / order box */
 #orderApp .card,
 .order-app .card{
   background:
     linear-gradient(145deg,
-      rgba(255,255,255,.70),
-      rgba(255,255,255,.50)
+      rgba(255,255,255,.62),
+      rgba(255,255,255,.42)
     ) !important;
-  border:1px solid rgba(255,255,255,.78) !important;
+  border:1px solid rgba(255,255,255,.74) !important;
   border-radius:30px !important;
   box-shadow:
     0 16px 38px rgba(0,0,0,.09),
@@ -2441,13 +2349,11 @@ body.sky31-menu-page{
   -webkit-backdrop-filter:none !important;
 }
 
-/* Header/logo remains clean */
 #orderApp .header,
 .order-app .header{
   background:transparent !important;
 }
 
-/* Popups remain readable, no background-image */
 .sheet,
 .cart-sheet,
 .order-status-sheet,
@@ -2457,14 +2363,32 @@ body.sky31-menu-page{
   background-image:none !important;
 }
 
-/* Mobile */
+/* Mobile tuning */
 @media(max-width:430px){
+  #sky31FixedMenuBg{
+    background:
+      linear-gradient(rgba(251,250,247,.08), rgba(251,250,247,.08)),
+      url("./landing-bg.jpg") center center / cover no-repeat !important;
+  }
+
   #orderApp .wrap,
   .order-app .wrap{
     width:calc(100% - 20px) !important;
     margin:10px auto 24px !important;
     padding:18px 12px 116px !important;
     border-radius:36px !important;
+    background:
+      linear-gradient(145deg,
+        rgba(255,255,255,.26),
+        rgba(255,255,255,.14) 50%,
+        rgba(255,255,255,.08)
+      ) !important;
+    background-image:
+      linear-gradient(145deg,
+        rgba(255,255,255,.26),
+        rgba(255,255,255,.14) 50%,
+        rgba(255,255,255,.08)
+      ) !important;
   }
 
   #orderApp .wrap::before,
@@ -2476,178 +2400,38 @@ body.sky31-menu-page{
   .order-app .wrap::after{
     border-radius:34px !important;
   }
-}
 
-
-/* V72 Mobile Safari fixed background */
-
-#sky31MobileBg{
-  display:none;
-}
-
-@media (max-width: 1024px){
-  body.sky31-menu-page{
-    background:#fbfaf7 !important;
-  }
-
-  #sky31MobileBg{
-    display:block !important;
-    position:fixed !important;
-    inset:0 !important;
-    z-index:-9999 !important;
-    background:
-      linear-gradient(rgba(251,250,247,.22), rgba(251,250,247,.22)),
-      url("./landing-bg.jpg") center center / cover no-repeat !important;
-    pointer-events:none !important;
-  }
-}
-
-
-/* V73 mobile glass transparency fix */
-@media (max-width: 1024px){
-
-  /* Keep the real fixed background visible on mobile */
-  body.sky31-menu-page{
-    background:#fbfaf7 !important;
-  }
-
-  #sky31MobileBg{
-    display:block !important;
-    position:fixed !important;
-    inset:0 !important;
-    z-index:-9999 !important;
-    background:
-      linear-gradient(rgba(251,250,247,.10), rgba(251,250,247,.10)),
-      url("./landing-bg.jpg") center center / cover no-repeat !important;
-    opacity:1 !important;
-    filter:none !important;
-    pointer-events:none !important;
-  }
-
-  /* Main menu frame: much more transparent on mobile */
-  #orderApp .wrap,
-  .order-app .wrap{
-    background:
-      linear-gradient(145deg,
-        rgba(255,255,255,.30),
-        rgba(255,255,255,.15) 52%,
-        rgba(255,255,255,.08)
-      ) !important;
-    background-image:
-      linear-gradient(145deg,
-        rgba(255,255,255,.30),
-        rgba(255,255,255,.15) 52%,
-        rgba(255,255,255,.08)
-      ) !important;
-
-    border:1px solid rgba(255,255,255,.46) !important;
-    border-radius:34px !important;
-
-    box-shadow:
-      0 18px 54px rgba(0,0,0,.14),
-      inset 0 1px 0 rgba(255,255,255,.70),
-      inset 0 -1px 0 rgba(255,255,255,.12) !important;
-
-    /* mobile Safari: use lighter blur, not zero, to retain glass */
-    backdrop-filter:blur(10px) saturate(1.25) !important;
-    -webkit-backdrop-filter:blur(10px) saturate(1.25) !important;
-  }
-
-  /* highlight only, no second image */
-  #orderApp .wrap::before,
-  .order-app .wrap::before{
-    content:"" !important;
-    display:block !important;
-    position:absolute !important;
-    inset:0 !important;
-    pointer-events:none !important;
-    border-radius:34px !important;
-    background:
-      radial-gradient(circle at 22% 4%,
-        rgba(255,255,255,.46),
-        rgba(255,255,255,.14) 25%,
-        rgba(255,255,255,0) 48%
-      ),
-      linear-gradient(135deg,
-        rgba(255,255,255,.24),
-        rgba(255,255,255,0) 44%,
-        rgba(255,255,255,.10)
-      ) !important;
-    opacity:.70 !important;
-  }
-
-  #orderApp .wrap::after,
-  .order-app .wrap::after{
-    content:"" !important;
-    display:block !important;
-    position:absolute !important;
-    inset:1px !important;
-    pointer-events:none !important;
-    border-radius:32px !important;
-    border:1px solid rgba(255,255,255,.24) !important;
-    background:none !important;
-    background-image:none !important;
-  }
-
-  /* Product cards: reduce white-paper feeling */
   #orderApp .product,
   .order-app .product{
+    border-radius:22px !important;
     background:
       linear-gradient(180deg,
-        rgba(255,255,255,.56),
-        rgba(255,255,255,.38)
+        rgba(255,255,255,.50),
+        rgba(255,255,255,.34)
       ) !important;
     background-image:
       linear-gradient(180deg,
-        rgba(255,255,255,.56),
-        rgba(255,255,255,.38)
+        rgba(255,255,255,.50),
+        rgba(255,255,255,.34)
       ) !important;
-    border:1px solid rgba(255,255,255,.58) !important;
-    border-radius:22px !important;
-    box-shadow:
-      0 12px 28px rgba(0,0,0,.10),
-      inset 0 1px 0 rgba(255,255,255,.72) !important;
-    backdrop-filter:blur(8px) saturate(1.18) !important;
-    -webkit-backdrop-filter:blur(8px) saturate(1.18) !important;
   }
 
   #orderApp .product-body,
   .order-app .product-body{
     background:
       linear-gradient(180deg,
-        rgba(255,255,255,.52),
-        rgba(255,255,255,.32)
+        rgba(255,255,255,.50),
+        rgba(255,255,255,.30)
       ) !important;
-    backdrop-filter:blur(6px) saturate(1.12) !important;
-    -webkit-backdrop-filter:blur(6px) saturate(1.12) !important;
   }
 
-  /* Order box and ordinary cards */
   #orderApp .card,
   .order-app .card{
     background:
       linear-gradient(145deg,
-        rgba(255,255,255,.50),
-        rgba(255,255,255,.30)
+        rgba(255,255,255,.52),
+        rgba(255,255,255,.32)
       ) !important;
-    border:1px solid rgba(255,255,255,.58) !important;
-    border-radius:26px !important;
-    box-shadow:
-      0 12px 30px rgba(0,0,0,.09),
-      inset 0 1px 0 rgba(255,255,255,.70) !important;
-    backdrop-filter:blur(8px) saturate(1.16) !important;
-    -webkit-backdrop-filter:blur(8px) saturate(1.16) !important;
-  }
-
-  /* Popups remain readable but not pure white */
-  .sheet,
-  .cart-sheet,
-  .order-status-sheet,
-  .customer-sheet,
-  .modal{
-    background:rgba(251,250,247,.88) !important;
-    backdrop-filter:blur(14px) saturate(1.18) !important;
-    -webkit-backdrop-filter:blur(14px) saturate(1.18) !important;
   }
 }
 
@@ -2918,13 +2702,17 @@ line-height:1.6;
 
 
 
-<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=63">
-<link rel="icon" type="image/png" sizes="512x512" href="/favicon.png?v=63">
-<link rel="shortcut icon" href="/favicon.png?v=63">
+
+
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=75">
+<link rel="icon" type="image/png" sizes="512x512" href="/favicon.png?v=75">
+<link rel="shortcut icon" href="/favicon.png?v=75">
 <meta name="apple-mobile-web-app-title" content="Sky31">
 
 </head>
 <body>
+<div id="sky31FixedMenuBg" aria-hidden="true"></div>
+
 <div id="landingPage" class="landing-page">
   <div class="landing-bg"></div>
   <div class="landing-overlay"></div>
@@ -4229,10 +4017,14 @@ window.addEventListener("load", function() {
 
 
 
+
+
+
+
 <script>
-/* V71 visual-only: menu page body background class */
+/* V75 visual-only menu background toggler */
 (function(){
-  function updateMenuBgClass(){
+  function updateSky31MenuVisualState(){
     var landing = document.getElementById("landingPage") || document.querySelector(".landing-page");
     var app = document.getElementById("orderApp") || document.querySelector(".order-app");
     if(!app) return;
@@ -4244,25 +4036,14 @@ window.addEventListener("load", function() {
   }
 
   document.addEventListener("DOMContentLoaded", function(){
-    updateMenuBgClass();
-    setInterval(updateMenuBgClass, 500);
+    updateSky31MenuVisualState();
+    setInterval(updateSky31MenuVisualState, 500);
   });
 
   document.addEventListener("click", function(){
-    setTimeout(updateMenuBgClass, 100);
-    setTimeout(updateMenuBgClass, 500);
+    setTimeout(updateSky31MenuVisualState, 80);
+    setTimeout(updateSky31MenuVisualState, 400);
   }, true);
-})();
-</script>
-
-
-<script>
-/* V72 mobile fixed background layer */
-(function(){
-  if(document.getElementById('sky31MobileBg')) return;
-  var bg=document.createElement('div');
-  bg.id='sky31MobileBg';
-  document.body.prepend(bg);
 })();
 </script>
 
