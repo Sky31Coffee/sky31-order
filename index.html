@@ -3196,6 +3196,64 @@ input.input-error{
   }
 }
 
+
+/* V100 mobile price lower fix */
+/* Mobile menu only: move all price badges lower and reserve more space below product name. Desktop unchanged. */
+
+@media(max-width:430px){
+  .product-body{
+    min-height:178px !important;
+    padding:18px 18px 18px 18px !important;
+    display:flex !important;
+    flex-direction:column !important;
+  }
+
+  .product-body h3{
+    margin-bottom:6px !important;
+    line-height:1.05 !important;
+  }
+
+  .product-body p{
+    margin-bottom:0 !important;
+    line-height:1.2 !important;
+  }
+
+  .product .menu-price-line{
+    position:static !important;
+    align-self:flex-end !important;
+    margin-top:auto !important;
+    transform:translateY(8px) !important;
+    white-space:nowrap !important;
+    z-index:1 !important;
+  }
+}
+
+@media(max-width:390px){
+  .product-body{
+    min-height:188px !important;
+    padding:17px 16px 18px 16px !important;
+  }
+
+  .product .menu-price-line{
+    transform:translateY(9px) !important;
+    font-size:9.8px !important;
+    padding:7px 9px !important;
+  }
+}
+
+@media(max-width:360px){
+  .product-body{
+    min-height:198px !important;
+  }
+
+  .product .menu-price-line{
+    align-self:stretch !important;
+    justify-content:center !important;
+    text-align:center !important;
+    transform:translateY(10px) !important;
+  }
+}
+
 </style>
 
 <style>
