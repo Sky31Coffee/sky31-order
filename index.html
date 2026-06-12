@@ -3286,7 +3286,8 @@ input.input-error{
 }
 
 
-/* V102 member system */
+
+/* V103 member center refine */
 .member-modal{
   position:fixed;
   inset:0;
@@ -3299,54 +3300,126 @@ input.input-error{
   -webkit-backdrop-filter:blur(10px);
 }
 
-.member-modal.show{
-  display:flex;
-}
+.member-modal.show{display:flex;}
 
 .member-sheet{
-  width:min(520px, calc(100% - 24px));
+  width:min(540px, calc(100% - 24px));
   max-height:88vh;
   overflow:auto;
   margin:0 0 12px;
-  padding:22px;
-  border-radius:28px;
-  background:rgba(250,247,240,.92);
+  padding:0;
+  border-radius:30px;
+  background:rgba(250,247,240,.94);
   border:1px solid rgba(255,255,255,.72);
   box-shadow:0 28px 90px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.82);
   color:#2f2a24;
 }
 
-.member-head{
+.member-topbar{
+  position:sticky;
+  top:0;
+  z-index:5;
+  height:56px;
   display:flex;
-  align-items:flex-start;
-  justify-content:space-between;
-  gap:14px;
+  align-items:center;
+  justify-content:center;
+  padding:0 58px;
+  background:rgba(250,247,240,.88);
+  backdrop-filter:blur(18px);
+  -webkit-backdrop-filter:blur(18px);
+  border-bottom:1px solid rgba(47,42,36,.08);
+}
+
+.member-topbar-title{
+  font-weight:900;
+  letter-spacing:-.02em;
+}
+
+.member-nav-btn{
+  position:absolute;
+  top:9px;
+  width:38px;
+  height:38px;
+  border:0;
+  border-radius:999px;
+  background:rgba(255,255,255,.66);
+  color:#2f2a24;
+  font-size:19px;
+  font-weight:850;
+  line-height:38px;
+  cursor:pointer;
+}
+
+.member-nav-btn.back{left:12px;}
+.member-nav-btn.close{right:12px;}
+
+.member-body{
+  padding:20px 22px 24px;
+}
+
+.member-page{display:none;}
+.member-page.active{display:block;}
+
+.member-hero{
   margin-bottom:16px;
 }
 
-.member-head h2{
+.member-hero h2{
   margin:0;
-  font-size:24px;
-  line-height:1.1;
-  letter-spacing:-.03em;
+  font-size:27px;
+  line-height:1.08;
+  letter-spacing:-.04em;
 }
 
-.member-head small{
-  display:block;
-  margin-top:4px;
-  color:rgba(47,42,36,.56);
+.member-hero p{
+  margin:7px 0 0;
+  color:rgba(47,42,36,.58);
+  font-size:14px;
   font-weight:560;
 }
 
-.member-close{
-  width:38px;
-  height:38px;
-  border-radius:999px;
-  border:0;
-  background:rgba(255,255,255,.62);
-  font-size:22px;
-  line-height:38px;
+.member-menu{
+  display:grid;
+  gap:12px;
+}
+
+.member-menu-card{
+  display:grid;
+  grid-template-columns:42px 1fr 24px;
+  align-items:center;
+  gap:12px;
+  width:100%;
+  text-align:left;
+  border:1px solid rgba(255,255,255,.72);
+  border-radius:22px;
+  padding:15px;
+  background:rgba(255,255,255,.58);
+  color:#2f2a24;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.82);
   cursor:pointer;
+}
+
+.member-menu-icon{
+  width:42px;
+  height:42px;
+  border-radius:16px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:rgba(255,255,255,.68);
+  font-size:21px;
+}
+
+.member-menu-title{
+  font-size:16px;
+  font-weight:900;
+}
+
+.member-menu-sub{
+  margin-top:3px;
+  font-size:12px;
+  color:rgba(47,42,36,.56);
+  font-weight:620;
 }
 
 .member-card{
@@ -3366,9 +3439,7 @@ input.input-error{
   font-size:14px;
 }
 
-.member-row:last-child{
-  border-bottom:0;
-}
+.member-row:last-child{border-bottom:0;}
 
 .member-row span{
   color:rgba(47,42,36,.58);
@@ -3445,24 +3516,13 @@ input.input-error{
   border:0;
   border-radius:999px;
   padding:13px 14px;
-  font-weight:820;
+  font-weight:850;
   cursor:pointer;
 }
 
-.member-btn.primary{
-  background:#1f1d1a;
-  color:#fff;
-}
-
-.member-btn.secondary{
-  background:rgba(255,255,255,.64);
-  color:#2f2a24;
-}
-
-.member-btn.danger{
-  background:rgba(120,36,24,.10);
-  color:#7a251c;
-}
+.member-btn.primary{background:#1f1d1a;color:#fff;}
+.member-btn.secondary{background:rgba(255,255,255,.64);color:#2f2a24;}
+.member-btn.danger{background:rgba(120,36,24,.10);color:#7a251c;}
 
 .member-msg{
   min-height:18px;
@@ -3472,43 +3532,112 @@ input.input-error{
   color:rgba(47,42,36,.72);
 }
 
-.member-msg.error{
-  color:#9a2d22;
-}
+.member-msg.error{color:#9a2d22;}
+.member-msg.success{color:#1f7a47;}
 
 .member-history{
   display:grid;
-  gap:8px;
-  margin-top:10px;
+  gap:10px;
+  margin-top:12px;
 }
 
 .member-order{
-  display:grid;
-  grid-template-columns:auto 1fr auto;
-  gap:10px;
-  align-items:center;
-  padding:10px 0;
-  border-bottom:1px solid rgba(47,42,36,.08);
-  font-size:13px;
+  border-radius:18px;
+  background:rgba(255,255,255,.56);
+  border:1px solid rgba(255,255,255,.70);
+  overflow:hidden;
 }
 
-.member-order:last-child{
-  border-bottom:0;
+.member-order-summary{
+  display:grid;
+  grid-template-columns:1fr auto;
+  gap:10px;
+  align-items:center;
+  padding:13px 14px;
 }
 
 .member-order-no{
-  font-weight:850;
+  font-weight:900;
 }
 
 .member-order-meta{
+  margin-top:3px;
   color:rgba(47,42,36,.58);
   font-size:12px;
-  line-height:1.3;
+  line-height:1.35;
 }
 
 .member-order-total{
-  font-weight:850;
+  text-align:right;
+  font-weight:900;
   font-variant-numeric:tabular-nums;
+}
+
+.member-order-toggle{
+  width:100%;
+  border:0;
+  border-top:1px solid rgba(47,42,36,.08);
+  background:rgba(255,255,255,.42);
+  padding:10px 14px;
+  font-weight:820;
+  color:#2f2a24;
+  cursor:pointer;
+}
+
+.member-order-detail{
+  display:none;
+  padding:12px 14px 14px;
+  border-top:1px solid rgba(47,42,36,.08);
+}
+
+.member-order.open .member-order-detail{display:block;}
+
+.member-order-item{
+  display:grid;
+  grid-template-columns:1fr auto;
+  gap:10px;
+  padding:7px 0;
+  border-bottom:1px solid rgba(47,42,36,.06);
+  font-size:13px;
+}
+
+.member-order-item:last-child{border-bottom:0;}
+
+.member-order-item small{
+  display:block;
+  color:rgba(47,42,36,.56);
+  margin-top:2px;
+  line-height:1.35;
+}
+
+.member-empty{
+  padding:15px;
+  border-radius:18px;
+  background:rgba(255,255,255,.50);
+  color:rgba(47,42,36,.58);
+  font-weight:650;
+}
+
+.member-toast{
+  position:fixed;
+  left:50%;
+  bottom:24px;
+  transform:translateX(-50%) translateY(12px);
+  z-index:10001;
+  opacity:0;
+  pointer-events:none;
+  padding:12px 16px;
+  border-radius:999px;
+  background:rgba(31,29,26,.92);
+  color:#fff;
+  font-weight:820;
+  box-shadow:0 14px 36px rgba(0,0,0,.22);
+  transition:.22s ease;
+}
+
+.member-toast.show{
+  opacity:1;
+  transform:translateX(-50%) translateY(0);
 }
 
 .profile-button.member-logged{
@@ -3527,19 +3656,37 @@ input.input-error{
   border:2px solid rgba(255,255,255,.95);
 }
 
+.status-query button,
+#statusCheckBtn,
+#statusBtn{
+  min-width:46px !important;
+  width:46px !important;
+  padding-left:0 !important;
+  padding-right:0 !important;
+  font-size:18px !important;
+}
+
 @media(max-width:430px){
   .member-sheet{
     width:calc(100% - 16px);
-    padding:20px;
-    border-radius:26px;
+    border-radius:28px;
     margin-bottom:8px;
   }
-  .member-grid{
-    grid-template-columns:1fr 1fr 1fr;
-    gap:8px;
+
+  .member-body{
+    padding:18px 18px 22px;
   }
+
   .member-actions{
     grid-template-columns:1fr;
+  }
+
+  .member-grid{
+    gap:8px;
+  }
+
+  .member-menu-card{
+    border-radius:20px;
   }
 }
 
@@ -5178,7 +5325,7 @@ window.addEventListener("load", function() {
     <label>手機 Phone</label>
     <input id="statusPhone" placeholder="輸入下單手機" inputmode="tel">
     <div id="statusInlineError" class="inline-validation-error" aria-live="polite"></div>
-    <button class="primary" onclick="checkOrderStatus()">查詢 Check Status</button>
+    <button class="primary" onclick="checkOrderStatus()">🔍</button>
     <div id="statusResult" class="status-result"></div>
   </div>
 </div>
@@ -5999,10 +6146,14 @@ window.addEventListener("load", function() {
 </script>
 
 
+
+
 <script>
-/* V102 member system */
+/* V103 member center refine */
 (function(){
   const MEMBER_KEY = "sky31_member_v1";
+  let memberPage = "home";
+  let lastHistory = null;
 
   function $(id){ return document.getElementById(id); }
 
@@ -6012,9 +6163,7 @@ window.addEventListener("load", function() {
     });
   }
 
-  function phoneNorm(s){
-    return String(s || "").replace(/\D/g,"");
-  }
+  function phoneNorm(s){ return String(s || "").replace(/\D/g,""); }
 
   function money(n){
     if(typeof sky31Money === "function") return sky31Money(n);
@@ -6055,11 +6204,25 @@ window.addEventListener("load", function() {
     localStorage.removeItem(MEMBER_KEY);
   }
 
-  function setMsg(text, isError){
+  function setMsg(text, type){
     var msg = $("memberMsg");
     if(!msg) return;
     msg.textContent = text || "";
-    msg.classList.toggle("error", !!isError);
+    msg.classList.toggle("error", type === "error");
+    msg.classList.toggle("success", type === "success");
+  }
+
+  function toast(text){
+    var t = $("memberToast");
+    if(!t){
+      t = document.createElement("div");
+      t.id = "memberToast";
+      t.className = "member-toast";
+      document.body.appendChild(t);
+    }
+    t.textContent = text;
+    t.classList.add("show");
+    setTimeout(function(){ t.classList.remove("show"); }, 1800);
   }
 
   function applyMember(member){
@@ -6086,8 +6249,8 @@ window.addEventListener("load", function() {
       btn.setAttribute("aria-label", btn.title);
     }else{
       btn.classList.remove("member-logged");
-      btn.title = "會員登入 / 查詢";
-      btn.setAttribute("aria-label", "會員登入 / 查詢");
+      btn.title = "會員中心";
+      btn.setAttribute("aria-label", "會員中心");
     }
   }
 
@@ -6099,32 +6262,58 @@ window.addEventListener("load", function() {
     div.className = "member-modal";
     div.innerHTML =
       '<div class="member-sheet">' +
-        '<div class="member-head">' +
-          '<div><h2>Sky31 會員</h2><small>Member login / lookup</small></div>' +
-          '<button class="member-close" type="button" onclick="closeMemberModal()">×</button>' +
+        '<div class="member-topbar">' +
+          '<button id="memberBackBtn" class="member-nav-btn back" type="button" onclick="memberBack()">‹</button>' +
+          '<div id="memberTopTitle" class="member-topbar-title">會員中心</div>' +
+          '<button class="member-nav-btn close" type="button" onclick="closeMemberModal()">×</button>' +
         '</div>' +
+        '<div class="member-body">' +
 
-        '<div id="memberLoggedPanel" class="member-card" style="display:none;"></div>' +
+          '<section id="memberPageHome" class="member-page">' +
+            '<div class="member-hero"><h2>Sky31 會員中心</h2><p>登入會員、查看歷史訂單與累積消費。</p></div>' +
+            '<div id="memberQuickCard" class="member-card" style="display:none;"></div>' +
+            '<div class="member-menu">' +
+              '<button class="member-menu-card" type="button" onclick="memberGoPage(\\'member\\')">' +
+                '<div class="member-menu-icon">👤</div><div><div class="member-menu-title">會員</div><div class="member-menu-sub">登入、註冊、查看會員資料</div></div><div>›</div>' +
+              '</button>' +
+              '<button class="member-menu-card" type="button" onclick="memberGoPage(\\'history\\')">' +
+                '<div class="member-menu-icon">🧾</div><div><div class="member-menu-title">歷史訂單查詢</div><div class="member-menu-sub">查看最近訂單、累積杯數與消費</div></div><div>›</div>' +
+              '</button>' +
+              '<button class="member-menu-card" type="button" onclick="memberLogout()">' +
+                '<div class="member-menu-icon">↩︎</div><div><div class="member-menu-title">登出</div><div class="member-menu-sub">登出目前會員帳號</div></div><div>›</div>' +
+              '</button>' +
+            '</div>' +
+          '</section>' +
 
-        '<div class="member-form">' +
-          '<label>手機 Phone</label>' +
-          '<input id="memberPhone" inputmode="tel" placeholder="輸入手機號碼登入 / 查詢">' +
-          '<label>姓名 Name</label>' +
-          '<input id="memberName" placeholder="首次註冊請輸入姓名">' +
-          '<label>生日 Birthday，可選</label>' +
-          '<input id="memberBirthday" type="date">' +
-          '<label>備註 Note，可選</label>' +
-          '<textarea id="memberNote" placeholder="例如：少冰、常用豆款、稱呼等"></textarea>' +
+          '<section id="memberPageMember" class="member-page">' +
+            '<div class="member-hero"><h2>會員</h2><p>登入查詢或註冊新會員。登入與註冊已分開處理。</p></div>' +
+            '<div id="memberLoggedPanel" class="member-card" style="display:none;"></div>' +
+            '<div class="member-form">' +
+              '<label>手機 Phone</label>' +
+              '<input id="memberPhone" inputmode="tel" placeholder="輸入手機號碼">' +
+              '<label>姓名 Name</label>' +
+              '<input id="memberName" placeholder="註冊新會員時需要輸入姓名">' +
+              '<label>生日 Birthday，可選</label>' +
+              '<input id="memberBirthday" type="date">' +
+              '<label>備註 Note，可選</label>' +
+              '<textarea id="memberNote" placeholder="例如：少冰、常用豆款、稱呼等"></textarea>' +
+            '</div>' +
+            '<div class="member-actions">' +
+              '<button class="member-btn primary" type="button" onclick="memberLoginLookup()">登入 / 查詢</button>' +
+              '<button class="member-btn secondary" type="button" onclick="memberRegisterSave()">註冊</button>' +
+              '<button class="member-btn danger" type="button" onclick="memberLogout()">登出</button>' +
+              '<button class="member-btn secondary" type="button" onclick="memberBack()">上一頁</button>' +
+            '</div>' +
+            '<div id="memberMsg" class="member-msg"></div>' +
+          '</section>' +
+
+          '<section id="memberPageHistory" class="member-page">' +
+            '<div class="member-hero"><h2>歷史訂單</h2><p>查看最近訂單，按「查看詳情」可展開 / 收起。</p></div>' +
+            '<div id="memberHistoryStats" class="member-card"></div>' +
+            '<div id="memberHistoryList" class="member-history"></div>' +
+          '</section>' +
+
         '</div>' +
-
-        '<div class="member-actions">' +
-          '<button class="member-btn primary" type="button" onclick="memberLoginLookup()">登入 / 查詢</button>' +
-          '<button class="member-btn secondary" type="button" onclick="memberRegisterSave()">註冊 / 保存</button>' +
-          '<button class="member-btn danger" type="button" onclick="memberLogout()">登出帳號</button>' +
-          '<button class="member-btn secondary" type="button" onclick="closeMemberModal()">關閉</button>' +
-        '</div>' +
-
-        '<div id="memberMsg" class="member-msg"></div>' +
       '</div>';
     document.body.appendChild(div);
 
@@ -6133,12 +6322,70 @@ window.addEventListener("load", function() {
     });
   }
 
+  function showPage(page){
+    ensureMemberModal();
+    memberPage = page || "home";
+
+    ["Home","Member","History"].forEach(function(name){
+      var el = $("memberPage" + name);
+      if(el) el.classList.remove("active");
+    });
+
+    var title = "會員中心";
+    if(memberPage === "member"){
+      $("memberPageMember").classList.add("active");
+      title = "會員";
+    }else if(memberPage === "history"){
+      $("memberPageHistory").classList.add("active");
+      title = "歷史訂單";
+      renderHistoryPage();
+    }else{
+      $("memberPageHome").classList.add("active");
+      title = "會員中心";
+      renderHomeQuickCard();
+    }
+
+    $("memberTopTitle").textContent = title;
+    $("memberBackBtn").style.visibility = memberPage === "home" ? "hidden" : "visible";
+    setMsg("");
+  }
+
+  window.memberGoPage = function(page){
+    showPage(page);
+  };
+
+  window.memberBack = function(){
+    showPage("home");
+  };
+
   function fillMemberForm(member){
     member = member || storedMember() || {};
     if($("memberPhone")) $("memberPhone").value = member.phone || ($("phone") ? $("phone").value : "");
     if($("memberName")) $("memberName").value = member.name || ($("name") ? $("name").value : "");
     if($("memberBirthday")) $("memberBirthday").value = member.birthday || "";
     if($("memberNote")) $("memberNote").value = member.note || "";
+  }
+
+  function renderHomeQuickCard(){
+    var card = $("memberQuickCard");
+    if(!card) return;
+    var member = storedMember();
+
+    if(!member || !member.phone){
+      card.style.display = "none";
+      card.innerHTML = "";
+      return;
+    }
+
+    card.style.display = "block";
+    card.innerHTML =
+      '<div class="member-row"><span>已登入</span><strong>' + esc(member.name || "-") + '</strong></div>' +
+      '<div class="member-row"><span>電話</span><strong>' + esc(member.phone || "-") + '</strong></div>' +
+      '<div class="member-grid">' +
+        '<div class="member-stat"><b>' + Number(member.totalOrders || 0) + '</b><span>訂單</span></div>' +
+        '<div class="member-stat"><b>' + Number(member.totalCups || 0) + '</b><span>累積杯數</span></div>' +
+        '<div class="member-stat"><b>' + money(member.totalSpent || 0).replace("MOP ","") + '</b><span>消費 MOP</span></div>' +
+      '</div>';
   }
 
   function renderLoggedPanel(member){
@@ -6152,18 +6399,6 @@ window.addEventListener("load", function() {
     }
 
     panel.style.display = "block";
-
-    var orders = Array.isArray(member.recentOrders) ? member.recentOrders : [];
-    var history = orders.length ? orders.map(function(o){
-      var cups = Number(o.totalCups || 0);
-      return '<div class="member-order">' +
-        '<div class="member-order-no">#' + esc(o.orderNo || "") + '</div>' +
-        '<div><div class="member-order-meta">' + esc(dateText(o.createdAt)) + '｜' + esc(statusText(o.status)) + '</div>' +
-        '<div class="member-order-meta">' + cups + ' 杯｜' + esc(o.pickupTime || "") + '</div></div>' +
-        '<div class="member-order-total">' + money(o.totalAmount || 0) + '</div>' +
-      '</div>';
-    }).join("") : '<div class="member-order-meta">暫時沒有歷史訂單</div>';
-
     panel.innerHTML =
       '<div class="member-row"><span>會員</span><strong>' + esc(member.name || "-") + '</strong></div>' +
       '<div class="member-row"><span>電話</span><strong>' + esc(member.phone || "-") + '</strong></div>' +
@@ -6171,11 +6406,74 @@ window.addEventListener("load", function() {
       '<div class="member-grid">' +
         '<div class="member-stat"><b>' + Number(member.totalOrders || 0) + '</b><span>訂單</span></div>' +
         '<div class="member-stat"><b>' + Number(member.totalCups || 0) + '</b><span>累積杯數</span></div>' +
-        '<div class="member-stat"><b>' + money(member.totalSpent || 0).replace("MOP ","") + '</b><span>累積消費 MOP</span></div>' +
-      '</div>' +
-      '<div style="margin-top:14px;font-weight:850;">歷史訂單</div>' +
-      '<div class="member-history">' + history + '</div>';
+        '<div class="member-stat"><b>' + money(member.totalSpent || 0).replace("MOP ","") + '</b><span>消費 MOP</span></div>' +
+      '</div>';
   }
+
+  function renderHistoryPage(){
+    var stats = $("memberHistoryStats");
+    var list = $("memberHistoryList");
+    var member = storedMember();
+
+    if(!stats || !list) return;
+
+    if(!member || !member.phone){
+      stats.innerHTML = '<div class="member-empty">尚未登入會員。請返回會員頁面登入。</div>';
+      list.innerHTML = '<button class="member-btn primary" type="button" onclick="memberGoPage(\\'member\\')">前往登入</button>';
+      return;
+    }
+
+    stats.innerHTML =
+      '<div class="member-row"><span>會員</span><strong>' + esc(member.name || "-") + '</strong></div>' +
+      '<div class="member-grid">' +
+        '<div class="member-stat"><b>' + Number(member.totalOrders || 0) + '</b><span>訂單</span></div>' +
+        '<div class="member-stat"><b>' + Number(member.totalCups || 0) + '</b><span>累積杯數</span></div>' +
+        '<div class="member-stat"><b>' + money(member.totalSpent || 0).replace("MOP ","") + '</b><span>消費 MOP</span></div>' +
+      '</div>';
+
+    var orders = Array.isArray(member.recentOrders) ? member.recentOrders : [];
+    if(!orders.length){
+      list.innerHTML = '<div class="member-empty">暫時沒有歷史訂單</div>';
+      return;
+    }
+
+    list.innerHTML = orders.map(function(o, idx){
+      var items = Array.isArray(o.cart) ? o.cart : [];
+      var itemHtml = items.length ? items.map(function(item){
+        var meta = [
+          item.bean ? String(item.bean).split("|")[0].split("｜")[0].trim() : "",
+          item.temp || "",
+          item.ice && item.ice !== "不適用" ? item.ice : "",
+          item.milk || "",
+          item.pickup || ""
+        ].filter(Boolean).join("、");
+        var subtotal = Number(item.subtotal || (Number(item.unitPrice || item.price || 0) * Number(item.qty || 1)) || 0);
+        return '<div class="member-order-item"><div><b>' + esc(item.name || item.cn || "-") + ' × ' + Number(item.qty || 1) + '</b><small>' + esc(meta) + '</small></div><strong>' + money(subtotal) + '</strong></div>';
+      }).join("") : '<div class="member-order-meta">沒有保存餐品明細</div>';
+
+      return '<div class="member-order" id="memberOrder' + idx + '">' +
+        '<div class="member-order-summary">' +
+          '<div><div class="member-order-no">#' + esc(o.orderNo || "") + '</div>' +
+          '<div class="member-order-meta">' + esc(dateText(o.createdAt)) + '｜' + esc(statusText(o.status)) + '｜' + Number(o.totalCups || 0) + ' 杯</div></div>' +
+          '<div class="member-order-total">' + money(o.totalAmount || 0) + '</div>' +
+        '</div>' +
+        '<button class="member-order-toggle" type="button" onclick="memberToggleOrder(' + idx + ')">查看詳情 ▼</button>' +
+        '<div class="member-order-detail">' +
+          '<div class="member-row"><span>取餐時間</span><strong>' + esc(o.pickupTime || "-") + '</strong></div>' +
+          '<div class="member-row"><span>狀態</span><strong>' + esc(statusText(o.status)) + '</strong></div>' +
+          itemHtml +
+        '</div>' +
+      '</div>';
+    }).join("");
+  }
+
+  window.memberToggleOrder = function(idx){
+    var card = $("memberOrder" + idx);
+    if(!card) return;
+    var open = card.classList.toggle("open");
+    var btn = card.querySelector(".member-order-toggle");
+    if(btn) btn.textContent = open ? "收起詳情 ▲" : "查看詳情 ▼";
+  };
 
   async function fetchMember(phone){
     var res = await fetch("/api/member?phone=" + encodeURIComponent(phoneNorm(phone)) + "&t=" + Date.now(), {cache:"no-store"});
@@ -6184,24 +6482,23 @@ window.addEventListener("load", function() {
     return data.member;
   }
 
-  async function postMember(payload){
+  async function registerMember(payload){
     var res = await fetch("/api/member", {
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify(payload)
     });
     var data = await res.json();
-    if(!res.ok || !data.ok) throw new Error(data.error || "保存會員失敗");
+    if(!res.ok || !data.ok) throw new Error(data.error || "註冊會員失敗");
     return data.member;
   }
 
   window.openMemberModal = async function(){
     ensureMemberModal();
-    setMsg("");
-    fillMemberForm();
     $("memberModal").classList.add("show");
     document.body.style.overflow = "hidden";
-    renderLoggedPanel(storedMember());
+    fillMemberForm();
+    showPage("home");
 
     var m = storedMember();
     if(m && m.phone){
@@ -6210,16 +6507,9 @@ window.addEventListener("load", function() {
         saveStoredMember(fresh);
         applyMember(fresh);
         fillMemberForm(fresh);
-        renderLoggedPanel(fresh);
-      }catch(e){
-        renderLoggedPanel(m);
-      }
+        renderHomeQuickCard();
+      }catch(e){}
     }
-
-    setTimeout(function(){
-      var phone = $("memberPhone");
-      if(phone) phone.focus();
-    },80);
   };
 
   window.closeMemberModal = function(){
@@ -6229,12 +6519,12 @@ window.addEventListener("load", function() {
   };
 
   window.memberLoginLookup = async function(){
-    ensureMemberModal();
     var phone = phoneNorm(($("memberPhone") || {}).value || "");
     if(!phone){
-      setMsg("請輸入手機號碼。", true);
+      setMsg("請輸入手機號碼。", "error");
       return;
     }
+
     setMsg("查詢中...");
     try{
       var member = await fetchMember(phone);
@@ -6242,35 +6532,42 @@ window.addEventListener("load", function() {
       applyMember(member);
       fillMemberForm(member);
       renderLoggedPanel(member);
-      setMsg("已登入會員，訂單資料會自動填入。");
+      renderHomeQuickCard();
+      setMsg("已登入會員。", "success");
     }catch(e){
       renderLoggedPanel(null);
-      setMsg("未找到此電話的會員資料。請輸入姓名後按「註冊 / 保存」。", true);
+      setMsg("未找到此電話的會員資料，請使用註冊按鈕建立會員。", "error");
     }
   };
 
   window.memberRegisterSave = async function(){
-    ensureMemberModal();
     var phone = phoneNorm(($("memberPhone") || {}).value || "");
     var name = (($("memberName") || {}).value || "").trim();
     var birthday = (($("memberBirthday") || {}).value || "").trim();
     var note = (($("memberNote") || {}).value || "").trim();
 
     if(!phone || !name){
-      setMsg("註冊會員需要姓名和手機號碼。", true);
+      setMsg("註冊會員需要姓名和手機號碼。", "error");
       return;
     }
 
-    setMsg("保存中...");
+    setMsg("檢查電話是否已註冊...");
     try{
-      var member = await postMember({phone:phone, name:name, birthday:birthday, note:note});
+      try{
+        await fetchMember(phone);
+        setMsg("此電話已註冊，不能重複註冊。請直接登入。", "error");
+        return;
+      }catch(_){}
+
+      var member = await registerMember({phone:phone, name:name, birthday:birthday, note:note});
       saveStoredMember(member);
       applyMember(member);
       fillMemberForm(member);
       renderLoggedPanel(member);
-      setMsg("會員資料已保存。");
+      renderHomeQuickCard();
+      setMsg("註冊成功，已登入會員。", "success");
     }catch(e){
-      setMsg(e.message || "保存會員失敗。", true);
+      setMsg(e.message || "註冊會員失敗。", "error");
     }
   };
 
@@ -6284,7 +6581,9 @@ window.addEventListener("load", function() {
     if(typeof updateCheckoutCustomerInfo === "function") updateCheckoutCustomerInfo();
     fillMemberForm({});
     renderLoggedPanel(null);
-    setMsg("已登出會員。");
+    renderHomeQuickCard();
+    showPage("home");
+    toast("已成功登出");
   };
 
   function bootMember(){
@@ -6305,7 +6604,7 @@ window.addEventListener("load", function() {
       fetchMember(member.phone).then(function(fresh){
         saveStoredMember(fresh);
         applyMember(fresh);
-        renderLoggedPanel(fresh);
+        renderHomeQuickCard();
       }).catch(function(){});
     }else{
       updateMemberProfileButton(null);
