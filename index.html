@@ -2502,6 +2502,155 @@ body.sky31-menu-page{
   }
 }
 
+
+/* V73 mobile glass transparency fix */
+@media (max-width: 1024px){
+
+  /* Keep the real fixed background visible on mobile */
+  body.sky31-menu-page{
+    background:#fbfaf7 !important;
+  }
+
+  #sky31MobileBg{
+    display:block !important;
+    position:fixed !important;
+    inset:0 !important;
+    z-index:-9999 !important;
+    background:
+      linear-gradient(rgba(251,250,247,.10), rgba(251,250,247,.10)),
+      url("./landing-bg.jpg") center center / cover no-repeat !important;
+    opacity:1 !important;
+    filter:none !important;
+    pointer-events:none !important;
+  }
+
+  /* Main menu frame: much more transparent on mobile */
+  #orderApp .wrap,
+  .order-app .wrap{
+    background:
+      linear-gradient(145deg,
+        rgba(255,255,255,.30),
+        rgba(255,255,255,.15) 52%,
+        rgba(255,255,255,.08)
+      ) !important;
+    background-image:
+      linear-gradient(145deg,
+        rgba(255,255,255,.30),
+        rgba(255,255,255,.15) 52%,
+        rgba(255,255,255,.08)
+      ) !important;
+
+    border:1px solid rgba(255,255,255,.46) !important;
+    border-radius:34px !important;
+
+    box-shadow:
+      0 18px 54px rgba(0,0,0,.14),
+      inset 0 1px 0 rgba(255,255,255,.70),
+      inset 0 -1px 0 rgba(255,255,255,.12) !important;
+
+    /* mobile Safari: use lighter blur, not zero, to retain glass */
+    backdrop-filter:blur(10px) saturate(1.25) !important;
+    -webkit-backdrop-filter:blur(10px) saturate(1.25) !important;
+  }
+
+  /* highlight only, no second image */
+  #orderApp .wrap::before,
+  .order-app .wrap::before{
+    content:"" !important;
+    display:block !important;
+    position:absolute !important;
+    inset:0 !important;
+    pointer-events:none !important;
+    border-radius:34px !important;
+    background:
+      radial-gradient(circle at 22% 4%,
+        rgba(255,255,255,.46),
+        rgba(255,255,255,.14) 25%,
+        rgba(255,255,255,0) 48%
+      ),
+      linear-gradient(135deg,
+        rgba(255,255,255,.24),
+        rgba(255,255,255,0) 44%,
+        rgba(255,255,255,.10)
+      ) !important;
+    opacity:.70 !important;
+  }
+
+  #orderApp .wrap::after,
+  .order-app .wrap::after{
+    content:"" !important;
+    display:block !important;
+    position:absolute !important;
+    inset:1px !important;
+    pointer-events:none !important;
+    border-radius:32px !important;
+    border:1px solid rgba(255,255,255,.24) !important;
+    background:none !important;
+    background-image:none !important;
+  }
+
+  /* Product cards: reduce white-paper feeling */
+  #orderApp .product,
+  .order-app .product{
+    background:
+      linear-gradient(180deg,
+        rgba(255,255,255,.56),
+        rgba(255,255,255,.38)
+      ) !important;
+    background-image:
+      linear-gradient(180deg,
+        rgba(255,255,255,.56),
+        rgba(255,255,255,.38)
+      ) !important;
+    border:1px solid rgba(255,255,255,.58) !important;
+    border-radius:22px !important;
+    box-shadow:
+      0 12px 28px rgba(0,0,0,.10),
+      inset 0 1px 0 rgba(255,255,255,.72) !important;
+    backdrop-filter:blur(8px) saturate(1.18) !important;
+    -webkit-backdrop-filter:blur(8px) saturate(1.18) !important;
+  }
+
+  #orderApp .product-body,
+  .order-app .product-body{
+    background:
+      linear-gradient(180deg,
+        rgba(255,255,255,.52),
+        rgba(255,255,255,.32)
+      ) !important;
+    backdrop-filter:blur(6px) saturate(1.12) !important;
+    -webkit-backdrop-filter:blur(6px) saturate(1.12) !important;
+  }
+
+  /* Order box and ordinary cards */
+  #orderApp .card,
+  .order-app .card{
+    background:
+      linear-gradient(145deg,
+        rgba(255,255,255,.50),
+        rgba(255,255,255,.30)
+      ) !important;
+    border:1px solid rgba(255,255,255,.58) !important;
+    border-radius:26px !important;
+    box-shadow:
+      0 12px 30px rgba(0,0,0,.09),
+      inset 0 1px 0 rgba(255,255,255,.70) !important;
+    backdrop-filter:blur(8px) saturate(1.16) !important;
+    -webkit-backdrop-filter:blur(8px) saturate(1.16) !important;
+  }
+
+  /* Popups remain readable but not pure white */
+  .sheet,
+  .cart-sheet,
+  .order-status-sheet,
+  .customer-sheet,
+  .modal{
+    background:rgba(251,250,247,.88) !important;
+    backdrop-filter:blur(14px) saturate(1.18) !important;
+    -webkit-backdrop-filter:blur(14px) saturate(1.18) !important;
+  }
+}
+
 </style>
 
 <style>
