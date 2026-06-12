@@ -124,7 +124,7 @@ function buildTelegramText(order) {
   lines.push("客人：" + (order.customerName || ""));
   lines.push("電話：" + (order.phone || ""));
   lines.push("");
-  lines.push("提示：完成後可在 Telegram 按「完成訂單」。");
+  lines.push("提示：收到訂單後可在 Telegram 按「確認訂單」。");
 
   return lines.join("\n").trim();
 }
@@ -140,7 +140,7 @@ async function sendTelegram(env, text, orderNo) {
     text,
     reply_markup: {
       inline_keyboard: [[
-        { text: "✅ 完成訂單 #" + orderNo, callback_data: "complete:" + orderNo },
+        { text: "✅ 確認訂單 #" + orderNo, callback_data: "confirm:" + orderNo },
         { text: "❌ 取消訂單 #" + orderNo, callback_data: "cancel:" + orderNo }
       ]]
     }
