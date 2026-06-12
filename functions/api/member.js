@@ -30,21 +30,24 @@ export async function onRequestPost(context) {
       return json({ ok: false, error: "請輸入姓名和手機號碼" }, 400);
     }
 
-    const now = new Date().toISOString();
     const existing = await loadMember(env, phone);
+    if (existing) {
+      return json({ ok: false, error: "此電話已註冊，不能重複註冊。請直接登入。" }, 409);
+    }
+
+    const now = new Date().toISOString();
 
     const member = {
-      ...(existing || {}),
       phone,
       name,
       birthday,
       note,
-      createdAt: existing?.createdAt || now,
+      createdAt: now,
       updatedAt: now,
-      totalOrders: Number(existing?.totalOrders || 0),
-      totalCups: Number(existing?.totalCups || 0),
-      totalSpent: Number(existing?.totalSpent || 0),
-      recentOrderNos: Array.isArray(existing?.recentOrderNos) ? existing.recentOrderNos : []
+      totalOrders: 0,
+      totalCups: 0,
+      totalSpent: 0,
+      recentOrderNos: []
     };
 
     await env.ORDERS.put("member:" + phone, JSON.stringify(member));
@@ -108,7 +111,8 @@ async function enrichMemberWithOrders(env, member) {
         pickupTime: order.pickupTime || order.pickup || "",
         totalCups: cups,
         totalAmount: Math.round(amount * 100) / 100,
-        currency: order.currency || "MOP"
+        currency: order.currency || "MOP",
+        cart: normalizeCart(order.cart, order.currency || "MOP")
       });
     }
   }
@@ -127,6 +131,28 @@ async function enrichMemberWithOrders(env, member) {
     totalSpent: Math.round(totalSpent * 100) / 100,
     recentOrders: orders
   };
+}
+
+function normalizeCart(cart, currency = "MOP") {
+  return (Array.isArray(cart) ? cart : []).map(item => {
+    const qty = Number(item.qty || item.quantity || 1);
+    const unit = Number(item.unitPrice || item.price || 0);
+    return {
+      name: item.name || item.title || "",
+      cn: item.cn || item.zh || "",
+      qty,
+      bean: item.bean || "",
+      temp: item.temp || item.temperature || "",
+      ice: item.ice || "",
+      milk: item.milk || "",
+      pickup: item.pickup || "",
+      note: item.note || "",
+      unitPrice: unit,
+      price: unit,
+      subtotal: Number(item.subtotal || unit * qty || 0),
+      currency: item.currency || currency
+    };
+  });
 }
 
 function normalizePhone(phone) {
