@@ -2705,89 +2705,12 @@ input.input-error{
 
 
 
-/* V83 five step progress */
+
+/* V84 single progress fix */
+/* Keep only the original order-status progress UI. Hide duplicated V82/V83 injected bars if cached. */
+.sky31-progress-v82,
 .sky31-progress-v83{
-  margin:14px 0 12px;
-  padding:12px 10px;
-  border-radius:18px;
-  background:rgba(255,255,255,.42);
-  border:1px solid rgba(255,255,255,.55);
-}
-.sky31-progress-v83-row{
-  display:grid;
-  grid-template-columns:repeat(5,1fr);
-  gap:7px;
-  align-items:start;
-}
-.sky31-progress-v83-step{
-  text-align:center;
-  opacity:.35;
-  position:relative;
-}
-.sky31-progress-v83-step.is-on{
-  opacity:1;
-}
-.sky31-progress-v83-dot{
-  width:32px;
-  height:32px;
-  border-radius:999px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  margin:0 auto 6px;
-  background:rgba(255,255,255,.56);
-  border:1px solid rgba(255,255,255,.72);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.85),0 8px 18px rgba(0,0,0,.08);
-  font-size:16px;
-}
-.sky31-progress-v83-step.is-on .sky31-progress-v83-dot{
-  background:linear-gradient(145deg,rgba(255,255,255,.94),rgba(255,255,255,.58));
-  box-shadow:0 10px 24px rgba(0,0,0,.12),inset 0 1px 0 rgba(255,255,255,.95);
-}
-.sky31-progress-v83-label{
-  font-size:11px;
-  line-height:1.24;
-  font-weight:650;
-  color:#2f2a24;
-  white-space:normal;
-}
-.sky31-progress-v83-time{
-  margin-top:2px;
-  font-size:9.5px;
-  line-height:1.2;
-  color:rgba(47,42,36,.62);
-}
-.sky31-status-pill-v83{
-  display:inline-flex;
-  align-items:center;
-  gap:6px;
-  padding:7px 11px;
-  border-radius:999px;
-  background:rgba(255,255,255,.58);
-  border:1px solid rgba(255,255,255,.64);
-  font-size:13px;
-  font-weight:700;
-}
-@media(max-width:430px){
-  .sky31-progress-v83{
-    padding:11px 7px;
-  }
-  .sky31-progress-v83-row{
-    gap:4px;
-  }
-  .sky31-progress-v83-dot{
-    width:28px;
-    height:28px;
-    font-size:14px;
-    margin-bottom:5px;
-  }
-  .sky31-progress-v83-label{
-    font-size:10px;
-    line-height:1.18;
-  }
-  .sky31-progress-v83-time{
-    font-size:8.5px;
-  }
+  display:none !important;
 }
 
 </style>
@@ -4602,113 +4525,30 @@ window.addEventListener("load", function() {
 
 
 
+
+
 <script>
-/* V83 five step progress */
+/* V84 single progress fix */
 (function(){
-  function rank(s){
-    if(s === "confirmed") return 2;
-    if(s === "making") return 3;
-    if(s === "completed") return 4;
-    if(s === "picked_up") return 5;
-    if(s === "cancelled") return -1;
-    return 1; // pending / empty = already ordered
-  }
-
-  function label(s){
-    if(s === "confirmed") return "已確認訂單";
-    if(s === "making") return "製作中";
-    if(s === "completed") return "已完成，等待領取";
-    if(s === "picked_up") return "已領取";
-    if(s === "cancelled") return "已取消";
-    return "已下單，等待確認";
-  }
-
-  function icon(s){
-    if(s === "confirmed") return "✅";
-    if(s === "making") return "👨‍🍳";
-    if(s === "completed") return "✅";
-    if(s === "picked_up") return "☕";
-    if(s === "cancelled") return "❌";
-    return "🧾";
-  }
-
-  function fmt(t){
-    try{
-      if(!t) return "";
-      var d = new Date(t);
-      if(isNaN(d.getTime())) return "";
-      return String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0");
-    }catch(e){ return ""; }
-  }
-
-  window.sky31ProgressHtml = function(order){
-    order = order || {};
-    var s = order.status || "pending";
-
-    if(s === "cancelled"){
-      return '<div class="sky31-progress-v83"><span class="sky31-status-pill-v83">❌ 已取消</span></div>';
-    }
-
-    var r = rank(s);
-    var steps = [
-      {k:"pending",   i:"🧾", l:"已下單",   t:order.createdAt},
-      {k:"confirmed", i:"✅", l:"確定訂單", t:order.confirmedAt},
-      {k:"making",    i:"👨‍🍳", l:"製作中",   t:order.makingAt},
-      {k:"completed", i:"✅", l:"已完成",   t:order.completedAt},
-      {k:"picked_up", i:"☕", l:"已領取",   t:order.pickedUpAt}
-    ];
-
-    var h = '<div class="sky31-progress-v83">';
-    h += '<div style="margin-bottom:10px"><span class="sky31-status-pill-v83">' + icon(s) + ' ' + label(s) + '</span></div>';
-    h += '<div class="sky31-progress-v83-row">';
-
-    steps.forEach(function(x){
-      var on = rank(x.k) <= r && r > 0;
-      h += '<div class="sky31-progress-v83-step ' + (on ? "is-on" : "") + '">';
-      h += '<div class="sky31-progress-v83-dot">' + x.i + '</div>';
-      h += '<div class="sky31-progress-v83-label">' + x.l + '</div>';
-      h += '<div class="sky31-progress-v83-time">' + (fmt(x.t) || '&nbsp;') + '</div>';
-      h += '</div>';
+  function normalizeStatusText(){
+    document.querySelectorAll("*").forEach(function(el){
+      if(!el || !el.childNodes || el.childNodes.length !== 1) return;
+      var t = el.textContent || "";
+      if(t.trim() === "等待確認") el.textContent = "已下單，等待確認";
+      if(t.trim() === "咖啡正在製作中") el.textContent = "製作中";
+      if(t.trim() === "已完成") el.textContent = "已完成，等待領取";
     });
-
-    h += '</div></div>';
-    return h;
-  };
-
-  function patchCardHtml(html, order){
-    if(!html || typeof html !== "string") return html;
-    if(html.indexOf("sky31-progress-v83") >= 0) return html;
-
-    // Remove old V82 progress if cached in any generated html
-    html = html.replace(/<div class="sky31-progress-v82[\s\S]*?<\/div><\/div>/g, "");
-
-    var progress = window.sky31ProgressHtml(order || {});
-    if(html.indexOf("</h3>") >= 0){
-      return html.replace("</h3>", "</h3>" + progress);
-    }
-    return progress + html;
   }
 
-  function wrapCardFunction(name){
-    var old = window[name];
-    if(typeof old !== "function" || old.__sky31v83) return;
-    var fn = function(order){
-      var html = old.apply(this, arguments);
-      return patchCardHtml(html, order || {});
-    };
-    fn.__sky31v83 = true;
-    window[name] = fn;
-  }
+  document.addEventListener("DOMContentLoaded", function(){
+    normalizeStatusText();
+    setInterval(normalizeStatusText, 800);
+  });
 
-  function tryPatch(){
-    wrapCardFunction("bbOrderCard");
-    wrapCardFunction("sky31OrderStatusCard");
-    wrapCardFunction("orderStatusCard");
-  }
-
-  document.addEventListener("DOMContentLoaded", tryPatch);
-  setTimeout(tryPatch, 300);
-  setTimeout(tryPatch, 1000);
+  document.addEventListener("click", function(){
+    setTimeout(normalizeStatusText, 300);
+    setTimeout(normalizeStatusText, 1000);
+  }, true);
 })();
 </script>
 
