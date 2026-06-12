@@ -2152,85 +2152,66 @@ body::before{
 
 
 
-/* V61 visual-only: live background motion + iPhone icon support */
-@keyframes sky31LandingBreathV61{
-  0%{ transform:scale(1.00) translate3d(-1.1%, -.8%, 0); }
-  50%{ transform:scale(1.055) translate3d(.7%, .35%, 0); }
-  100%{ transform:scale(1.09) translate3d(1.1%, .8%, 0); }
-}
-@keyframes sky31MenuDriftV61{
-  0%{ background-position:48% 48%; transform:scale(1.02); }
-  50%{ background-position:53% 51%; transform:scale(1.045); }
-  100%{ background-position:50% 54%; transform:scale(1.065); }
-}
-.landing-bg{
-  position:absolute !important;
-  inset:-5% !important;
-  background-image:url("./landing-bg.jpg") !important;
-  background-size:cover !important;
-  background-repeat:no-repeat !important;
-  background-position:center center !important;
-  filter:none !important;
-  animation:sky31LandingBreathV61 24s ease-in-out infinite alternate !important;
-  transform-origin:center center !important;
-  will-change:transform !important;
-}
-.landing-overlay{
-  background:linear-gradient(180deg, rgba(0,0,0,.18), rgba(0,0,0,.08)) !important;
-  backdrop-filter:none !important;
-  -webkit-backdrop-filter:none !important;
-}
-.landing-content{
-  background:rgba(255,255,255,.70) !important;
-  border:1px solid rgba(255,255,255,.82) !important;
-  box-shadow:0 28px 80px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.88) !important;
-  backdrop-filter:none !important;
-  -webkit-backdrop-filter:none !important;
-}
-.landing-subtitle,
-.landing-desc,
-.business-hours,
-.business-hours span,
-.business-hours b,
-.bean-preview b,
-.bean-preview span{
-  color:rgba(20,18,16,.90) !important;
-}
-#orderApp,
-.order-app{
-  position:relative !important;
-  isolation:isolate !important;
-}
+
+/* V65 visual-only: CLEAN single menu background layer */
+
+/* First, disable every old menu background pseudo layer */
+html::before,
+html::after,
+body::before,
+body::after,
+.wrap::before,
+.wrap::after,
+#orderApp::before,
+#orderApp::after,
 .order-app::before,
-#orderApp::before{
-  content:"" !important;
-  position:fixed !important;
-  inset:-6% !important;
-  z-index:-2 !important;
-  background-image:url("./landing-bg.jpg") !important;
-  background-size:cover !important;
-  background-position:center center !important;
-  background-repeat:no-repeat !important;
-  opacity:.30 !important;
+.order-app::after,
+.menu::before,
+.menu::after{
+  content:none !important;
+  display:none !important;
+  background:none !important;
+  background-image:none !important;
+  animation:none !important;
   filter:none !important;
   backdrop-filter:none !important;
   -webkit-backdrop-filter:none !important;
-  animation:sky31MenuDriftV61 32s ease-in-out infinite alternate !important;
-  transform-origin:center center !important;
-  pointer-events:none !important;
-  will-change:transform, background-position !important;
 }
-.order-app::after,
-#orderApp::after{
-  content:"" !important;
-  position:fixed !important;
-  inset:0 !important;
-  z-index:-1 !important;
-  background:rgba(251,250,247,.28) !important;
-  backdrop-filter:none !important;
-  -webkit-backdrop-filter:none !important;
-  pointer-events:none !important;
+
+/* Keep normal site background clean */
+html,
+body{
+  background:#fbfaf7 !important;
 }
+
+/* This is the ONLY menu background layer */
+#sky31MenuBg{
+  position:fixed;
+  inset:-10%;
+  z-index:-9999;
+  pointer-events:none;
+  background-image:url("./landing-bg.jpg");
+  background-size:cover;
+  background-position:center center;
+  background-repeat:no-repeat;
+  opacity:.34;
+  filter:none;
+  transform:translate3d(var(--sky31-bg-x,0px), var(--sky31-bg-y,0px), 0) scale(1.10);
+  transform-origin:center center;
+  will-change:transform;
+}
+
+/* Only show the background after entering menu/order page */
+body:not(.sky31-menu-active) #sky31MenuBg{
+  opacity:0;
+}
+
+/* Keep landing page using its own landing-bg only */
+.landing-bg{
+  filter:none !important;
+}
+
+/* Menu cards remain readable; layout untouched */
 .product,
 .card,
 .cart-sheet,
@@ -2238,61 +2219,10 @@ body::before{
 .customer-sheet{
   background:rgba(255,255,255,.84) !important;
 }
-@media (prefers-reduced-motion: reduce){
-  .landing-bg,
-  .order-app::before,
-  #orderApp::before{
-    animation:none !important;
-    transform:none !important;
-  }
-}
 
-
-/* V62 visual-only: Apple-style menu background parallax */
-#orderApp,
-.order-app{
-  position:relative !important;
-  isolation:isolate !important;
-}
-
-/* Background layer only. Does not affect menu layout. */
-.order-app::before,
-#orderApp::before{
-  content:"" !important;
-  position:fixed !important;
-  inset:-8% !important;
-  z-index:-2 !important;
-  background-image:url("./landing-bg.jpg") !important;
-  background-size:cover !important;
-  background-position:center center !important;
-  background-repeat:no-repeat !important;
-  opacity:.32 !important;
-  filter:none !important;
-  backdrop-filter:none !important;
-  -webkit-backdrop-filter:none !important;
-  transform:translate3d(0, var(--sky31-bg-y, 0px), 0) scale(1.08) !important;
-  transform-origin:center center !important;
-  will-change:transform !important;
-  pointer-events:none !important;
-}
-
-.order-app::after,
-#orderApp::after{
-  content:"" !important;
-  position:fixed !important;
-  inset:0 !important;
-  z-index:-1 !important;
-  background:rgba(251,250,247,.26) !important;
-  backdrop-filter:none !important;
-  -webkit-backdrop-filter:none !important;
-  pointer-events:none !important;
-}
-
-@media (prefers-reduced-motion: reduce){
-  .order-app::before,
-  #orderApp::before{
-    transform:scale(1.08) !important;
-  }
+/* Optional light wash over menu page without extra image */
+body.sky31-menu-active{
+  background:linear-gradient(180deg, rgba(251,250,247,.78), rgba(251,250,247,.88)) !important;
 }
 
 </style>
@@ -2569,6 +2499,8 @@ line-height:1.6;
 
 </head>
 <body>
+<div id="sky31MenuBg" aria-hidden="true"></div>
+
 <div id="landingPage" class="landing-page">
   <div class="landing-bg"></div>
   <div class="landing-overlay"></div>
@@ -3869,30 +3801,59 @@ window.addEventListener("load", function() {
 </div>
 
 
+
+
 <script>
-/* V62 visual-only Apple-style background movement */
+/* V65 visual-only: clean one-background parallax */
 (function(){
   var ticking = false;
 
-  function updateSky31MenuBg(){
+  function isMenuVisible(){
+    var landing = document.getElementById("landingPage") || document.querySelector(".landing-page");
+    var orderApp = document.getElementById("orderApp") || document.querySelector(".order-app");
+    if(!orderApp) return false;
+
+    var landingHidden = !landing || landing.classList.contains("hidden") || getComputedStyle(landing).display === "none";
+    var appHidden = orderApp.classList.contains("hidden") || getComputedStyle(orderApp).display === "none";
+
+    return landingHidden && !appHidden;
+  }
+
+  function update(){
     ticking = false;
-    var app = document.getElementById("orderApp") || document.querySelector(".order-app");
-    if(!app) return;
+    var bg = document.getElementById("sky31MenuBg");
+    if(!bg) return;
+
+    if(isMenuVisible()){
+      document.body.classList.add("sky31-menu-active");
+    }else{
+      document.body.classList.remove("sky31-menu-active");
+    }
 
     var y = window.scrollY || document.documentElement.scrollTop || 0;
-    var move = Math.max(-42, Math.min(42, y * -0.045));
-    app.style.setProperty("--sky31-bg-y", move.toFixed(2) + "px");
+    var moveY = Math.max(-70, Math.min(70, y * -0.07));
+    var moveX = Math.max(-14, Math.min(14, Math.sin(y / 260) * 10));
+
+    document.documentElement.style.setProperty("--sky31-bg-y", moveY.toFixed(2) + "px");
+    document.documentElement.style.setProperty("--sky31-bg-x", moveX.toFixed(2) + "px");
   }
 
   function requestUpdate(){
     if(ticking) return;
     ticking = true;
-    window.requestAnimationFrame(updateSky31MenuBg);
+    requestAnimationFrame(update);
   }
 
-  window.addEventListener("scroll", requestUpdate, { passive:true });
-  window.addEventListener("resize", requestUpdate, { passive:true });
-  document.addEventListener("DOMContentLoaded", updateSky31MenuBg);
+  window.addEventListener("scroll", requestUpdate, {passive:true});
+  window.addEventListener("resize", requestUpdate, {passive:true});
+  document.addEventListener("DOMContentLoaded", function(){
+    update();
+    setInterval(update, 500);
+  });
+  document.addEventListener("click", function(){
+    setTimeout(update, 120);
+    setTimeout(update, 600);
+  }, true);
 })();
 </script>
 
