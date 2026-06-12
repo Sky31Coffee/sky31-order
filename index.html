@@ -2251,11 +2251,12 @@ body::before{
 
 
 
-/* V68 menu single body background + glass wrap */
+
+/* V71 fixed body background, no inner image/refraction */
 
 /* Do not touch Landing Page. */
 
-/* Kill all duplicate menu background layers */
+/* Disable every old menu background layer and pseudo-layer */
 html::before,
 html::after,
 body::before,
@@ -2280,75 +2281,27 @@ body::after,
   -webkit-backdrop-filter:none !important;
 }
 
-/* The menu page background is now only ONE image on the page itself */
+/* Normal pages keep default plain background */
 body{
   background:#fbfaf7 !important;
 }
 
-body:has(#orderApp:not(.hidden)),
-body:has(.order-app:not(.hidden)){
-  background:
-    linear-gradient(rgba(251,250,247,.34), rgba(251,250,247,.34)),
-    url("./landing-bg.jpg") center center / cover fixed no-repeat !important;
-}
-
-/* Main menu area becomes one translucent glass frame */
-#orderApp .wrap,
-.order-app .wrap{
-  max-width:760px !important;
-  margin:0 auto !important;
-  padding:20px 18px 116px !important;
-  background:rgba(251,250,247,.62) !important;
-  border-left:1px solid rgba(255,255,255,.55) !important;
-  border-right:1px solid rgba(255,255,255,.55) !important;
-  box-shadow:0 0 70px rgba(0,0,0,.08) !important;
-  backdrop-filter:blur(10px) saturate(1.12) !important;
-  -webkit-backdrop-filter:blur(10px) saturate(1.12) !important;
-  min-height:100vh !important;
-}
-
-/* Header / Sky31 logo area should stay transparent, not become another photo */
-#orderApp .header,
-.order-app .header{
-  background:transparent !important;
-}
-
-/* Product cards stay glassy but do not add background photos */
-#orderApp .product,
-.order-app .product,
-#orderApp .card,
-.order-app .card{
-  background:rgba(255,255,255,.78) !important;
-  border:1px solid rgba(255,255,255,.82) !important;
-  box-shadow:0 16px 36px rgba(0,0,0,.07), inset 0 1px 0 rgba(255,255,255,.78) !important;
-  backdrop-filter:blur(12px) saturate(1.14) !important;
-  -webkit-backdrop-filter:blur(12px) saturate(1.14) !important;
-}
-
-/* Keep all drink photos normal */
-.product-img{
-  background-size:cover !important;
-  background-position:center !important;
-}
-
-/* Landing page keeps original full-screen priority */
-.landing-page{
-  z-index:20000 !important;
-}
-
+/* Menu page: only ONE fixed background on body. It never scrolls with the frame. */
 body.sky31-menu-page{
   background:
-    linear-gradient(rgba(251,250,247,.34), rgba(251,250,247,.34)),
+    linear-gradient(rgba(251,250,247,.22), rgba(251,250,247,.22)),
     url("./landing-bg.jpg") center center / cover fixed no-repeat !important;
 }
-body:not(.sky31-menu-page){
-  background:#fbfaf7 !important;
+
+/* The app and wrap must not contain any image layer */
+#orderApp,
+.order-app{
+  position:relative !important;
+  isolation:auto !important;
+  background:transparent !important;
+  background-image:none !important;
 }
 
-
-/* V69 glass frame refinement */
-
-/* Keep single background from V68, only refine the center menu glass frame */
 #orderApp .wrap,
 .order-app .wrap{
   width:min(760px, calc(100% - 34px)) !important;
@@ -2356,110 +2309,44 @@ body:not(.sky31-menu-page){
   margin:18px auto 34px !important;
   padding:22px 18px 116px !important;
 
-  background:rgba(255,255,255,.32) !important;
-  border:1px solid rgba(255,255,255,.48) !important;
-  border-radius:40px !important;
+  /* transparent frame only; no blur/refracted background image */
+  background:
+    linear-gradient(145deg,
+      rgba(255,255,255,.38),
+      rgba(255,255,255,.22) 50%,
+      rgba(255,255,255,.16)
+    ) !important;
+  background-image:
+    linear-gradient(145deg,
+      rgba(255,255,255,.38),
+      rgba(255,255,255,.22) 50%,
+      rgba(255,255,255,.16)
+    ) !important;
+
+  border:1px solid rgba(255,255,255,.55) !important;
+  border-radius:42px !important;
 
   box-shadow:
     0 22px 70px rgba(0,0,0,.12),
-    inset 0 1px 0 rgba(255,255,255,.70),
+    inset 0 1px 0 rgba(255,255,255,.75),
     inset 0 -1px 0 rgba(255,255,255,.18) !important;
 
-  backdrop-filter:blur(6px) saturate(1.18) !important;
-  -webkit-backdrop-filter:blur(6px) saturate(1.18) !important;
-
-  min-height:calc(100vh - 36px) !important;
-  overflow:hidden !important;
-}
-
-/* Make the header/logo sit naturally inside the glass frame */
-#orderApp .header,
-.order-app .header{
-  background:transparent !important;
-  border-radius:34px 34px 20px 20px !important;
-  padding-top:12px !important;
-}
-
-/* Product cards slightly clearer than the outer frame */
-#orderApp .product,
-.order-app .product{
-  background:rgba(255,255,255,.68) !important;
-  border:1px solid rgba(255,255,255,.72) !important;
-  border-radius:24px !important;
-  box-shadow:
-    0 14px 34px rgba(0,0,0,.08),
-    inset 0 1px 0 rgba(255,255,255,.76) !important;
-  backdrop-filter:blur(8px) saturate(1.12) !important;
-  -webkit-backdrop-filter:blur(8px) saturate(1.12) !important;
-}
-
-/* Section/customer cards keep readability but stay glass-like */
-#orderApp .card,
-.order-app .card{
-  background:rgba(255,255,255,.62) !important;
-  border:1px solid rgba(255,255,255,.70) !important;
-  border-radius:28px !important;
-  box-shadow:
-    0 14px 36px rgba(0,0,0,.075),
-    inset 0 1px 0 rgba(255,255,255,.72) !important;
-  backdrop-filter:blur(8px) saturate(1.12) !important;
-  -webkit-backdrop-filter:blur(8px) saturate(1.12) !important;
-}
-
-/* Softer visual spacing on mobile */
-@media(max-width:430px){
-  #orderApp .wrap,
-  .order-app .wrap{
-    width:calc(100% - 22px) !important;
-    margin:11px auto 24px !important;
-    padding:18px 12px 116px !important;
-    border-radius:34px !important;
-    background:rgba(255,255,255,.30) !important;
-  }
-
-  #orderApp .product,
-  .order-app .product{
-    border-radius:22px !important;
-  }
-}
-
-
-/* V70 iPhone Liquid Glass refinement */
-
-/* Main glass frame: more transparent + iPhone-like edge highlight */
-#orderApp .wrap,
-.order-app .wrap{
-  width:min(760px, calc(100% - 34px)) !important;
-  max-width:760px !important;
-  margin:18px auto 34px !important;
-  padding:22px 18px 116px !important;
-
-  background:
-    linear-gradient(145deg,
-      rgba(255,255,255,.42) 0%,
-      rgba(255,255,255,.18) 42%,
-      rgba(255,255,255,.08) 100%
-    ) !important;
-
-  border:1px solid rgba(255,255,255,.56) !important;
-  border-radius:44px !important;
-
-  box-shadow:
-    0 24px 80px rgba(0,0,0,.16),
-    inset 0 1px 0 rgba(255,255,255,.95),
-    inset 0 -1px 0 rgba(255,255,255,.20),
-    inset 1px 0 0 rgba(255,255,255,.34),
-    inset -1px 0 0 rgba(255,255,255,.12) !important;
-
-  backdrop-filter:blur(18px) saturate(1.55) brightness(1.08) !important;
-  -webkit-backdrop-filter:blur(18px) saturate(1.55) brightness(1.08) !important;
+  backdrop-filter:none !important;
+  -webkit-backdrop-filter:none !important;
 
   min-height:calc(100vh - 36px) !important;
   overflow:hidden !important;
   position:relative !important;
 }
 
-/* Liquid highlight layer */
+/* Keep highlight, but no pseudo-element background photo */
+#orderApp .wrap::before,
+.order-app .wrap::before,
+#orderApp .wrap::after,
+.order-app .wrap::after{
+  background-image:none !important;
+}
+
 #orderApp .wrap::before,
 .order-app .wrap::before{
   content:"" !important;
@@ -2467,24 +2354,21 @@ body:not(.sky31-menu-page){
   position:absolute !important;
   inset:0 !important;
   pointer-events:none !important;
-  border-radius:44px !important;
+  border-radius:42px !important;
   background:
-    radial-gradient(circle at 22% 8%,
-      rgba(255,255,255,.72),
-      rgba(255,255,255,.22) 24%,
-      rgba(255,255,255,0) 46%
+    radial-gradient(circle at 20% 0%,
+      rgba(255,255,255,.52),
+      rgba(255,255,255,.18) 25%,
+      rgba(255,255,255,0) 48%
     ),
     linear-gradient(135deg,
-      rgba(255,255,255,.40),
-      rgba(255,255,255,0) 34%,
-      rgba(255,255,255,.10) 72%,
-      rgba(255,255,255,.30)
+      rgba(255,255,255,.30),
+      rgba(255,255,255,0) 42%,
+      rgba(255,255,255,.16)
     ) !important;
-  mix-blend-mode:screen !important;
   opacity:.78 !important;
 }
 
-/* subtle edge line */
 #orderApp .wrap::after,
 .order-app .wrap::after{
   content:"" !important;
@@ -2492,126 +2376,105 @@ body:not(.sky31-menu-page){
   position:absolute !important;
   inset:1px !important;
   pointer-events:none !important;
-  border-radius:42px !important;
-  border:1px solid rgba(255,255,255,.34) !important;
-  box-shadow:
-    inset 0 0 22px rgba(255,255,255,.18),
-    inset 0 0 2px rgba(255,255,255,.68) !important;
+  border-radius:40px !important;
+  border:1px solid rgba(255,255,255,.30) !important;
 }
 
-/* Keep content above the glass highlights */
+/* Keep menu content above highlight */
 #orderApp .wrap > *,
 .order-app .wrap > *{
   position:relative !important;
   z-index:1 !important;
 }
 
-/* Product cards: liquid glass tiles */
+/* Product cards: translucent, but no backdrop-filter to avoid second moving image */
 #orderApp .product,
 .order-app .product{
   background:
-    linear-gradient(145deg,
-      rgba(255,255,255,.58),
-      rgba(255,255,255,.24) 48%,
-      rgba(255,255,255,.14)
+    linear-gradient(180deg,
+      rgba(255,255,255,.74),
+      rgba(255,255,255,.58)
     ) !important;
-  border:1px solid rgba(255,255,255,.62) !important;
+  background-image:
+    linear-gradient(180deg,
+      rgba(255,255,255,.74),
+      rgba(255,255,255,.58)
+    ) !important;
+
+  border:1px solid rgba(255,255,255,.78) !important;
   border-radius:26px !important;
   box-shadow:
-    0 16px 42px rgba(0,0,0,.12),
-    inset 0 1px 0 rgba(255,255,255,.92),
-    inset 0 -1px 0 rgba(255,255,255,.18) !important;
-  backdrop-filter:blur(16px) saturate(1.45) brightness(1.05) !important;
-  -webkit-backdrop-filter:blur(16px) saturate(1.45) brightness(1.05) !important;
+    0 16px 38px rgba(0,0,0,.10),
+    inset 0 1px 0 rgba(255,255,255,.84) !important;
+
+  backdrop-filter:none !important;
+  -webkit-backdrop-filter:none !important;
   overflow:hidden !important;
 }
 
-/* White info area inside drink card should be less flat */
+/* Product info area */
 #orderApp .product-body,
 .order-app .product-body{
   background:
     linear-gradient(180deg,
-      rgba(255,255,255,.60),
-      rgba(255,255,255,.34)
+      rgba(255,255,255,.68),
+      rgba(255,255,255,.52)
     ) !important;
-  backdrop-filter:blur(14px) saturate(1.25) !important;
-  -webkit-backdrop-filter:blur(14px) saturate(1.25) !important;
+  backdrop-filter:none !important;
+  -webkit-backdrop-filter:none !important;
 }
 
-/* Other cards */
+/* Other cards / order box */
 #orderApp .card,
 .order-app .card{
   background:
     linear-gradient(145deg,
-      rgba(255,255,255,.52),
-      rgba(255,255,255,.22)
+      rgba(255,255,255,.70),
+      rgba(255,255,255,.50)
     ) !important;
-  border:1px solid rgba(255,255,255,.60) !important;
-  border-radius:32px !important;
+  border:1px solid rgba(255,255,255,.78) !important;
+  border-radius:30px !important;
   box-shadow:
-    0 16px 44px rgba(0,0,0,.10),
-    inset 0 1px 0 rgba(255,255,255,.90) !important;
-  backdrop-filter:blur(16px) saturate(1.42) brightness(1.06) !important;
-  -webkit-backdrop-filter:blur(16px) saturate(1.42) brightness(1.06) !important;
+    0 16px 38px rgba(0,0,0,.09),
+    inset 0 1px 0 rgba(255,255,255,.82) !important;
+  backdrop-filter:none !important;
+  -webkit-backdrop-filter:none !important;
 }
 
-/* Header/logo sits cleanly on glass */
+/* Header/logo remains clean */
 #orderApp .header,
 .order-app .header{
   background:transparent !important;
-  border-radius:38px 38px 22px 22px !important;
 }
 
-/* Floating buttons more liquid */
-.profile-button,
-.order-status-button,
-.float-cart{
-  background:
-    radial-gradient(circle at 28% 18%,
-      rgba(255,255,255,.86),
-      rgba(255,255,255,.36) 38%,
-      rgba(255,255,255,.16)
-    ) !important;
-  border:1px solid rgba(255,255,255,.62) !important;
-  box-shadow:
-    0 14px 34px rgba(0,0,0,.14),
-    inset 0 1px 0 rgba(255,255,255,.95),
-    inset 0 -1px 0 rgba(255,255,255,.20) !important;
-  backdrop-filter:blur(22px) saturate(1.65) brightness(1.08) !important;
-  -webkit-backdrop-filter:blur(22px) saturate(1.65) brightness(1.08) !important;
+/* Popups remain readable, no background-image */
+.sheet,
+.cart-sheet,
+.order-status-sheet,
+.customer-sheet,
+.modal{
+  background:rgba(251,250,247,.96) !important;
+  background-image:none !important;
 }
 
-/* Mobile tuning */
+/* Mobile */
 @media(max-width:430px){
   #orderApp .wrap,
   .order-app .wrap{
     width:calc(100% - 20px) !important;
     margin:10px auto 24px !important;
     padding:18px 12px 116px !important;
-    border-radius:38px !important;
-    background:
-      linear-gradient(145deg,
-        rgba(255,255,255,.38),
-        rgba(255,255,255,.16) 48%,
-        rgba(255,255,255,.08)
-      ) !important;
-    backdrop-filter:blur(16px) saturate(1.5) brightness(1.06) !important;
-    -webkit-backdrop-filter:blur(16px) saturate(1.5) brightness(1.06) !important;
+    border-radius:36px !important;
   }
 
   #orderApp .wrap::before,
   .order-app .wrap::before{
-    border-radius:38px !important;
+    border-radius:36px !important;
   }
 
   #orderApp .wrap::after,
   .order-app .wrap::after{
-    border-radius:36px !important;
-  }
-
-  #orderApp .product,
-  .order-app .product{
-    border-radius:24px !important;
+    border-radius:34px !important;
   }
 }
 
@@ -4191,8 +4054,10 @@ window.addEventListener("load", function() {
 
 
 
+
+
 <script>
-/* V68 visual-only: menu background class fallback */
+/* V71 visual-only: menu page body background class */
 (function(){
   function updateMenuBgClass(){
     var landing = document.getElementById("landingPage") || document.querySelector(".landing-page");
