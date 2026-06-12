@@ -3049,6 +3049,79 @@ input.input-error{
   }
 }
 
+
+/* V98 mobile menu price fix */
+/* Desktop keeps V97 layout. Mobile price badge no longer covers product name. */
+
+@media(max-width:430px){
+  .product{
+    overflow:hidden !important;
+  }
+
+  .product-body{
+    min-height:132px !important;
+    padding:18px 18px 50px 18px !important;
+  }
+
+  .product-body h3{
+    padding-right:0 !important;
+    margin-bottom:5px !important;
+    line-height:1.04 !important;
+  }
+
+  .product-body p{
+    padding-right:0 !important;
+    max-width:100% !important;
+    line-height:1.22 !important;
+    margin-bottom:0 !important;
+  }
+
+  .product .menu-price-line{
+    right:16px !important;
+    bottom:16px !important;
+    max-width:calc(100% - 32px) !important;
+    font-size:10.5px !important;
+    line-height:1 !important;
+    padding:7px 10px !important;
+    white-space:nowrap !important;
+    transform:none !important;
+  }
+
+  /* Dirty only has one price; keep it small and clearly at bottom right */
+  .product .menu-price-line:only-child{
+    min-width:auto !important;
+  }
+}
+
+@media(max-width:390px){
+  .product-body{
+    min-height:140px !important;
+    padding:17px 16px 52px 16px !important;
+  }
+
+  .product .menu-price-line{
+    right:14px !important;
+    bottom:14px !important;
+    font-size:10px !important;
+    padding:7px 9px !important;
+  }
+}
+
+/* Very narrow iPhone screens: allow the price badge to sit below text, full safe width */
+@media(max-width:360px){
+  .product-body{
+    min-height:148px !important;
+    padding-bottom:54px !important;
+  }
+
+  .product .menu-price-line{
+    left:14px !important;
+    right:14px !important;
+    justify-content:center !important;
+    max-width:none !important;
+  }
+}
+
 </style>
 
 <style>
