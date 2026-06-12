@@ -2109,6 +2109,170 @@ button[type="submit"] span{
   color:#dc2626!important;
 }
 
+
+/* V55 visual only: new Sky31 image as share + homepage/landing/menu background */
+html,
+body{
+  background-image:url("/landing-bg.jpg") !important;
+  background-size:cover !important;
+  background-position:center center !important;
+  background-attachment:fixed !important;
+  background-repeat:no-repeat !important;
+}
+body::before{
+  content:"";
+  position:fixed;
+  inset:0;
+  z-index:-1;
+  background:rgba(255,255,255,.38);
+  pointer-events:none;
+}
+#landingPage,
+.landing-page,
+.landing,
+.home,
+.hero,
+.start-page{
+  background-image:url("/landing-bg.jpg") !important;
+  background-size:cover !important;
+  background-position:center center !important;
+  background-repeat:no-repeat !important;
+}
+#orderApp,
+.order-app,
+.menu-page,
+.menu,
+.wrap{
+  background-image:url("/landing-bg.jpg") !important;
+  background-size:cover !important;
+  background-position:center center !important;
+  background-repeat:no-repeat !important;
+}
+
+
+
+/* V60 visual-only: clearer landing text + slow zoom background + menu no blur */
+@keyframes sky31SlowZoomClean{
+  0%{
+    transform:scale(1.00) translate3d(-0.6%, -0.4%, 0);
+  }
+  100%{
+    transform:scale(1.075) translate3d(0.6%, 0.4%, 0);
+  }
+}
+
+/* Landing background: original color, no blur/grayscale, with slow zoom */
+.landing-bg{
+  position:absolute !important;
+  inset:-4% !important;
+  background-image:url("./landing-bg.jpg") !important;
+  background-size:cover !important;
+  background-repeat:no-repeat !important;
+  background-position:center center !important;
+  filter:none !important;
+  animation:sky31SlowZoomClean 22s ease-in-out infinite alternate !important;
+  transform-origin:center center !important;
+}
+
+/* Landing overlay: only a slight dark layer to make text readable, no blur */
+.landing-overlay{
+  background:linear-gradient(
+    180deg,
+    rgba(0,0,0,.16),
+    rgba(0,0,0,.08)
+  ) !important;
+  backdrop-filter:none !important;
+  -webkit-backdrop-filter:none !important;
+}
+
+/* Landing text card: clearer contrast but still glassy */
+.landing-content{
+  background:rgba(255,255,255,.68) !important;
+  border:1px solid rgba(255,255,255,.78) !important;
+  box-shadow:0 28px 80px rgba(0,0,0,.16), inset 0 1px 0 rgba(255,255,255,.85) !important;
+  backdrop-filter:none !important;
+  -webkit-backdrop-filter:none !important;
+}
+
+.landing-content,
+.landing-content *{
+  text-shadow:none !important;
+}
+
+.landing-subtitle,
+.landing-desc,
+.business-hours,
+.business-hours span,
+.business-hours b,
+.bean-preview b,
+.bean-preview span{
+  color:rgba(20,18,16,.88) !important;
+}
+
+.landing-desc{
+  font-weight:650 !important;
+}
+
+.landing-subtitle{
+  font-weight:850 !important;
+}
+
+.business-hours{
+  background:rgba(255,255,255,.72) !important;
+  border:1px solid rgba(255,255,255,.82) !important;
+}
+
+.bean-preview div{
+  background:rgba(255,255,255,.72) !important;
+  border:1px solid rgba(255,255,255,.82) !important;
+}
+
+/* Menu/order page background: force full-color, no blur/grayscale */
+#orderApp,
+.order-app,
+.wrap{
+  position:relative;
+}
+
+.order-app::before,
+#orderApp::before,
+.wrap::before{
+  content:"" !important;
+  position:fixed !important;
+  inset:-4% !important;
+  z-index:-2 !important;
+  background-image:url("./landing-bg.jpg") !important;
+  background-size:cover !important;
+  background-position:center center !important;
+  background-repeat:no-repeat !important;
+  opacity:.26 !important;
+  filter:none !important;
+  backdrop-filter:none !important;
+  -webkit-backdrop-filter:none !important;
+  animation:none !important;
+  transform:none !important;
+  pointer-events:none !important;
+}
+
+/* Remove the old pale layer as much as possible, while keeping menu cards readable */
+.order-app::after,
+#orderApp::after{
+  content:"" !important;
+  position:fixed !important;
+  inset:0 !important;
+  z-index:-1 !important;
+  background:rgba(251,250,247,.32) !important;
+  backdrop-filter:none !important;
+  -webkit-backdrop-filter:none !important;
+  pointer-events:none !important;
+}
+
+/* Override older versions that applied grayscale/filter */
+.order-app::before{
+  filter:none !important;
+  opacity:.26 !important;
+}
+
 </style>
 
 <style>
@@ -2359,21 +2523,24 @@ line-height:1.6;
 
 
 <!-- V48 WeChat / social share preview -->
+<link rel="apple-touch-icon" href="/sky31-logo.png">
+<link rel="icon" href="/sky31-logo.png">
+
+
+<!-- Sky31 V55 visual-only share image -->
 <meta property="og:type" content="website">
-<meta property="og:title" content="Sky31 Coffee">
-<meta property="og:description" content="Sky31 Coffee To Go｜線上點餐">
+<meta property="og:title" content="Sky31 Coffee To Go">
+<meta property="og:description" content="精品咖啡線上點餐">
 <meta property="og:url" content="https://sky31-order.pages.dev/">
 <meta property="og:image" content="https://sky31-order.pages.dev/share.jpg">
 <meta property="og:image:secure_url" content="https://sky31-order.pages.dev/share.jpg">
-<meta property="og:image:type" content="image/png">
+<meta property="og:image:type" content="image/jpeg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Sky31 Coffee">
-<meta name="twitter:description" content="Sky31 Coffee To Go｜線上點餐">
+<meta name="twitter:title" content="Sky31 Coffee To Go">
+<meta name="twitter:description" content="精品咖啡線上點餐">
 <meta name="twitter:image" content="https://sky31-order.pages.dev/share.jpg">
-<link rel="apple-touch-icon" href="/sky31-logo.png">
-<link rel="icon" href="/sky31-logo.png">
 
 </head>
 <body>
