@@ -3830,6 +3830,38 @@ input.input-error{
   align-items:center !important;
 }
 
+
+/* V112 pickup evening login only */
+/* Member login page becomes login-only. If already logged in, hide phone input until logout. */
+
+.member-login-locked #memberPageLogin .member-form,
+.member-login-locked #memberPageLogin .member-actions{
+  display:none !important;
+}
+
+.member-login-locked #memberPageLogin #memberLoggedPanel{
+  display:block !important;
+}
+
+.member-login-hint{
+  margin-top:12px;
+  padding:12px 14px;
+  border-radius:16px;
+  background:rgba(255,255,255,.56);
+  color:rgba(47,42,36,.68);
+  font-size:13px;
+  line-height:1.45;
+  font-weight:680;
+}
+
+
+/* V114 pickup display no time */
+/* Website pickup option only shows label + English translation. Telegram/order backend still maps Tomorrow Evening to 20:00-21:00. */
+.pickup-grid .chip[data-value="Tomorrow Evening 明天晚上"] small{
+  font-size:11px !important;
+  letter-spacing:.01em !important;
+}
+
 </style>
 
 <style>
@@ -4202,7 +4234,7 @@ line-height:1.6;
       <div class="chips bean-chips" data-field="bean" id="beanChips"></div>
     </div>
 
-    <div class="option-box"><div class="option-title">取餐時間 <span>Pickup time</span></div><div class="chips pickup-grid" data-field="pickup"><div class="chip active" data-value="Now 即刻">即刻<small>Now</small></div><div class="chip" data-value="Tomorrow Morning 明天早上">明天早上<small>Tomorrow AM</small></div><div class="chip" data-value="Tomorrow Noon 明天中午">明天中午<small>Tomorrow Noon</small></div></div></div>
+    <div class="option-box"><div class="option-title">取餐時間 <span>Pickup time</span></div><div class="chips pickup-grid" data-field="pickup"><div class="chip active" data-value="Now 即刻">即刻<small>Now</small></div><div class="chip" data-value="Tomorrow Morning 明天早上">明天早上<small>Tomorrow AM</small></div><div class="chip" data-value="Tomorrow Noon 明天中午">明天中午<small>Tomorrow Noon</small></div><div class="chip" data-value="Tomorrow Evening 明天晚上">明天晚上<small>Tomorrow Evening</small></div></div></div>
     <div class="option-box"><div class="option-title">備註 <span>Note 選填</span></div><input id="note" placeholder="例如：少糖 / 不加奶 / 加奶等..."></div>
     <div class="qty-box"><div class="option-title">杯量 <span>Quantity</span></div><div class="qty-control"><button class="qty-btn" onclick="changeDetailQty(-1)">−</button><span id="detailQty" class="qty-number">1</span><button class="qty-btn" onclick="changeDetailQty(1)">＋</button></div></div>
     <button class="primary" onclick="addToCart()">加入訂單 Add to Order</button>
@@ -6417,7 +6449,7 @@ window.addEventListener("load", function() {
             '<div id="memberQuickCard" class="member-card" style="display:none;"></div>' +
             '<div class="member-menu">' +
               '<button class="member-menu-card" type="button" onclick="memberGoPage(\'login\')">' +
-                '<div class="member-menu-icon">🔐</div><div><div class="member-menu-title">會員登入 / 查詢</div><div class="member-menu-sub">用電話號碼登入並查詢會員資料</div></div><div>›</div>' +
+                '<div class="member-menu-icon">🔐</div><div><div class="member-menu-title">會員登入</div><div class="member-menu-sub">用電話號碼登入會員</div></div><div>›</div>' +
               '</button>' +
               '<button class="member-menu-card" type="button" onclick="memberGoPage(\'register\')">' +
                 '<div class="member-menu-icon">👤</div><div><div class="member-menu-title">會員註冊</div><div class="member-menu-sub">新會員建立資料</div></div><div>›</div>' +
@@ -6432,14 +6464,14 @@ window.addEventListener("load", function() {
           '</section>' +
 
           '<section id="memberPageLogin" class="member-page">' +
-            '<div class="member-hero"><h2>會員登入 / 查詢</h2><p>輸入已註冊電話號碼登入會員。</p></div>' +
+            '<div class="member-hero"><h2>會員登入</h2><p>輸入已註冊電話號碼登入會員。登入後會隱藏手機輸入框。</p></div>' +
             '<div id="memberLoggedPanel" class="member-card" style="display:none;"></div>' +
             '<div class="member-form">' +
               '<label>手機 Phone</label>' +
               '<input id="memberPhone" inputmode="tel" placeholder="輸入手機號碼">' +
             '</div>' +
             '<div class="member-actions">' +
-              '<button class="member-btn primary" type="button" onclick="memberLoginLookup()">登入 / 查詢</button>' +
+              '<button class="member-btn primary" type="button" onclick="memberLoginLookup()">登入</button>' +
             '</div>' +
             '<div id="memberMsg" class="member-msg"></div>' +
           '</section>' +
@@ -6495,7 +6527,7 @@ window.addEventListener("load", function() {
     var title = "會員中心";
     if(memberPage === "login"){
       $("memberPageLogin").classList.add("active");
-      title = "會員登入 / 查詢";
+      title = "會員登入";
     }else if(memberPage === "register"){
       $("memberPageRegister").classList.add("active");
       title = "會員註冊";
@@ -6862,7 +6894,7 @@ window.addEventListener("load", function() {
       '<div class="member-security-card">' +
         '<div class="member-security-icon">🔒</div>' +
         '<div class="member-security-title">已自動登出</div>' +
-        '<div class="member-security-text">已為確保安全，一小時後自動登出。</div>' +
+        '<div class="member-security-text">為確保安全 已自動登出</div>' +
         '<button class="member-security-btn" type="button" onclick="closeMemberSecurityModal()">知道了</button>' +
       '</div>';
     document.body.appendChild(modal);
@@ -7312,6 +7344,225 @@ window.addEventListener("load", function() {
   document.addEventListener("click", function(){
     setTimeout(applyTraditionalQueryCenter, 50);
     setTimeout(applyTraditionalQueryCenter, 250);
+  }, true);
+})();
+</script>
+
+
+<script>
+/* V112 pickup evening login only */
+(function(){
+  var MEMBER_KEY = "sky31_member_v1";
+
+  function getMember(){
+    try{
+      var raw = localStorage.getItem(MEMBER_KEY);
+      return raw ? JSON.parse(raw) : null;
+    }catch(e){
+      return null;
+    }
+  }
+
+  function hasMember(){
+    var m = getMember();
+    return !!(m && m.phone);
+  }
+
+  function ensureTomorrowEveningPickup(){
+    document.querySelectorAll(".pickup-grid").forEach(function(grid){
+      if(grid.querySelector('[data-value="Tomorrow Evening 明天晚上"]')) return;
+
+      var chip = document.createElement("div");
+      chip.className = "chip";
+      chip.setAttribute("data-value", "Tomorrow Evening 明天晚上");
+      chip.innerHTML = '明天晚上<small>Tomorrow Evening</small>';
+
+      // Match existing chip click behavior by copying the same pattern used by other chips.
+      chip.addEventListener("click", function(){
+        grid.querySelectorAll(".chip").forEach(function(c){ c.classList.remove("active"); });
+        chip.classList.add("active");
+      });
+
+      grid.appendChild(chip);
+    });
+  }
+
+  function setMemberText(){
+    document.querySelectorAll(".member-menu-title, .member-topbar-title, .member-hero h2, button").forEach(function(el){
+      if(el.textContent && el.textContent.trim() === "會員登入 / 查詢") el.textContent = "會員登入";
+      if(el.textContent && el.textContent.trim() === "登入 / 查詢") el.textContent = "登入";
+    });
+
+    document.querySelectorAll(".member-menu-sub, .member-hero p").forEach(function(el){
+      if(el.textContent && el.textContent.indexOf("登入並查詢會員資料") >= 0){
+        el.textContent = "用電話號碼登入會員";
+      }
+    });
+  }
+
+  function renderLoginOnlyState(){
+    var modal = document.getElementById("memberModal");
+    if(!modal) return;
+
+    setMemberText();
+
+    var logged = hasMember();
+    modal.classList.toggle("member-login-locked", logged);
+
+    var page = document.getElementById("memberPageLogin");
+    if(!page) return;
+
+    var oldHint = page.querySelector(".member-login-hint");
+    if(oldHint) oldHint.remove();
+
+    if(logged){
+      var m = getMember() || {};
+      var panel = document.getElementById("memberLoggedPanel");
+      if(panel){
+        panel.style.display = "block";
+      }
+
+      var hint = document.createElement("div");
+      hint.className = "member-login-hint";
+      hint.innerHTML = "目前已登入會員：" + (m.name || m.phone || "-") + "<br>如需登入其他帳號，請先返回會員中心登出。";
+
+      if(panel && panel.parentNode){
+        panel.parentNode.insertBefore(hint, panel.nextSibling);
+      }else{
+        page.appendChild(hint);
+      }
+    }else{
+      var phone = document.getElementById("memberPhone");
+      if(phone) phone.value = "";
+    }
+  }
+
+  function patchMemberLogin(){
+    if(window.__sky31V112MemberLoginPatched) return;
+    window.__sky31V112MemberLoginPatched = true;
+
+    var oldLogin = window.memberLoginLookup;
+    if(typeof oldLogin === "function"){
+      window.memberLoginLookup = async function(){
+        if(hasMember()){
+          renderLoginOnlyState();
+          return;
+        }
+        var result = await oldLogin.apply(this, arguments);
+        setTimeout(renderLoginOnlyState, 120);
+        setTimeout(renderLoginOnlyState, 500);
+        return result;
+      };
+    }
+
+    var oldGoPage = window.memberGoPage;
+    if(typeof oldGoPage === "function"){
+      window.memberGoPage = function(page){
+        var result = oldGoPage.apply(this, arguments);
+        setTimeout(function(){
+          setMemberText();
+          renderLoginOnlyState();
+        }, 80);
+        return result;
+      };
+    }
+
+    var oldOpen = window.openMemberModal;
+    if(typeof oldOpen === "function"){
+      window.openMemberModal = async function(){
+        var result = await oldOpen.apply(this, arguments);
+        setTimeout(function(){
+          setMemberText();
+          renderLoginOnlyState();
+        }, 120);
+        setTimeout(function(){
+          setMemberText();
+          renderLoginOnlyState();
+        }, 500);
+        return result;
+      };
+    }
+
+    var oldLogout = window.memberLogout;
+    if(typeof oldLogout === "function"){
+      window.memberLogout = function(){
+        var result = oldLogout.apply(this, arguments);
+        setTimeout(renderLoginOnlyState, 100);
+        setTimeout(renderLoginOnlyState, 500);
+        return result;
+      };
+    }
+  }
+
+  function boot(){
+    ensureTomorrowEveningPickup();
+    setMemberText();
+    patchMemberLogin();
+    renderLoginOnlyState();
+  }
+
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", boot);
+  }else{
+    boot();
+  }
+
+  setTimeout(boot, 300);
+  setTimeout(boot, 1000);
+
+  document.addEventListener("click", function(){
+    setTimeout(boot, 80);
+    setTimeout(renderLoginOnlyState, 300);
+  }, true);
+})();
+</script>
+
+
+<script>
+/* V113 auto logout text fix */
+(function(){
+  function fixAutoLogoutText(){
+    document.querySelectorAll(".member-security-text").forEach(function(el){
+      el.textContent = "為確保安全 已自動登出";
+    });
+  }
+
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", fixAutoLogoutText);
+  }else{
+    fixAutoLogoutText();
+  }
+
+  setTimeout(fixAutoLogoutText, 200);
+  setTimeout(fixAutoLogoutText, 800);
+
+  document.addEventListener("click", function(){
+    setTimeout(fixAutoLogoutText, 80);
+  }, true);
+})();
+</script>
+
+
+<script>
+/* V114 pickup display no time */
+(function(){
+  function fixTomorrowEveningDisplay(){
+    document.querySelectorAll('.pickup-grid .chip[data-value="Tomorrow Evening 明天晚上"]').forEach(function(chip){
+      chip.innerHTML = '明天晚上<small>Tomorrow Evening</small>';
+    });
+  }
+
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", fixTomorrowEveningDisplay);
+  }else{
+    fixTomorrowEveningDisplay();
+  }
+
+  setTimeout(fixTomorrowEveningDisplay, 200);
+  setTimeout(fixTomorrowEveningDisplay, 800);
+
+  document.addEventListener("click", function(){
+    setTimeout(fixTomorrowEveningDisplay, 80);
   }, true);
 })();
 </script>
