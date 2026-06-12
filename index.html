@@ -2707,116 +2707,150 @@ input.input-error{
 
 
 
-/* V85 status five step single progress */
-/* Only affects order status query page. Keeps Telegram / API untouched. */
 
-/* Hide old 3-step/old injected progress blocks inside status results only */
+/* V86 replace old progress with arrows */
+/* Status query page only. Keep Telegram/API unchanged. */
+
+/* Hide old progress UIs inside status result */
 #statusResult .sky31-progress-v82,
 #statusResult .sky31-progress-v83,
+#statusResult .sky31-progress-v85,
 #statusResult .status-progress,
 #statusResult .progress,
 #statusResult .order-progress,
-#statusResult .progress-steps{
+#statusResult .progress-steps,
+#statusResult .steps,
+#statusResult .timeline,
+#statusResult [class*="progress"]:not(.sky31-progress-v86):not(.sky31-progress-v86-row):not(.sky31-progress-v86-step),
+#statusResult [class*="step"]:not(.sky31-progress-v86-step):not(.sky31-progress-v86-step-inner){
   display:none !important;
 }
 
-/* New single five-step progress */
-#statusResult .sky31-progress-v85{
-  margin:18px 0 18px;
+/* New 5-step progress in old progress position */
+#statusResult .sky31-progress-v86{
+  margin:18px 0 20px;
   padding:14px 10px 12px;
   border-radius:20px;
-  background:rgba(255,255,255,.44);
-  border:1px solid rgba(255,255,255,.58);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.66), 0 12px 28px rgba(0,0,0,.06);
+  background:rgba(255,255,255,.46);
+  border:1px solid rgba(255,255,255,.60);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.68), 0 12px 28px rgba(0,0,0,.06);
 }
 
-#statusResult .sky31-status-pill-v85{
+#statusResult .sky31-status-pill-v86{
   display:inline-flex;
   align-items:center;
   gap:6px;
   padding:7px 12px;
   border-radius:999px;
-  background:rgba(255,255,255,.68);
-  border:1px solid rgba(255,255,255,.72);
+  background:rgba(255,255,255,.70);
+  border:1px solid rgba(255,255,255,.74);
   font-size:13px;
   font-weight:720;
   color:#2f2a24;
 }
 
-#statusResult .sky31-progress-v85-row{
+#statusResult .sky31-progress-v86-row{
   display:grid;
-  grid-template-columns:repeat(5,1fr);
-  gap:6px;
+  grid-template-columns:1fr 12px 1fr 12px 1fr 12px 1fr 12px 1fr;
+  gap:2px;
   align-items:start;
-  margin-top:12px;
+  margin-top:13px;
 }
 
-#statusResult .sky31-progress-v85-step{
+#statusResult .sky31-progress-v86-step{
   text-align:center;
   opacity:.30;
   position:relative;
   color:#2f2a24;
+  min-width:0;
 }
 
-#statusResult .sky31-progress-v85-step.is-on{
+#statusResult .sky31-progress-v86-step.is-on{
   opacity:1;
 }
 
-#statusResult .sky31-progress-v85-dot{
-  width:32px;
-  height:32px;
+#statusResult .sky31-progress-v86-step-inner{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  min-width:0;
+}
+
+#statusResult .sky31-progress-v86-dot{
+  width:30px;
+  height:30px;
   border-radius:999px;
   display:flex;
   align-items:center;
   justify-content:center;
   margin:0 auto 6px;
-  background:rgba(255,255,255,.54);
-  border:1px solid rgba(255,255,255,.70);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.82), 0 8px 18px rgba(0,0,0,.08);
-  font-size:16px;
+  background:rgba(255,255,255,.56);
+  border:1px solid rgba(255,255,255,.72);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.86),0 8px 18px rgba(0,0,0,.08);
+  font-size:15px;
 }
 
-#statusResult .sky31-progress-v85-step.is-on .sky31-progress-v85-dot{
-  background:linear-gradient(145deg, rgba(255,255,255,.96), rgba(255,255,255,.58));
-  box-shadow:0 10px 24px rgba(0,0,0,.12), inset 0 1px 0 rgba(255,255,255,.95);
+#statusResult .sky31-progress-v86-step.is-on .sky31-progress-v86-dot{
+  background:linear-gradient(145deg,rgba(255,255,255,.96),rgba(255,255,255,.58));
+  box-shadow:0 10px 24px rgba(0,0,0,.12),inset 0 1px 0 rgba(255,255,255,.96);
 }
 
-#statusResult .sky31-progress-v85-label{
-  font-size:10.5px;
-  line-height:1.18;
+#statusResult .sky31-progress-v86-label{
+  font-size:10px;
+  line-height:1.16;
   font-weight:680;
   color:#2f2a24;
   word-break:keep-all;
 }
 
-#statusResult .sky31-progress-v85-time{
-  margin-top:2px;
+#statusResult .sky31-progress-v86-time{
+  margin-top:3px;
   min-height:12px;
-  font-size:9px;
-  line-height:1.15;
-  color:rgba(47,42,36,.60);
+  font-size:8.8px;
+  line-height:1.12;
+  color:rgba(47,42,36,.62);
+  font-variant-numeric:tabular-nums;
+}
+
+#statusResult .sky31-progress-v86-arrow{
+  text-align:center;
+  margin-top:8px;
+  font-size:13px;
+  font-weight:800;
+  color:rgba(47,42,36,.30);
+  line-height:30px;
+}
+
+#statusResult .sky31-progress-v86-arrow.is-on{
+  color:rgba(47,42,36,.78);
 }
 
 @media(max-width:430px){
-  #statusResult .sky31-progress-v85{
-    margin:15px 0 16px;
-    padding:12px 7px 10px;
+  #statusResult .sky31-progress-v86{
+    margin:16px 0 18px;
+    padding:12px 6px 10px;
   }
-  #statusResult .sky31-progress-v85-row{
-    gap:3px;
+  #statusResult .sky31-progress-v86-row{
+    grid-template-columns:1fr 8px 1fr 8px 1fr 8px 1fr 8px 1fr;
+    gap:1px;
   }
-  #statusResult .sky31-progress-v85-dot{
-    width:28px;
-    height:28px;
-    font-size:14px;
+  #statusResult .sky31-progress-v86-dot{
+    width:25px;
+    height:25px;
+    font-size:12px;
     margin-bottom:5px;
   }
-  #statusResult .sky31-progress-v85-label{
-    font-size:9.5px;
-    line-height:1.14;
+  #statusResult .sky31-progress-v86-label{
+    font-size:8.5px;
+    line-height:1.12;
   }
-  #statusResult .sky31-progress-v85-time{
-    font-size:8px;
+  #statusResult .sky31-progress-v86-time{
+    font-size:7.5px;
+  }
+  #statusResult .sky31-progress-v86-arrow{
+    font-size:10px;
+    line-height:25px;
+    margin-top:7px;
   }
 }
 
@@ -4636,8 +4670,10 @@ window.addEventListener("load", function() {
 
 
 
+
+
 <script>
-/* V85 status five step single progress */
+/* V86 replace old progress with arrows */
 (function(){
   function rank(status){
     if(status === "confirmed") return 2;
@@ -4645,7 +4681,7 @@ window.addEventListener("load", function() {
     if(status === "completed") return 4;
     if(status === "picked_up") return 5;
     if(status === "cancelled") return -1;
-    return 1; // pending / empty = already ordered
+    return 1;
   }
 
   function label(status){
@@ -4680,7 +4716,7 @@ window.addEventListener("load", function() {
     var s = order.status || "pending";
 
     if(s === "cancelled"){
-      return '<div class="sky31-progress-v85"><span class="sky31-status-pill-v85">❌ 已取消</span></div>';
+      return '<div class="sky31-progress-v86" data-sky31-progress-v86="1"><span class="sky31-status-pill-v86">❌ 已取消</span></div>';
     }
 
     var r = rank(s);
@@ -4692,55 +4728,69 @@ window.addEventListener("load", function() {
       {k:"picked_up", i:"☕", l:"已領取", t:order.pickedUpAt}
     ];
 
-    var h = '<div class="sky31-progress-v85" data-sky31-progress-v85="1">';
-    h += '<div><span class="sky31-status-pill-v85">' + icon(s) + ' ' + label(s) + '</span></div>';
-    h += '<div class="sky31-progress-v85-row">';
+    var h = '<div class="sky31-progress-v86" data-sky31-progress-v86="1">';
+    h += '<div><span class="sky31-status-pill-v86">' + icon(s) + ' ' + label(s) + '</span></div>';
+    h += '<div class="sky31-progress-v86-row">';
 
-    steps.forEach(function(step){
+    steps.forEach(function(step, idx){
       var on = rank(step.k) <= r && r > 0;
-      h += '<div class="sky31-progress-v85-step ' + (on ? "is-on" : "") + '">';
-      h += '<div class="sky31-progress-v85-dot">' + step.i + '</div>';
-      h += '<div class="sky31-progress-v85-label">' + step.l + '</div>';
-      h += '<div class="sky31-progress-v85-time">' + (fmt(step.t) || '&nbsp;') + '</div>';
-      h += '</div>';
+      h += '<div class="sky31-progress-v86-step ' + (on ? "is-on" : "") + '">';
+      h += '<div class="sky31-progress-v86-step-inner">';
+      h += '<div class="sky31-progress-v86-dot">' + step.i + '</div>';
+      h += '<div class="sky31-progress-v86-label">' + step.l + '</div>';
+      h += '<div class="sky31-progress-v86-time">' + (fmt(step.t) || '&nbsp;') + '</div>';
+      h += '</div></div>';
+      if(idx < steps.length - 1){
+        var arrowOn = rank(steps[idx + 1].k) <= r && r > 0;
+        h += '<div class="sky31-progress-v86-arrow ' + (arrowOn ? "is-on" : "") + '">›</div>';
+      }
     });
 
     h += '</div></div>';
     return h;
   }
 
-  window.sky31ProgressHtmlV85 = progressHtml;
+  window.sky31ProgressHtmlV86 = progressHtml;
 
-  function stripOldProgress(html){
+  function removeOldProgressFromString(html){
     if(!html || typeof html !== "string") return html;
     html = html.replace(/<div class="sky31-progress-v82[\s\S]*?<\/div><\/div>/g, "");
     html = html.replace(/<div class="sky31-progress-v83[\s\S]*?<\/div><\/div>/g, "");
     html = html.replace(/<div class="sky31-progress-v85[\s\S]*?<\/div><\/div>/g, "");
+    html = html.replace(/<div class="sky31-progress-v86[\s\S]*?<\/div><\/div>/g, "");
     return html;
   }
 
   function patchCardHtml(html, order){
-    html = stripOldProgress(html);
+    html = removeOldProgressFromString(html);
     var progress = progressHtml(order || {});
 
-    // Insert after title if possible, otherwise put it before existing content
-    if(html && html.indexOf("</h3>") >= 0){
+    /*
+      Replace old progress position:
+      old UI normally sits before the big pickup number/title area.
+      If an old card has a title h2/h3, insert after title;
+      otherwise insert right before 取餐號 / pickup number.
+    */
+    if(html.indexOf("取餐號") >= 0){
+      return html.replace(/(<[^>]*>\s*取餐號\s*<\/[^>]*>)/, progress + "$1");
+    }
+    if(html.indexOf("</h3>") >= 0){
       return html.replace("</h3>", "</h3>" + progress);
     }
-    if(html && html.indexOf("</h2>") >= 0){
+    if(html.indexOf("</h2>") >= 0){
       return html.replace("</h2>", "</h2>" + progress);
     }
-    return progress + (html || "");
+    return progress + html;
   }
 
   function wrapCardFunction(name){
     var old = window[name];
-    if(typeof old !== "function" || old.__sky31v85) return;
+    if(typeof old !== "function" || old.__sky31v86) return;
     var fn = function(order){
       var html = old.apply(this, arguments);
       return patchCardHtml(html, order || {});
     };
-    fn.__sky31v85 = true;
+    fn.__sky31v86 = true;
     window[name] = fn;
   }
 
@@ -4750,35 +4800,38 @@ window.addEventListener("load", function() {
     wrapCardFunction("orderStatusCard");
   }
 
-  function cleanupDuplicatedProgress(){
+  function cleanupDom(){
     var result = document.getElementById("statusResult");
     if(!result) return;
 
-    // If multiple new bars appear, keep first one per card/result section.
+    // Hide all old progress blocks that are not the new one.
+    result.querySelectorAll(".sky31-progress-v82,.sky31-progress-v83,.sky31-progress-v85,.status-progress,.progress,.order-progress,.progress-steps,.steps,.timeline").forEach(function(el){
+      if(!el.classList.contains("sky31-progress-v86") && !el.closest(".sky31-progress-v86")) {
+        el.style.display = "none";
+      }
+    });
+
+    // Keep only one new progress per card.
     var cards = result.querySelectorAll(".order-card,.bb-order-card,.status-card,.card");
     if(cards.length){
       cards.forEach(function(card){
-        var bars = card.querySelectorAll(".sky31-progress-v85");
+        var bars = card.querySelectorAll(".sky31-progress-v86");
         bars.forEach(function(bar, idx){
           if(idx > 0) bar.remove();
         });
       });
     }else{
-      var bars = result.querySelectorAll(".sky31-progress-v85");
+      var bars = result.querySelectorAll(".sky31-progress-v86");
       bars.forEach(function(bar, idx){
         if(idx > 0) bar.remove();
       });
     }
-
-    // Hide old progress styles if they still exist.
-    result.querySelectorAll(".sky31-progress-v82,.sky31-progress-v83,.status-progress,.progress,.order-progress,.progress-steps").forEach(function(el){
-      if(!el.classList.contains("sky31-progress-v85")) el.style.display = "none";
-    });
   }
 
   document.addEventListener("DOMContentLoaded", function(){
     install();
-    setInterval(cleanupDuplicatedProgress, 700);
+    cleanupDom();
+    setInterval(cleanupDom, 700);
   });
 
   setTimeout(install, 300);
@@ -4787,7 +4840,7 @@ window.addEventListener("load", function() {
   document.addEventListener("click", function(){
     setTimeout(function(){
       install();
-      cleanupDuplicatedProgress();
+      cleanupDom();
     }, 500);
   }, true);
 })();
