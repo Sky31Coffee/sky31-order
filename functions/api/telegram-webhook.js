@@ -1,4 +1,3 @@
-
 export async function onRequestPost(context) {
   const { request, env } = context;
   const update = await request.json();
@@ -13,21 +12,18 @@ export async function onRequestPost(context) {
       if (!order) return json({ ok: true });
 
       if (order.status === "cancelled") {
-        await answerCallback(env, cq.id, "此訂單已取消");
+        await answerCallback(env, cq.id, "此訂單已取消，請先恢復訂單");
         return json({ ok: true });
       }
 
       order.status = "completed";
       order.completedAt = new Date().toISOString();
+      order.pickedUpAt = null;
+
+      clearCancelBackup(order);
 
       await saveOrder(env, order);
-      await editTelegramMessage(env, cq.message.chat.id, cq.message.message_id, buildTelegramText(order), {
-        inline_keyboard: [[
-          { text: "☕ 已領取 #" + order.orderNo, callback_data: "pickup:" + order.orderNo },
-          { text: "❌ 取消訂單 #" + order.orderNo, callback_data: "cancel:" + order.orderNo }
-        ]]
-      });
-
+      await editTelegramMessage(env, cq.message.chat.id, cq.message.message_id, buildTelegramText(order), buildReplyMarkup(order));
       await answerCallback(env, cq.id, "已完成 #" + order.orderNo);
     }
 
@@ -37,7 +33,7 @@ export async function onRequestPost(context) {
       if (!order) return json({ ok: true });
 
       if (order.status === "cancelled") {
-        await answerCallback(env, cq.id, "此訂單已取消");
+        await answerCallback(env, cq.id, "此訂單已取消，請先恢復訂單");
         return json({ ok: true });
       }
 
@@ -45,9 +41,64 @@ export async function onRequestPost(context) {
       if (!order.completedAt) order.completedAt = new Date().toISOString();
       order.pickedUpAt = new Date().toISOString();
 
+      clearCancelBackup(order);
+
       await saveOrder(env, order);
-      await editTelegramMessage(env, cq.message.chat.id, cq.message.message_id, buildTelegramText(order));
+      await editTelegramMessage(env, cq.message.chat.id, cq.message.message_id, buildTelegramText(order), buildReplyMarkup(order));
       await answerCallback(env, cq.id, "已領取 #" + order.orderNo);
+    }
+
+    if (data.startsWith("undo_pickup:")) {
+      const orderNo = data.split(":")[1];
+      const order = await getOrder(env, orderNo, cq);
+      if (!order) return json({ ok: true });
+
+      if (order.status === "cancelled") {
+        await answerCallback(env, cq.id, "此訂單已取消，請先恢復訂單");
+        return json({ ok: true });
+      }
+
+      if (order.status !== "picked_up") {
+        await answerCallback(env, cq.id, "目前不是已領取狀態");
+        return json({ ok: true });
+      }
+
+      order.status = "completed";
+      order.pickedUpAt = null;
+      if (!order.completedAt) order.completedAt = new Date().toISOString();
+
+      await saveOrder(env, order);
+      await editTelegramMessage(env, cq.message.chat.id, cq.message.message_id, buildTelegramText(order), buildReplyMarkup(order));
+      await answerCallback(env, cq.id, "已撤回領取 #" + order.orderNo);
+    }
+
+    if (data.startsWith("undo_complete:")) {
+      const orderNo = data.split(":")[1];
+      const order = await getOrder(env, orderNo, cq);
+      if (!order) return json({ ok: true });
+
+      if (order.status === "cancelled") {
+        await answerCallback(env, cq.id, "此訂單已取消，請先恢復訂單");
+        return json({ ok: true });
+      }
+
+      if (order.status === "picked_up") {
+        await answerCallback(env, cq.id, "請先撤回領取，再撤回完成");
+        return json({ ok: true });
+      }
+
+      if (order.status !== "completed") {
+        await answerCallback(env, cq.id, "目前不是已完成狀態");
+        return json({ ok: true });
+      }
+
+      order.status = "pending";
+      order.completedAt = null;
+      order.pickedUpAt = null;
+
+      await saveOrder(env, order);
+      await editTelegramMessage(env, cq.message.chat.id, cq.message.message_id, buildTelegramText(order), buildReplyMarkup(order));
+      await answerCallback(env, cq.id, "已撤回完成 #" + order.orderNo);
     }
 
     if (data.startsWith("cancel:")) {
@@ -55,12 +106,59 @@ export async function onRequestPost(context) {
       const order = await getOrder(env, orderNo, cq);
       if (!order) return json({ ok: true });
 
+      if (order.status === "cancelled") {
+        await answerCallback(env, cq.id, "此訂單已經取消");
+        return json({ ok: true });
+      }
+
+      order.statusBeforeCancel = order.status || "pending";
+      order.completedAtBeforeCancel = order.completedAt || null;
+      order.pickedUpAtBeforeCancel = order.pickedUpAt || null;
+
       order.status = "cancelled";
       order.cancelledAt = new Date().toISOString();
 
       await saveOrder(env, order);
-      await editTelegramMessage(env, cq.message.chat.id, cq.message.message_id, buildTelegramText(order));
+      await editTelegramMessage(env, cq.message.chat.id, cq.message.message_id, buildTelegramText(order), buildReplyMarkup(order));
       await answerCallback(env, cq.id, "已取消 #" + order.orderNo);
+    }
+
+    if (data.startsWith("restore:")) {
+      const orderNo = data.split(":")[1];
+      const order = await getOrder(env, orderNo, cq);
+      if (!order) return json({ ok: true });
+
+      if (order.status !== "cancelled") {
+        await answerCallback(env, cq.id, "目前不是已取消狀態");
+        return json({ ok: true });
+      }
+
+      const restoreStatus = normalizeStatus(order.statusBeforeCancel || "pending");
+
+      order.status = restoreStatus;
+      order.restoredAt = new Date().toISOString();
+
+      if (restoreStatus === "pending") {
+        order.completedAt = null;
+        order.pickedUpAt = null;
+      }
+
+      if (restoreStatus === "completed") {
+        order.completedAt = order.completedAtBeforeCancel || order.completedAt || new Date().toISOString();
+        order.pickedUpAt = null;
+      }
+
+      if (restoreStatus === "picked_up") {
+        order.completedAt = order.completedAtBeforeCancel || order.completedAt || new Date().toISOString();
+        order.pickedUpAt = order.pickedUpAtBeforeCancel || order.pickedUpAt || new Date().toISOString();
+      }
+
+      order.cancelledAt = null;
+      clearCancelBackup(order);
+
+      await saveOrder(env, order);
+      await editTelegramMessage(env, cq.message.chat.id, cq.message.message_id, buildTelegramText(order), buildReplyMarkup(order));
+      await answerCallback(env, cq.id, "已恢復 #" + order.orderNo);
     }
   }
 
@@ -78,6 +176,61 @@ async function getOrder(env, orderNo, cq) {
 
 async function saveOrder(env, order) {
   await env.ORDERS.put("order:" + order.orderNo, JSON.stringify(order), { expirationTtl: 60 * 60 * 24 * 14 });
+}
+
+function normalizeStatus(status) {
+  if (status === "completed") return "completed";
+  if (status === "picked_up") return "picked_up";
+  if (status === "cancelled") return "pending";
+  return "pending";
+}
+
+function clearCancelBackup(order) {
+  order.statusBeforeCancel = null;
+  order.completedAtBeforeCancel = null;
+  order.pickedUpAtBeforeCancel = null;
+}
+
+function buildReplyMarkup(order) {
+  const orderNo = order.orderNo || "";
+  const status = order.status || "pending";
+
+  if (status === "cancelled") {
+    return {
+      inline_keyboard: [[
+        { text: "↩️ 恢復訂單 #" + orderNo, callback_data: "restore:" + orderNo }
+      ]]
+    };
+  }
+
+  if (status === "picked_up") {
+    return {
+      inline_keyboard: [[
+        { text: "↩️ 撤回領取 #" + orderNo, callback_data: "undo_pickup:" + orderNo }
+      ]]
+    };
+  }
+
+  if (status === "completed") {
+    return {
+      inline_keyboard: [
+        [
+          { text: "☕ 已領取 #" + orderNo, callback_data: "pickup:" + orderNo },
+          { text: "↩️ 撤回完成 #" + orderNo, callback_data: "undo_complete:" + orderNo }
+        ],
+        [
+          { text: "❌ 取消訂單 #" + orderNo, callback_data: "cancel:" + orderNo }
+        ]
+      ]
+    };
+  }
+
+  return {
+    inline_keyboard: [[
+      { text: "✅ 完成訂單 #" + orderNo, callback_data: "complete:" + orderNo },
+      { text: "❌ 取消訂單 #" + orderNo, callback_data: "cancel:" + orderNo }
+    ]]
+  };
 }
 
 function buildTelegramText(order) {
@@ -114,6 +267,12 @@ function buildTelegramText(order) {
   lines.push("客人：" + (order.customerName || ""));
   lines.push("電話：" + (order.phone || ""));
 
+  if (order.status === "pending" || !order.status) {
+    lines.push("");
+    lines.push("────────────");
+    lines.push("🕐 狀態：等待製作");
+  }
+
   if (order.status === "completed" || order.status === "picked_up") {
     lines.push("");
     lines.push("────────────");
@@ -131,9 +290,22 @@ function buildTelegramText(order) {
     lines.push("────────────");
     lines.push("❌ 狀態：已取消");
     if (order.cancelledAt) lines.push("取消時間：" + formatDateTime(order.cancelledAt));
+    if (order.statusBeforeCancel) lines.push("取消前狀態：" + statusLabel(order.statusBeforeCancel));
+  }
+
+  if (order.restoredAt && order.status !== "cancelled") {
+    lines.push("");
+    lines.push("↩️ 最近恢復：" + formatDateTime(order.restoredAt));
   }
 
   return lines.join("\n").trim();
+}
+
+function statusLabel(status) {
+  if (status === "completed") return "已完成";
+  if (status === "picked_up") return "已領取";
+  if (status === "cancelled") return "已取消";
+  return "等待製作";
 }
 
 function beanIcon(bean) {
