@@ -3285,6 +3285,264 @@ input.input-error{
   }
 }
 
+
+/* V102 member system */
+.member-modal{
+  position:fixed;
+  inset:0;
+  z-index:9999;
+  display:none;
+  align-items:flex-end;
+  justify-content:center;
+  background:rgba(0,0,0,.28);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+}
+
+.member-modal.show{
+  display:flex;
+}
+
+.member-sheet{
+  width:min(520px, calc(100% - 24px));
+  max-height:88vh;
+  overflow:auto;
+  margin:0 0 12px;
+  padding:22px;
+  border-radius:28px;
+  background:rgba(250,247,240,.92);
+  border:1px solid rgba(255,255,255,.72);
+  box-shadow:0 28px 90px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.82);
+  color:#2f2a24;
+}
+
+.member-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:14px;
+  margin-bottom:16px;
+}
+
+.member-head h2{
+  margin:0;
+  font-size:24px;
+  line-height:1.1;
+  letter-spacing:-.03em;
+}
+
+.member-head small{
+  display:block;
+  margin-top:4px;
+  color:rgba(47,42,36,.56);
+  font-weight:560;
+}
+
+.member-close{
+  width:38px;
+  height:38px;
+  border-radius:999px;
+  border:0;
+  background:rgba(255,255,255,.62);
+  font-size:22px;
+  line-height:38px;
+  cursor:pointer;
+}
+
+.member-card{
+  padding:15px;
+  border-radius:20px;
+  background:rgba(255,255,255,.56);
+  border:1px solid rgba(255,255,255,.70);
+  margin-bottom:14px;
+}
+
+.member-row{
+  display:flex;
+  justify-content:space-between;
+  gap:14px;
+  padding:8px 0;
+  border-bottom:1px solid rgba(47,42,36,.08);
+  font-size:14px;
+}
+
+.member-row:last-child{
+  border-bottom:0;
+}
+
+.member-row span{
+  color:rgba(47,42,36,.58);
+  font-weight:620;
+}
+
+.member-row strong{
+  text-align:right;
+  font-weight:820;
+}
+
+.member-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr;
+  gap:10px;
+  margin:12px 0 4px;
+}
+
+.member-stat{
+  padding:12px 8px;
+  border-radius:16px;
+  background:rgba(255,255,255,.58);
+  text-align:center;
+}
+
+.member-stat b{
+  display:block;
+  font-size:18px;
+  line-height:1.1;
+}
+
+.member-stat span{
+  display:block;
+  margin-top:4px;
+  font-size:11px;
+  color:rgba(47,42,36,.58);
+  font-weight:650;
+}
+
+.member-form label{
+  display:block;
+  margin:12px 0 6px;
+  font-size:12px;
+  font-weight:760;
+  color:rgba(47,42,36,.68);
+}
+
+.member-form input,
+.member-form textarea{
+  width:100%;
+  box-sizing:border-box;
+  border:1px solid rgba(47,42,36,.12);
+  background:rgba(255,255,255,.70);
+  border-radius:16px;
+  padding:13px 14px;
+  font-size:15px;
+  outline:none;
+  color:#2f2a24;
+}
+
+.member-form textarea{
+  min-height:72px;
+  resize:vertical;
+}
+
+.member-actions{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+  margin-top:14px;
+}
+
+.member-btn{
+  border:0;
+  border-radius:999px;
+  padding:13px 14px;
+  font-weight:820;
+  cursor:pointer;
+}
+
+.member-btn.primary{
+  background:#1f1d1a;
+  color:#fff;
+}
+
+.member-btn.secondary{
+  background:rgba(255,255,255,.64);
+  color:#2f2a24;
+}
+
+.member-btn.danger{
+  background:rgba(120,36,24,.10);
+  color:#7a251c;
+}
+
+.member-msg{
+  min-height:18px;
+  margin-top:12px;
+  font-size:13px;
+  font-weight:650;
+  color:rgba(47,42,36,.72);
+}
+
+.member-msg.error{
+  color:#9a2d22;
+}
+
+.member-history{
+  display:grid;
+  gap:8px;
+  margin-top:10px;
+}
+
+.member-order{
+  display:grid;
+  grid-template-columns:auto 1fr auto;
+  gap:10px;
+  align-items:center;
+  padding:10px 0;
+  border-bottom:1px solid rgba(47,42,36,.08);
+  font-size:13px;
+}
+
+.member-order:last-child{
+  border-bottom:0;
+}
+
+.member-order-no{
+  font-weight:850;
+}
+
+.member-order-meta{
+  color:rgba(47,42,36,.58);
+  font-size:12px;
+  line-height:1.3;
+}
+
+.member-order-total{
+  font-weight:850;
+  font-variant-numeric:tabular-nums;
+}
+
+.profile-button.member-logged{
+  box-shadow:0 0 0 2px rgba(35,31,26,.18), 0 10px 24px rgba(0,0,0,.12) !important;
+}
+
+.profile-button.member-logged::after{
+  content:"";
+  position:absolute;
+  width:8px;
+  height:8px;
+  right:5px;
+  bottom:5px;
+  border-radius:999px;
+  background:#2faf66;
+  border:2px solid rgba(255,255,255,.95);
+}
+
+@media(max-width:430px){
+  .member-sheet{
+    width:calc(100% - 16px);
+    padding:20px;
+    border-radius:26px;
+    margin-bottom:8px;
+  }
+  .member-grid{
+    grid-template-columns:1fr 1fr 1fr;
+    gap:8px;
+  }
+  .member-actions{
+    grid-template-columns:1fr;
+  }
+}
+
 </style>
 
 <style>
@@ -3588,7 +3846,7 @@ line-height:1.6;
 <div class="wrap">
 <input type="hidden" id="name"><input type="hidden" id="phone">
   <header class="header">
-  <button id="profileButton" class="profile-button" onclick="openCustomerModal(false)" aria-label="客戶資料">
+  <button id="profileButton" class="profile-button" onclick="openMemberModal()" aria-label="會員中心">
       <svg class="profile-icon" viewBox="0 0 24 24" aria-hidden="true">
         <circle cx="12" cy="8" r="4"></circle>
         <path d="M4 21c1.6-4.3 4.4-6.5 8-6.5s6.4 2.2 8 6.5"></path>
@@ -5737,6 +5995,325 @@ window.addEventListener("load", function() {
     }
   }, true);
 
+})();
+</script>
+
+
+<script>
+/* V102 member system */
+(function(){
+  const MEMBER_KEY = "sky31_member_v1";
+
+  function $(id){ return document.getElementById(id); }
+
+  function esc(s){
+    return String(s == null ? "" : s).replace(/[&<>"']/g,function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+    });
+  }
+
+  function phoneNorm(s){
+    return String(s || "").replace(/\D/g,"");
+  }
+
+  function money(n){
+    if(typeof sky31Money === "function") return sky31Money(n);
+    n = Number(n || 0);
+    return "MOP " + (Math.round(n * 100) / 100).toString();
+  }
+
+  function dateText(s){
+    if(!s) return "-";
+    try{
+      var d = new Date(s);
+      if(isNaN(d.getTime())) return "-";
+      return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0") + " " + String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0");
+    }catch(e){ return "-"; }
+  }
+
+  function statusText(status){
+    if(status === "cancelled") return "已取消";
+    if(status === "picked_up") return "已領取";
+    if(status === "completed") return "已完成";
+    if(status === "making") return "製作中";
+    if(status === "confirmed") return "已確認";
+    return "等待確認";
+  }
+
+  function storedMember(){
+    try{
+      var raw = localStorage.getItem(MEMBER_KEY);
+      return raw ? JSON.parse(raw) : null;
+    }catch(e){ return null; }
+  }
+
+  function saveStoredMember(member){
+    localStorage.setItem(MEMBER_KEY, JSON.stringify(member || {}));
+  }
+
+  function clearStoredMember(){
+    localStorage.removeItem(MEMBER_KEY);
+  }
+
+  function setMsg(text, isError){
+    var msg = $("memberMsg");
+    if(!msg) return;
+    msg.textContent = text || "";
+    msg.classList.toggle("error", !!isError);
+  }
+
+  function applyMember(member){
+    if(!member) return;
+    var nameEl = $("name");
+    var phoneEl = $("phone");
+    if(nameEl) nameEl.value = member.name || "";
+    if(phoneEl) phoneEl.value = member.phone || "";
+    var modalName = $("modalName");
+    var modalPhone = $("modalPhone");
+    if(modalName) modalName.value = member.name || "";
+    if(modalPhone) modalPhone.value = member.phone || "";
+    if(typeof updateCheckoutCustomerInfo === "function") updateCheckoutCustomerInfo();
+    updateMemberProfileButton(member);
+  }
+
+  function updateMemberProfileButton(member){
+    var btn = $("profileButton");
+    if(!btn) return;
+    var m = member || storedMember();
+    if(m && m.phone){
+      btn.classList.add("member-logged");
+      btn.title = "會員：" + (m.name || m.phone);
+      btn.setAttribute("aria-label", btn.title);
+    }else{
+      btn.classList.remove("member-logged");
+      btn.title = "會員登入 / 查詢";
+      btn.setAttribute("aria-label", "會員登入 / 查詢");
+    }
+  }
+
+  function ensureMemberModal(){
+    if($("memberModal")) return;
+
+    var div = document.createElement("div");
+    div.id = "memberModal";
+    div.className = "member-modal";
+    div.innerHTML =
+      '<div class="member-sheet">' +
+        '<div class="member-head">' +
+          '<div><h2>Sky31 會員</h2><small>Member login / lookup</small></div>' +
+          '<button class="member-close" type="button" onclick="closeMemberModal()">×</button>' +
+        '</div>' +
+
+        '<div id="memberLoggedPanel" class="member-card" style="display:none;"></div>' +
+
+        '<div class="member-form">' +
+          '<label>手機 Phone</label>' +
+          '<input id="memberPhone" inputmode="tel" placeholder="輸入手機號碼登入 / 查詢">' +
+          '<label>姓名 Name</label>' +
+          '<input id="memberName" placeholder="首次註冊請輸入姓名">' +
+          '<label>生日 Birthday，可選</label>' +
+          '<input id="memberBirthday" type="date">' +
+          '<label>備註 Note，可選</label>' +
+          '<textarea id="memberNote" placeholder="例如：少冰、常用豆款、稱呼等"></textarea>' +
+        '</div>' +
+
+        '<div class="member-actions">' +
+          '<button class="member-btn primary" type="button" onclick="memberLoginLookup()">登入 / 查詢</button>' +
+          '<button class="member-btn secondary" type="button" onclick="memberRegisterSave()">註冊 / 保存</button>' +
+          '<button class="member-btn danger" type="button" onclick="memberLogout()">登出帳號</button>' +
+          '<button class="member-btn secondary" type="button" onclick="closeMemberModal()">關閉</button>' +
+        '</div>' +
+
+        '<div id="memberMsg" class="member-msg"></div>' +
+      '</div>';
+    document.body.appendChild(div);
+
+    div.addEventListener("click", function(e){
+      if(e.target === div) closeMemberModal();
+    });
+  }
+
+  function fillMemberForm(member){
+    member = member || storedMember() || {};
+    if($("memberPhone")) $("memberPhone").value = member.phone || ($("phone") ? $("phone").value : "");
+    if($("memberName")) $("memberName").value = member.name || ($("name") ? $("name").value : "");
+    if($("memberBirthday")) $("memberBirthday").value = member.birthday || "";
+    if($("memberNote")) $("memberNote").value = member.note || "";
+  }
+
+  function renderLoggedPanel(member){
+    var panel = $("memberLoggedPanel");
+    if(!panel) return;
+
+    if(!member || !member.phone){
+      panel.style.display = "none";
+      panel.innerHTML = "";
+      return;
+    }
+
+    panel.style.display = "block";
+
+    var orders = Array.isArray(member.recentOrders) ? member.recentOrders : [];
+    var history = orders.length ? orders.map(function(o){
+      var cups = Number(o.totalCups || 0);
+      return '<div class="member-order">' +
+        '<div class="member-order-no">#' + esc(o.orderNo || "") + '</div>' +
+        '<div><div class="member-order-meta">' + esc(dateText(o.createdAt)) + '｜' + esc(statusText(o.status)) + '</div>' +
+        '<div class="member-order-meta">' + cups + ' 杯｜' + esc(o.pickupTime || "") + '</div></div>' +
+        '<div class="member-order-total">' + money(o.totalAmount || 0) + '</div>' +
+      '</div>';
+    }).join("") : '<div class="member-order-meta">暫時沒有歷史訂單</div>';
+
+    panel.innerHTML =
+      '<div class="member-row"><span>會員</span><strong>' + esc(member.name || "-") + '</strong></div>' +
+      '<div class="member-row"><span>電話</span><strong>' + esc(member.phone || "-") + '</strong></div>' +
+      (member.birthday ? '<div class="member-row"><span>生日</span><strong>' + esc(member.birthday) + '</strong></div>' : '') +
+      '<div class="member-grid">' +
+        '<div class="member-stat"><b>' + Number(member.totalOrders || 0) + '</b><span>訂單</span></div>' +
+        '<div class="member-stat"><b>' + Number(member.totalCups || 0) + '</b><span>累積杯數</span></div>' +
+        '<div class="member-stat"><b>' + money(member.totalSpent || 0).replace("MOP ","") + '</b><span>累積消費 MOP</span></div>' +
+      '</div>' +
+      '<div style="margin-top:14px;font-weight:850;">歷史訂單</div>' +
+      '<div class="member-history">' + history + '</div>';
+  }
+
+  async function fetchMember(phone){
+    var res = await fetch("/api/member?phone=" + encodeURIComponent(phoneNorm(phone)) + "&t=" + Date.now(), {cache:"no-store"});
+    var data = await res.json();
+    if(!res.ok || !data.ok) throw new Error(data.error || "查詢不到會員資料");
+    return data.member;
+  }
+
+  async function postMember(payload){
+    var res = await fetch("/api/member", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify(payload)
+    });
+    var data = await res.json();
+    if(!res.ok || !data.ok) throw new Error(data.error || "保存會員失敗");
+    return data.member;
+  }
+
+  window.openMemberModal = async function(){
+    ensureMemberModal();
+    setMsg("");
+    fillMemberForm();
+    $("memberModal").classList.add("show");
+    document.body.style.overflow = "hidden";
+    renderLoggedPanel(storedMember());
+
+    var m = storedMember();
+    if(m && m.phone){
+      try{
+        var fresh = await fetchMember(m.phone);
+        saveStoredMember(fresh);
+        applyMember(fresh);
+        fillMemberForm(fresh);
+        renderLoggedPanel(fresh);
+      }catch(e){
+        renderLoggedPanel(m);
+      }
+    }
+
+    setTimeout(function(){
+      var phone = $("memberPhone");
+      if(phone) phone.focus();
+    },80);
+  };
+
+  window.closeMemberModal = function(){
+    var modal = $("memberModal");
+    if(modal) modal.classList.remove("show");
+    document.body.style.overflow = "";
+  };
+
+  window.memberLoginLookup = async function(){
+    ensureMemberModal();
+    var phone = phoneNorm(($("memberPhone") || {}).value || "");
+    if(!phone){
+      setMsg("請輸入手機號碼。", true);
+      return;
+    }
+    setMsg("查詢中...");
+    try{
+      var member = await fetchMember(phone);
+      saveStoredMember(member);
+      applyMember(member);
+      fillMemberForm(member);
+      renderLoggedPanel(member);
+      setMsg("已登入會員，訂單資料會自動填入。");
+    }catch(e){
+      renderLoggedPanel(null);
+      setMsg("未找到此電話的會員資料。請輸入姓名後按「註冊 / 保存」。", true);
+    }
+  };
+
+  window.memberRegisterSave = async function(){
+    ensureMemberModal();
+    var phone = phoneNorm(($("memberPhone") || {}).value || "");
+    var name = (($("memberName") || {}).value || "").trim();
+    var birthday = (($("memberBirthday") || {}).value || "").trim();
+    var note = (($("memberNote") || {}).value || "").trim();
+
+    if(!phone || !name){
+      setMsg("註冊會員需要姓名和手機號碼。", true);
+      return;
+    }
+
+    setMsg("保存中...");
+    try{
+      var member = await postMember({phone:phone, name:name, birthday:birthday, note:note});
+      saveStoredMember(member);
+      applyMember(member);
+      fillMemberForm(member);
+      renderLoggedPanel(member);
+      setMsg("會員資料已保存。");
+    }catch(e){
+      setMsg(e.message || "保存會員失敗。", true);
+    }
+  };
+
+  window.memberLogout = function(){
+    clearStoredMember();
+    var nameEl = $("name");
+    var phoneEl = $("phone");
+    if(nameEl) nameEl.value = "";
+    if(phoneEl) phoneEl.value = "";
+    updateMemberProfileButton(null);
+    if(typeof updateCheckoutCustomerInfo === "function") updateCheckoutCustomerInfo();
+    fillMemberForm({});
+    renderLoggedPanel(null);
+    setMsg("已登出會員。");
+  };
+
+  function bootMember(){
+    ensureMemberModal();
+
+    var btn = $("profileButton");
+    if(btn){
+      btn.onclick = function(e){
+        if(e) e.preventDefault();
+        openMemberModal();
+        return false;
+      };
+    }
+
+    var member = storedMember();
+    if(member && member.phone){
+      applyMember(member);
+      fetchMember(member.phone).then(function(fresh){
+        saveStoredMember(fresh);
+        applyMember(fresh);
+        renderLoggedPanel(fresh);
+      }).catch(function(){});
+    }else{
+      updateMemberProfileButton(null);
+    }
+  }
+
+  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", bootMember);
+  else bootMember();
 })();
 </script>
 
