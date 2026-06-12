@@ -2680,6 +2680,29 @@ body.sky31-menu-page{
   }
 }
 
+
+/* V81 no-alert mobile freeze fix */
+/* Visual-only validation message. Avoid iPhone alert() freeze inside modals. */
+.inline-validation-error{
+  display:none;
+  margin:10px 0 8px;
+  padding:10px 12px;
+  border-radius:14px;
+  background:rgba(239,68,68,.10);
+  border:1px solid rgba(239,68,68,.22);
+  color:#b91c1c;
+  font-size:14px;
+  line-height:1.45;
+  font-weight:650;
+}
+.inline-validation-error.show{
+  display:block;
+}
+input.input-error{
+  border-color:rgba(239,68,68,.55) !important;
+  box-shadow:0 0 0 3px rgba(239,68,68,.12) !important;
+}
+
 </style>
 
 <style>
@@ -3032,6 +3055,7 @@ line-height:1.6;
     <input id="modalName" placeholder="請輸入姓名">
     <label>手機 Phone</label>
     <input id="modalPhone" placeholder="請輸入手機號碼" inputmode="tel">
+    <div id="customerInlineError" class="inline-validation-error" aria-live="polite"></div>
     <button class="primary" onclick="saveCustomerAndSubmit()">保存資料 Save</button>
     <button class="danger" onclick="closeCustomerModal()">取消 Cancel</button>
   </div>
@@ -4249,6 +4273,7 @@ window.addEventListener("load", function() {
     <input id="statusOrderNo" placeholder="可不填；如有訂單號可輸入">
     <label>手機 Phone</label>
     <input id="statusPhone" placeholder="輸入下單手機" inputmode="tel">
+    <div id="statusInlineError" class="inline-validation-error" aria-live="polite"></div>
     <button class="primary" onclick="checkOrderStatus()">查詢 Check Status</button>
     <div id="statusResult" class="status-result"></div>
   </div>
@@ -4293,6 +4318,197 @@ window.addEventListener("load", function() {
   var bg=document.createElement('div');
   bg.id='sky31MobileBg';
   document.body.prepend(bg);
+})();
+</script>
+
+
+<script>
+/* V81 no-alert mobile freeze fix */
+(function(){
+  function $(id){ return document.getElementById(id); }
+  function safeTrim(el){ return el && typeof el.value === "string" ? el.value.trim() : ""; }
+
+  function showInlineError(id, msg){
+    var el = $(id);
+    if(!el) return;
+    el.textContent = msg || "";
+    el.classList.toggle("show", !!msg);
+  }
+
+  function markInputError(input, hasError){
+    if(!input) return;
+    input.classList.toggle("input-error", !!hasError);
+  }
+
+  function unlockBodySoon(){
+    setTimeout(function(){
+      var customerModal = $("customerModal");
+      var statusModal = $("orderStatusModal");
+      var overlay = $("overlay");
+      var cartModal = $("cartModal");
+
+      var anyOpen =
+        (customerModal && customerModal.classList.contains("show")) ||
+        (statusModal && statusModal.classList.contains("show")) ||
+        (overlay && overlay.classList.contains("show")) ||
+        (cartModal && cartModal.classList.contains("show"));
+
+      if(!anyOpen) document.body.style.overflow = "";
+    }, 60);
+  }
+
+  window.sky31ShowInlineError = showInlineError;
+
+  /* Replace customer save with inline validation, no alert() */
+  window.saveCustomerAndSubmit = function(){
+    var modalNameEl = $("modalName");
+    var modalPhoneEl = $("modalPhone");
+    var nameEl = $("name");
+    var phoneEl = $("phone");
+
+    var modalName = safeTrim(modalNameEl);
+    var modalPhone = safeTrim(modalPhoneEl);
+
+    markInputError(modalNameEl, !modalName);
+    markInputError(modalPhoneEl, !modalPhone);
+
+    if(!modalName || !modalPhone){
+      var msg = "";
+      if(!modalName && !modalPhone) msg = "請先填寫姓名和手機號碼。";
+      else if(!modalName) msg = "請填寫姓名。";
+      else msg = "請填寫手機號碼。";
+
+      showInlineError("customerInlineError", msg);
+
+      setTimeout(function(){
+        if(!modalName && modalNameEl) modalNameEl.focus();
+        else if(!modalPhone && modalPhoneEl) modalPhoneEl.focus();
+      }, 80);
+
+      return false;
+    }
+
+    showInlineError("customerInlineError", "");
+    if(nameEl) nameEl.value = modalName;
+    if(phoneEl) phoneEl.value = modalPhone;
+
+    if(typeof updateCheckoutCustomerInfo === "function") {
+      try{ updateCheckoutCustomerInfo(); }catch(e){}
+    }
+    if(typeof updateProfileButton === "function") {
+      try{ updateProfileButton(); }catch(e){}
+    }
+
+    var modal = $("customerModal");
+    if(modal) modal.classList.remove("show");
+    document.body.style.overflow = "";
+    window.pendingSubmitAfterCustomerInfo = false;
+
+    if(typeof openCartModal === "function") {
+      try{ openCartModal(); }catch(e){}
+    }
+
+    return true;
+  };
+
+  /* Clear customer inline error while typing */
+  document.addEventListener("input", function(e){
+    if(e.target && (e.target.id === "modalName" || e.target.id === "modalPhone")){
+      var n = safeTrim($("modalName"));
+      var p = safeTrim($("modalPhone"));
+      markInputError($("modalName"), !n && !!p);
+      markInputError($("modalPhone"), !p && !!n);
+      if(n && p) showInlineError("customerInlineError", "");
+    }
+
+    if(e.target && (e.target.id === "statusOrderNo" || e.target.id === "statusPhone")){
+      showInlineError("statusInlineError", "");
+      markInputError($("statusOrderNo"), false);
+      markInputError($("statusPhone"), false);
+    }
+  }, true);
+
+  /* Robust order status check: no alert(), no freeze. */
+  async function safeCheckStatus(){
+    var result = $("statusResult") || document.querySelector(".status-result");
+    var orderInput = $("statusOrderNo") || $("orderNo") || $("checkOrderNo") || document.querySelector("input[name='orderNo']") || document.querySelector("input[placeholder*='訂單']");
+    var phoneInput = $("statusPhone") || $("phoneStatus") || $("checkPhone") || document.querySelector("input[name='statusPhone']") || document.querySelector("input[placeholder*='Phone']") || document.querySelector("input[placeholder*='手機']");
+
+    var orderNo = safeTrim(orderInput).replace(/^#/, "");
+    var phone = safeTrim(phoneInput);
+
+    markInputError(orderInput, false);
+    markInputError(phoneInput, false);
+    showInlineError("statusInlineError", "");
+
+    if(!orderNo && !phone){
+      showInlineError("statusInlineError", "請輸入手機號碼；如有訂單號可以一併輸入。");
+      markInputError(phoneInput, true);
+      if(phoneInput) setTimeout(function(){ phoneInput.focus(); }, 80);
+      return false;
+    }
+
+    if(orderNo && !phone){
+      showInlineError("statusInlineError", "為保障私隱，請同時輸入下單手機號碼。");
+      markInputError(phoneInput, true);
+      if(phoneInput) setTimeout(function(){ phoneInput.focus(); }, 80);
+      return false;
+    }
+
+    /* phone only is allowed: show all recent orders for that phone */
+    if(result) result.innerHTML = "<p class='bb-meta'>查詢中...</p>";
+
+    try{
+      var url = "/api/status?phone=" + encodeURIComponent(phone);
+      if(orderNo) url += "&orderNo=" + encodeURIComponent(orderNo);
+      url += "&t=" + Date.now();
+
+      var res = await fetch(url, { cache:"no-store" });
+      var data = await res.json();
+
+      if(!data.ok){
+        if(result) result.innerHTML = "<p class='bb-meta'>" + String(data.error || "查詢不到目前可顯示的訂單") + "</p>";
+        return false;
+      }
+
+      var orders = Array.isArray(data.orders) ? data.orders : [data];
+
+      if(typeof bbOrderCard === "function"){
+        if(result) result.innerHTML = orders.map(bbOrderCard).join("");
+      }else if(typeof sky31OrderStatusCard === "function"){
+        if(result) result.innerHTML = orders.map(sky31OrderStatusCard).join("");
+      }else{
+        if(result) result.innerHTML = "<pre class='status-order-text'>" + JSON.stringify(orders, null, 2) + "</pre>";
+      }
+
+      return true;
+    }catch(e){
+      if(result) result.innerHTML = "<p class='bb-meta'>暫時無法查詢，請稍後再試。</p>";
+      return false;
+    }finally{
+      unlockBodySoon();
+    }
+  }
+
+  window.checkOrderStatus = safeCheckStatus;
+  window.sky31ForceCheckStatus = safeCheckStatus;
+  window.checkStatus = safeCheckStatus;
+  window.queryOrder = safeCheckStatus;
+  window.searchOrder = safeCheckStatus;
+
+  document.addEventListener("click", function(e){
+    var btn = e.target && e.target.closest ? e.target.closest("button") : null;
+    if(!btn) return;
+    var txt = btn.textContent || "";
+    var inStatusModal = !!btn.closest("#orderStatusModal,.order-status-modal,#statusModal,.status-modal,[data-status-modal]");
+
+    if(inStatusModal && (txt.indexOf("查詢") >= 0 || txt.indexOf("Check Status") >= 0)){
+      e.preventDefault();
+      e.stopPropagation();
+      safeCheckStatus();
+    }
+  }, true);
+
 })();
 </script>
 
