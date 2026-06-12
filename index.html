@@ -2478,6 +2478,30 @@ body.sky31-menu-page{
   }
 }
 
+
+/* V72 Mobile Safari fixed background */
+
+#sky31MobileBg{
+  display:none;
+}
+
+@media (max-width: 1024px){
+  body.sky31-menu-page{
+    background:#fbfaf7 !important;
+  }
+
+  #sky31MobileBg{
+    display:block !important;
+    position:fixed !important;
+    inset:0 !important;
+    z-index:-9999 !important;
+    background:
+      linear-gradient(rgba(251,250,247,.22), rgba(251,250,247,.22)),
+      url("./landing-bg.jpg") center center / cover no-repeat !important;
+    pointer-events:none !important;
+  }
+}
+
 </style>
 
 <style>
@@ -4079,6 +4103,17 @@ window.addEventListener("load", function() {
     setTimeout(updateMenuBgClass, 100);
     setTimeout(updateMenuBgClass, 500);
   }, true);
+})();
+</script>
+
+
+<script>
+/* V72 mobile fixed background layer */
+(function(){
+  if(document.getElementById('sky31MobileBg')) return;
+  var bg=document.createElement('div');
+  bg.id='sky31MobileBg';
+  document.body.prepend(bg);
 })();
 </script>
 
