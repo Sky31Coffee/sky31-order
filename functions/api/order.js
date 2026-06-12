@@ -220,6 +220,9 @@ function resolvePickupTime(pickup, now) {
   } else if (label.includes("明天中午")) {
     target.setDate(now.getDate() + 1);
     slot = "13:00-13:30";
+  } else if (label.includes("明天晚上") || label.includes("Tomorrow Evening") || label.includes("Tomorrow PM")) {
+    target.setDate(now.getDate() + 1);
+    slot = "20:00-21:00";
   } else if (label.includes("30")) {
     target.setMinutes(now.getMinutes() + 30);
     slot = pad2(target.getHours()) + ":" + pad2(target.getMinutes());
