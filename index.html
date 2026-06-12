@@ -2810,6 +2810,67 @@ input.input-error{
   }
 }
 
+
+/* V89 progress icon refine */
+/* Only adjusts query progress bar visual. Telegram/API unchanged. */
+
+#statusResult .sky31-progress-native{
+  grid-template-columns:1fr 15px 1fr 15px 1fr 15px 1fr 15px 1fr !important;
+  align-items:start !important;
+}
+
+#statusResult .sky31-progress-native-icon{
+  font-size:23px !important;
+  margin-bottom:7px !important;
+}
+
+#statusResult .sky31-progress-native-arrow{
+  font-size:16px !important;
+  line-height:26px !important;
+  padding-top:3px !important;
+}
+
+#statusResult .sky31-progress-native-label{
+  font-size:12px !important;
+  line-height:1.15 !important;
+}
+
+#statusResult .sky31-progress-native-time{
+  font-size:9.5px !important;
+  min-height:12px !important;
+}
+
+/* Stronger visual difference for confirmed step */
+#statusResult .sky31-progress-native-step.is-on .sky31-progress-native-icon{
+  transform:translateZ(0);
+}
+
+@media(max-width:430px){
+  #statusResult .sky31-progress-native{
+    grid-template-columns:1fr 9px 1fr 9px 1fr 9px 1fr 9px 1fr !important;
+  }
+
+  #statusResult .sky31-progress-native-icon{
+    font-size:19px !important;
+    margin-bottom:5px !important;
+  }
+
+  #statusResult .sky31-progress-native-arrow{
+    font-size:11px !important;
+    line-height:21px !important;
+    padding-top:3px !important;
+  }
+
+  #statusResult .sky31-progress-native-label{
+    font-size:9.5px !important;
+    line-height:1.12 !important;
+  }
+
+  #statusResult .sky31-progress-native-time{
+    font-size:7.8px !important;
+  }
+}
+
 </style>
 
 <style>
@@ -3246,7 +3307,7 @@ function sky31NativeProgressHtml(o){
   const r = sky31NativeProgressRank(status);
   const steps = [
     {key:"pending", icon:"🧾", label:"已下單<br><span style=\"font-weight:500;opacity:.72\">等待確定</span>", time:o.createdAt},
-    {key:"confirmed", icon:"✅", label:"確定訂單", time:o.confirmedAt},
+    {key:"confirmed", icon:"📋✓", label:"確定訂單", time:o.confirmedAt},
     {key:"making", icon:"👨‍🍳", label:"製作中", time:o.makingAt},
     {key:"completed", icon:"✅", label:"已完成", time:o.completedAt},
     {key:"picked_up", icon:"☕", label:"已領取", time:o.pickedUpAt}
@@ -4694,6 +4755,38 @@ window.addEventListener("load", function() {
 
 
 
+
+
+<script>
+/* V89 progress icon refine */
+(function(){
+  function replaceConfirmedIcon(){
+    var result = document.getElementById("statusResult");
+    if(!result) return;
+    result.querySelectorAll(".sky31-progress-native-step").forEach(function(step){
+      var label = step.querySelector(".sky31-progress-native-label");
+      var icon = step.querySelector(".sky31-progress-native-icon");
+      if(label && icon && (label.textContent || "").indexOf("確定訂單") >= 0){
+        icon.textContent = "📋✓";
+      }
+    });
+
+    result.querySelectorAll(".sky31-progress-native-arrow").forEach(function(a){
+      if((a.textContent || "").trim() === "›") a.textContent = "→";
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", function(){
+    replaceConfirmedIcon();
+    setInterval(replaceConfirmedIcon, 600);
+  });
+
+  document.addEventListener("click", function(){
+    setTimeout(replaceConfirmedIcon, 300);
+    setTimeout(replaceConfirmedIcon, 1000);
+  }, true);
+})();
+</script>
 
 </body>
 </html>
