@@ -3287,7 +3287,8 @@ input.input-error{
 
 
 
-/* V103 member center refine */
+
+/* V105 member flow refine */
 .member-modal{
   position:fixed;
   inset:0;
@@ -3360,9 +3361,7 @@ input.input-error{
 .member-page{display:none;}
 .member-page.active{display:block;}
 
-.member-hero{
-  margin-bottom:16px;
-}
+.member-hero{margin-bottom:16px;}
 
 .member-hero h2{
   margin:0;
@@ -3487,8 +3486,7 @@ input.input-error{
   color:rgba(47,42,36,.68);
 }
 
-.member-form input,
-.member-form textarea{
+.member-form input{
   width:100%;
   box-sizing:border-box;
   border:1px solid rgba(47,42,36,.12);
@@ -3500,14 +3498,9 @@ input.input-error{
   color:#2f2a24;
 }
 
-.member-form textarea{
-  min-height:72px;
-  resize:vertical;
-}
-
 .member-actions{
   display:grid;
-  grid-template-columns:1fr 1fr;
+  grid-template-columns:1fr;
   gap:10px;
   margin-top:14px;
 }
@@ -3556,9 +3549,7 @@ input.input-error{
   padding:13px 14px;
 }
 
-.member-order-no{
-  font-weight:900;
-}
+.member-order-no{font-weight:900;}
 
 .member-order-meta{
   margin-top:3px;
@@ -3656,16 +3647,6 @@ input.input-error{
   border:2px solid rgba(255,255,255,.95);
 }
 
-.status-query button,
-#statusCheckBtn,
-#statusBtn{
-  min-width:46px !important;
-  width:46px !important;
-  padding-left:0 !important;
-  padding-right:0 !important;
-  font-size:18px !important;
-}
-
 @media(max-width:430px){
   .member-sheet{
     width:calc(100% - 16px);
@@ -3677,17 +3658,8 @@ input.input-error{
     padding:18px 18px 22px;
   }
 
-  .member-actions{
-    grid-template-columns:1fr;
-  }
-
-  .member-grid{
-    gap:8px;
-  }
-
-  .member-menu-card{
-    border-radius:20px;
-  }
+  .member-grid{gap:8px;}
+  .member-menu-card{border-radius:20px;}
 }
 
 </style>
@@ -6148,12 +6120,15 @@ window.addEventListener("load", function() {
 
 
 
+
+
+
+
 <script>
-/* V103 member center refine */
+/* V105 member flow refine */
 (function(){
   const MEMBER_KEY = "sky31_member_v1";
   let memberPage = "home";
-  let lastHistory = null;
 
   function $(id){ return document.getElementById(id); }
 
@@ -6270,13 +6245,16 @@ window.addEventListener("load", function() {
         '<div class="member-body">' +
 
           '<section id="memberPageHome" class="member-page">' +
-            '<div class="member-hero"><h2>Sky31 會員中心</h2><p>登入會員、查看歷史訂單與累積消費。</p></div>' +
+            '<div class="member-hero"><h2>Sky31 會員中心</h2><p>登入會員、註冊會員、查看歷史訂單。</p></div>' +
             '<div id="memberQuickCard" class="member-card" style="display:none;"></div>' +
             '<div class="member-menu">' +
-              '<button class="member-menu-card" type="button" onclick="memberGoPage(\\'member\\')">' +
-                '<div class="member-menu-icon">👤</div><div><div class="member-menu-title">會員</div><div class="member-menu-sub">登入、註冊、查看會員資料</div></div><div>›</div>' +
+              '<button class="member-menu-card" type="button" onclick="memberGoPage(\'login\')">' +
+                '<div class="member-menu-icon">🔐</div><div><div class="member-menu-title">會員登入 / 查詢</div><div class="member-menu-sub">用電話號碼登入並查詢會員資料</div></div><div>›</div>' +
               '</button>' +
-              '<button class="member-menu-card" type="button" onclick="memberGoPage(\\'history\\')">' +
+              '<button class="member-menu-card" type="button" onclick="memberGoPage(\'register\')">' +
+                '<div class="member-menu-icon">👤</div><div><div class="member-menu-title">會員註冊</div><div class="member-menu-sub">新會員建立資料</div></div><div>›</div>' +
+              '</button>' +
+              '<button class="member-menu-card" type="button" onclick="memberGoPage(\'history\')">' +
                 '<div class="member-menu-icon">🧾</div><div><div class="member-menu-title">歷史訂單查詢</div><div class="member-menu-sub">查看最近訂單、累積杯數與消費</div></div><div>›</div>' +
               '</button>' +
               '<button class="member-menu-card" type="button" onclick="memberLogout()">' +
@@ -6285,26 +6263,33 @@ window.addEventListener("load", function() {
             '</div>' +
           '</section>' +
 
-          '<section id="memberPageMember" class="member-page">' +
-            '<div class="member-hero"><h2>會員</h2><p>登入查詢或註冊新會員。登入與註冊已分開處理。</p></div>' +
+          '<section id="memberPageLogin" class="member-page">' +
+            '<div class="member-hero"><h2>會員登入 / 查詢</h2><p>輸入已註冊電話號碼登入會員。</p></div>' +
             '<div id="memberLoggedPanel" class="member-card" style="display:none;"></div>' +
             '<div class="member-form">' +
               '<label>手機 Phone</label>' +
               '<input id="memberPhone" inputmode="tel" placeholder="輸入手機號碼">' +
-              '<label>姓名 Name</label>' +
-              '<input id="memberName" placeholder="註冊新會員時需要輸入姓名">' +
-              '<label>生日 Birthday，可選</label>' +
-              '<input id="memberBirthday" type="date">' +
-              '<label>備註 Note，可選</label>' +
-              '<textarea id="memberNote" placeholder="例如：少冰、常用豆款、稱呼等"></textarea>' +
             '</div>' +
             '<div class="member-actions">' +
               '<button class="member-btn primary" type="button" onclick="memberLoginLookup()">登入 / 查詢</button>' +
-              '<button class="member-btn secondary" type="button" onclick="memberRegisterSave()">註冊</button>' +
-              '<button class="member-btn danger" type="button" onclick="memberLogout()">登出</button>' +
-              '<button class="member-btn secondary" type="button" onclick="memberBack()">上一頁</button>' +
             '</div>' +
             '<div id="memberMsg" class="member-msg"></div>' +
+          '</section>' +
+
+          '<section id="memberPageRegister" class="member-page">' +
+            '<div class="member-hero"><h2>會員註冊</h2><p>首次註冊請填寫姓名和手機。重複電話不能再次註冊。</p></div>' +
+            '<div class="member-form">' +
+              '<label>手機 Phone</label>' +
+              '<input id="memberRegPhone" inputmode="tel" placeholder="輸入手機號碼">' +
+              '<label>姓名 Name</label>' +
+              '<input id="memberRegName" placeholder="輸入姓名">' +
+              '<label>生日 Birthday，可選</label>' +
+              '<input id="memberRegBirthday" type="date">' +
+            '</div>' +
+            '<div class="member-actions">' +
+              '<button class="member-btn primary" type="button" onclick="memberRegisterSave()">註冊</button>' +
+            '</div>' +
+            '<div id="memberRegMsg" class="member-msg"></div>' +
           '</section>' +
 
           '<section id="memberPageHistory" class="member-page">' +
@@ -6322,19 +6307,30 @@ window.addEventListener("load", function() {
     });
   }
 
+  function setRegMsg(text, type){
+    var msg = $("memberRegMsg");
+    if(!msg) return;
+    msg.textContent = text || "";
+    msg.classList.toggle("error", type === "error");
+    msg.classList.toggle("success", type === "success");
+  }
+
   function showPage(page){
     ensureMemberModal();
     memberPage = page || "home";
 
-    ["Home","Member","History"].forEach(function(name){
+    ["Home","Login","Register","History"].forEach(function(name){
       var el = $("memberPage" + name);
       if(el) el.classList.remove("active");
     });
 
     var title = "會員中心";
-    if(memberPage === "member"){
-      $("memberPageMember").classList.add("active");
-      title = "會員";
+    if(memberPage === "login"){
+      $("memberPageLogin").classList.add("active");
+      title = "會員登入 / 查詢";
+    }else if(memberPage === "register"){
+      $("memberPageRegister").classList.add("active");
+      title = "會員註冊";
     }else if(memberPage === "history"){
       $("memberPageHistory").classList.add("active");
       title = "歷史訂單";
@@ -6348,22 +6344,18 @@ window.addEventListener("load", function() {
     $("memberTopTitle").textContent = title;
     $("memberBackBtn").style.visibility = memberPage === "home" ? "hidden" : "visible";
     setMsg("");
+    setRegMsg("");
   }
 
-  window.memberGoPage = function(page){
-    showPage(page);
-  };
-
-  window.memberBack = function(){
-    showPage("home");
-  };
+  window.memberGoPage = function(page){ showPage(page); };
+  window.memberBack = function(){ showPage("home"); };
 
   function fillMemberForm(member){
     member = member || storedMember() || {};
     if($("memberPhone")) $("memberPhone").value = member.phone || ($("phone") ? $("phone").value : "");
-    if($("memberName")) $("memberName").value = member.name || ($("name") ? $("name").value : "");
-    if($("memberBirthday")) $("memberBirthday").value = member.birthday || "";
-    if($("memberNote")) $("memberNote").value = member.note || "";
+    if($("memberRegPhone")) $("memberRegPhone").value = ($("phone") ? $("phone").value : "") || "";
+    if($("memberRegName")) $("memberRegName").value = ($("name") ? $("name").value : "") || "";
+    if($("memberRegBirthday")) $("memberRegBirthday").value = "";
   }
 
   function renderHomeQuickCard(){
@@ -6418,8 +6410,8 @@ window.addEventListener("load", function() {
     if(!stats || !list) return;
 
     if(!member || !member.phone){
-      stats.innerHTML = '<div class="member-empty">尚未登入會員。請返回會員頁面登入。</div>';
-      list.innerHTML = '<button class="member-btn primary" type="button" onclick="memberGoPage(\\'member\\')">前往登入</button>';
+      stats.innerHTML = '<div class="member-empty">尚未登入會員。請返回會員登入頁面。</div>';
+      list.innerHTML = '<button class="member-btn primary" type="button" onclick="memberGoPage(\'login\')">前往登入</button>';
       return;
     }
 
@@ -6536,38 +6528,36 @@ window.addEventListener("load", function() {
       setMsg("已登入會員。", "success");
     }catch(e){
       renderLoggedPanel(null);
-      setMsg("未找到此電話的會員資料，請使用註冊按鈕建立會員。", "error");
+      setMsg("未找到此電話的會員資料，請先返回會員中心註冊。", "error");
     }
   };
 
   window.memberRegisterSave = async function(){
-    var phone = phoneNorm(($("memberPhone") || {}).value || "");
-    var name = (($("memberName") || {}).value || "").trim();
-    var birthday = (($("memberBirthday") || {}).value || "").trim();
-    var note = (($("memberNote") || {}).value || "").trim();
+    var phone = phoneNorm(($("memberRegPhone") || {}).value || "");
+    var name = (($("memberRegName") || {}).value || "").trim();
+    var birthday = (($("memberRegBirthday") || {}).value || "").trim();
 
     if(!phone || !name){
-      setMsg("註冊會員需要姓名和手機號碼。", "error");
+      setRegMsg("註冊會員需要姓名和手機號碼。", "error");
       return;
     }
 
-    setMsg("檢查電話是否已註冊...");
+    setRegMsg("檢查電話是否已註冊...");
     try{
       try{
         await fetchMember(phone);
-        setMsg("此電話已註冊，不能重複註冊。請直接登入。", "error");
+        setRegMsg("此電話已註冊，不能重複註冊。請返回登入頁直接登入。", "error");
         return;
       }catch(_){}
 
-      var member = await registerMember({phone:phone, name:name, birthday:birthday, note:note});
+      var member = await registerMember({phone:phone, name:name, birthday:birthday});
       saveStoredMember(member);
       applyMember(member);
       fillMemberForm(member);
-      renderLoggedPanel(member);
       renderHomeQuickCard();
-      setMsg("註冊成功，已登入會員。", "success");
+      setRegMsg("註冊成功，已登入會員。", "success");
     }catch(e){
-      setMsg(e.message || "註冊會員失敗。", "error");
+      setRegMsg(e.message || "註冊會員失敗。", "error");
     }
   };
 
@@ -6579,11 +6569,15 @@ window.addEventListener("load", function() {
     if(phoneEl) phoneEl.value = "";
     updateMemberProfileButton(null);
     if(typeof updateCheckoutCustomerInfo === "function") updateCheckoutCustomerInfo();
-    fillMemberForm({});
     renderLoggedPanel(null);
     renderHomeQuickCard();
     showPage("home");
     toast("已成功登出");
+    setTimeout(function(){
+      closeMemberModal();
+      try{ document.body.style.overflow = ""; }catch(e){}
+      try{ window.location.hash = ""; }catch(e){}
+    }, 900);
   };
 
   function bootMember(){
@@ -6591,6 +6585,8 @@ window.addEventListener("load", function() {
 
     var btn = $("profileButton");
     if(btn){
+      btn.setAttribute("onclick", "openMemberModal()");
+      btn.setAttribute("aria-label", "會員中心");
       btn.onclick = function(e){
         if(e) e.preventDefault();
         openMemberModal();
@@ -6613,6 +6609,9 @@ window.addEventListener("load", function() {
 
   if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", bootMember);
   else bootMember();
+
+  setTimeout(bootMember, 300);
+  setTimeout(bootMember, 1000);
 })();
 </script>
 
