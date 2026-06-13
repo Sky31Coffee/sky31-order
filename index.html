@@ -4395,6 +4395,42 @@ input.input-error{
   }
 }
 
+
+/* V128 stability performance */
+/* Mobile-friendly busy state to prevent double tap / repeated network requests. */
+.sky31-busy-overlay{
+  position:fixed;
+  inset:0;
+  z-index:10160;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  padding:20px;
+  background:rgba(0,0,0,.24);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+}
+
+.sky31-busy-overlay.show{
+  display:flex;
+}
+
+.sky31-busy-pill{
+  padding:14px 18px;
+  border-radius:999px;
+  background:rgba(31,29,26,.92);
+  color:#fff;
+  font-size:14px;
+  font-weight:850;
+  box-shadow:0 18px 52px rgba(0,0,0,.26);
+}
+
+.sky31-request-disabled{
+  pointer-events:none !important;
+  opacity:.68 !important;
+  filter:saturate(.85) !important;
+}
+
 </style>
 
 <style>
@@ -8966,6 +9002,145 @@ window.addEventListener("load", function() {
     setTimeout(boot, 80);
     setTimeout(boot, 300);
   }, true);
+})();
+</script>
+
+
+<script>
+/* V128 stability performance */
+(function(){
+  var busyMap = {};
+  var lastCall = {};
+  var MEMBER_KEY = "sky31_member_v1";
+
+  function $(id){ return document.getElementById(id); }
+
+  function ensureBusyOverlay(){
+    if($("sky31BusyOverlay")) return;
+    var div = document.createElement("div");
+    div.id = "sky31BusyOverlay";
+    div.className = "sky31-busy-overlay";
+    div.innerHTML = '<div class="sky31-busy-pill" id="sky31BusyText">處理中...</div>';
+    document.body.appendChild(div);
+  }
+
+  function setBusy(name, on, text){
+    ensureBusyOverlay();
+    busyMap[name] = !!on;
+
+    var anyBusy = Object.keys(busyMap).some(function(k){ return busyMap[k]; });
+    var overlay = $("sky31BusyOverlay");
+    var label = $("sky31BusyText");
+
+    if(label && text) label.textContent = text;
+    if(overlay) overlay.classList.toggle("show", anyBusy);
+
+    var submitBtn = document.querySelector("[onclick='submitOrder()'], .checkout-submit, #submitOrderBtn");
+    if(submitBtn && name === "submitOrder"){
+      submitBtn.classList.toggle("sky31-request-disabled", !!on);
+    }
+
+    var queryBtn = document.querySelector("#orderStatusModal button[onclick='checkOrderStatus()']");
+    if(queryBtn && name === "checkOrderStatus"){
+      queryBtn.classList.toggle("sky31-request-disabled", !!on);
+    }
+  }
+
+  function now(){ return Date.now(); }
+
+  function throttle(name, ms){
+    var t = now();
+    if(lastCall[name] && t - lastCall[name] < ms) return false;
+    lastCall[name] = t;
+    return true;
+  }
+
+  function patchSubmitOrder(){
+    if(window.__sky31V128SubmitPatched) return;
+    var original = window.submitOrder;
+    if(typeof original !== "function") return;
+
+    window.__sky31V128SubmitPatched = true;
+    window.submitOrder = async function(){
+      if(busyMap.submitOrder) return;
+      if(!throttle("submitOrder", 1200)) return;
+
+      setBusy("submitOrder", true, "正在送出訂單...");
+      try{
+        return await original.apply(this, arguments);
+      }catch(e){
+        throw e;
+      }finally{
+        setTimeout(function(){ setBusy("submitOrder", false); }, 500);
+      }
+    };
+  }
+
+  function patchCheckOrderStatus(){
+    if(window.__sky31V128StatusPatched) return;
+    var original = window.checkOrderStatus;
+    if(typeof original !== "function") return;
+
+    window.__sky31V128StatusPatched = true;
+    window.checkOrderStatus = async function(){
+      if(busyMap.checkOrderStatus) return;
+      if(!throttle("checkOrderStatus", 900)) return;
+
+      setBusy("checkOrderStatus", true, "正在查詢訂單...");
+      try{
+        return await original.apply(this, arguments);
+      }catch(e){
+        throw e;
+      }finally{
+        setTimeout(function(){ setBusy("checkOrderStatus", false); }, 450);
+      }
+    };
+  }
+
+  function patchMemberCheckFrequency(){
+    // V124 already checks membership periodically. This patch avoids multiple interval stacks after iOS Safari page restores.
+    if(window.__sky31V128VisibilityPatch) return;
+    window.__sky31V128VisibilityPatch = true;
+
+    var hiddenAt = 0;
+    document.addEventListener("visibilitychange", function(){
+      if(document.hidden){
+        hiddenAt = Date.now();
+      }else{
+        // On returning to the page, let existing V124 verify once, but avoid user double-click feeling.
+        if(Date.now() - hiddenAt > 1000){
+          setTimeout(function(){
+            try{
+              var memberRaw = localStorage.getItem(MEMBER_KEY);
+              if(memberRaw && typeof fetch === "function"){
+                var m = JSON.parse(memberRaw);
+                if(m && m.phone){
+                  fetch("/api/member?phone=" + encodeURIComponent(String(m.phone).replace(/\D/g,"")) + "&t=" + Date.now(), {cache:"no-store"})
+                    .catch(function(){});
+                }
+              }
+            }catch(e){}
+          }, 180);
+        }
+      }
+    });
+  }
+
+  function boot(){
+    ensureBusyOverlay();
+    patchSubmitOrder();
+    patchCheckOrderStatus();
+    patchMemberCheckFrequency();
+  }
+
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", boot);
+  }else{
+    boot();
+  }
+
+  setTimeout(boot, 300);
+  setTimeout(boot, 1200);
 })();
 </script>
 
