@@ -4797,6 +4797,292 @@ input.input-error{
   }
 }
 
+
+/* V140 button effects polish */
+/* Global interaction polish for all clickable controls. No business logic changed. */
+
+:root{
+  --sky31-press-scale:.965;
+  --sky31-hover-lift:-1px;
+  --sky31-interactive-shadow:0 10px 24px rgba(0,0,0,.10);
+  --sky31-interactive-shadow-strong:0 14px 34px rgba(0,0,0,.16);
+  --sky31-focus-ring:0 0 0 3px rgba(118,88,58,.18);
+}
+
+button,
+[role="button"],
+[onclick],
+.start-order-btn,
+.primary,
+.danger,
+.qty-btn,
+.cart-qty-btn,
+.status-toggle-btn,
+.bb-detail-toggle,
+.member-btn,
+.member-menu-card,
+.member-order-toggle,
+.member-nav-btn,
+.checkout-member-btn,
+.checkout-member-close,
+.cart-close,
+.back,
+.option,
+.option-btn,
+.option-chip,
+.choice-chip,
+.temp-option,
+.size-option,
+.bean-option,
+.product-card,
+.menu-card,
+.drink-card,
+.item-card,
+.member-record-toggle,
+.member-notice-footer-close,
+.member-notice-close,
+.sky31-admin-logout-btn{
+  -webkit-tap-highlight-color:transparent;
+  touch-action:manipulation;
+}
+
+button:not(:disabled),
+[role="button"]:not(:disabled),
+[onclick]:not(:disabled),
+.start-order-btn,
+.primary,
+.danger,
+.qty-btn,
+.cart-qty-btn,
+.status-toggle-btn,
+.bb-detail-toggle,
+.member-btn,
+.member-menu-card,
+.member-order-toggle,
+.member-nav-btn,
+.checkout-member-btn,
+.checkout-member-close,
+.cart-close,
+.back,
+.option,
+.option-btn,
+.option-chip,
+.choice-chip,
+.temp-option,
+.size-option,
+.bean-option,
+.product-card,
+.menu-card,
+.drink-card,
+.item-card,
+.member-record-toggle,
+.member-notice-footer-close,
+.member-notice-close,
+.sky31-admin-logout-btn{
+  cursor:pointer;
+  transition:
+    transform .14s cubic-bezier(.2,.8,.2,1),
+    filter .14s ease,
+    opacity .14s ease,
+    box-shadow .18s ease,
+    background-color .18s ease,
+    border-color .18s ease !important;
+  will-change:transform;
+}
+
+@media(hover:hover){
+  button:not(:disabled):hover,
+  [role="button"]:not(:disabled):hover,
+  [onclick]:not(:disabled):hover,
+  .start-order-btn:hover,
+  .primary:hover,
+  .danger:hover,
+  .qty-btn:hover,
+  .cart-qty-btn:hover,
+  .status-toggle-btn:hover,
+  .bb-detail-toggle:hover,
+  .member-btn:hover,
+  .member-menu-card:hover,
+  .member-order-toggle:hover,
+  .member-nav-btn:hover,
+  .checkout-member-btn:hover,
+  .checkout-member-close:hover,
+  .cart-close:hover,
+  .back:hover,
+  .option:hover,
+  .option-btn:hover,
+  .option-chip:hover,
+  .choice-chip:hover,
+  .temp-option:hover,
+  .size-option:hover,
+  .bean-option:hover,
+  .product-card:hover,
+  .menu-card:hover,
+  .drink-card:hover,
+  .item-card:hover,
+  .member-record-toggle:hover,
+  .member-notice-footer-close:hover,
+  .member-notice-close:hover,
+  .sky31-admin-logout-btn:hover{
+    transform:translateY(var(--sky31-hover-lift)) scale(1.018) !important;
+    filter:brightness(1.035) saturate(1.03) !important;
+    box-shadow:var(--sky31-interactive-shadow) !important;
+  }
+
+  .primary:hover,
+  .start-order-btn:hover,
+  .checkout-member-btn.primary:hover,
+  .member-btn.primary:hover,
+  .sky31-admin-logout-btn:hover{
+    box-shadow:var(--sky31-interactive-shadow-strong) !important;
+  }
+
+  .danger:hover{
+    filter:brightness(1.02) saturate(1.08) !important;
+  }
+}
+
+button:not(:disabled):active,
+[role="button"]:not(:disabled):active,
+[onclick]:not(:disabled):active,
+.start-order-btn:active,
+.primary:active,
+.danger:active,
+.qty-btn:active,
+.cart-qty-btn:active,
+.status-toggle-btn:active,
+.bb-detail-toggle:active,
+.member-btn:active,
+.member-menu-card:active,
+.member-order-toggle:active,
+.member-nav-btn:active,
+.checkout-member-btn:active,
+.checkout-member-close:active,
+.cart-close:active,
+.back:active,
+.option:active,
+.option-btn:active,
+.option-chip:active,
+.choice-chip:active,
+.temp-option:active,
+.size-option:active,
+.bean-option:active,
+.product-card:active,
+.menu-card:active,
+.drink-card:active,
+.item-card:active,
+.member-record-toggle:active,
+.member-notice-footer-close:active,
+.member-notice-close:active,
+.sky31-admin-logout-btn:active{
+  transform:scale(var(--sky31-press-scale)) !important;
+  filter:brightness(.96) saturate(.96) !important;
+  box-shadow:0 5px 14px rgba(0,0,0,.10) !important;
+}
+
+button:focus-visible,
+[role="button"]:focus-visible,
+[onclick]:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible{
+  outline:none !important;
+  box-shadow:var(--sky31-focus-ring), 0 8px 22px rgba(0,0,0,.10) !important;
+}
+
+button:disabled,
+button[disabled],
+.sky31-request-disabled{
+  cursor:not-allowed !important;
+  opacity:.56 !important;
+  filter:saturate(.75) !important;
+  transform:none !important;
+}
+
+/* Selected/active option chips get a subtle locked-in glow without changing layout. */
+.option.active,
+.option.selected,
+.option-btn.active,
+.option-btn.selected,
+.option-chip.active,
+.option-chip.selected,
+.choice-chip.active,
+.choice-chip.selected,
+.temp-option.active,
+.temp-option.selected,
+.size-option.active,
+.size-option.selected,
+.bean-option.active,
+.bean-option.selected,
+[aria-pressed="true"]{
+  box-shadow:0 0 0 2px rgba(118,88,58,.22), 0 10px 24px rgba(0,0,0,.08) !important;
+}
+
+/* Keep close buttons controlled and not too jumpy. */
+.cart-close:hover,
+.member-notice-close:hover,
+.checkout-member-close:hover,
+.member-nav-btn.close:hover{
+  transform:scale(1.06) !important;
+}
+
+.cart-close:active,
+.member-notice-close:active,
+.checkout-member-close:active,
+.member-nav-btn.close:active{
+  transform:scale(.92) !important;
+}
+
+/* Product/menu cards get a clearer but still soft desktop hover. */
+@media(hover:hover){
+  .product-card:hover,
+  .menu-card:hover,
+  .drink-card:hover,
+  .item-card:hover,
+  .member-menu-card:hover{
+    transform:translateY(-2px) scale(1.01) !important;
+  }
+}
+
+/* Reduced motion accessibility. */
+@media(prefers-reduced-motion:reduce){
+  button,
+  [role="button"],
+  [onclick],
+  .start-order-btn,
+  .primary,
+  .danger,
+  .qty-btn,
+  .cart-qty-btn,
+  .status-toggle-btn,
+  .bb-detail-toggle,
+  .member-btn,
+  .member-menu-card,
+  .member-order-toggle,
+  .member-nav-btn,
+  .checkout-member-btn,
+  .cart-close,
+  .back,
+  .option,
+  .option-btn,
+  .option-chip,
+  .choice-chip,
+  .temp-option,
+  .size-option,
+  .bean-option,
+  .product-card,
+  .menu-card,
+  .drink-card,
+  .item-card,
+  .member-record-toggle,
+  .member-notice-footer-close,
+  .member-notice-close,
+  .sky31-admin-logout-btn{
+    transition:none !important;
+    animation:none !important;
+  }
+}
+
 </style>
 
 <style>
