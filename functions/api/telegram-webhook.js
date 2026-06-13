@@ -2,10 +2,24 @@ export async function onRequestPost(context) {
   const { request, env } = context;
   const update = await request.json();
 
-  if (!update.callback_query) return json({ ok: true });
+  if (!update.callback_query) {
+    const message = update.message || update.edited_message;
+    if (message && message.text) {
+      return handleTelegramTextCommand(env, message);
+    }
+    return json({ ok: true });
+  }
 
   const cq = update.callback_query;
   const data = cq.data || "";
+
+  if (
+    data.startsWith("member_list:") ||
+    data.startsWith("member_view_active:") ||
+    data.startsWith("member_view_deleted:")
+  ) {
+    return handleMemberQueryAction(env, cq, data);
+  }
 
   if (
     data.startsWith("member_delete:") ||
@@ -164,6 +178,312 @@ export async function onRequestPost(context) {
   return json({ ok: true });
 }
 
+
+async function handleTelegramTextCommand(env, message) {
+  const text = String(message.text || "").trim();
+  const chatId = message.chat && message.chat.id ? message.chat.id : env.TELEGRAM_CHAT_ID;
+
+  if (!isMemberQueryCommand(text)) {
+    return json({ ok: true });
+  }
+
+  const members = await listTelegramMembers(env);
+  await sendTelegramMessage(
+    env,
+    chatId,
+    buildMemberListText(members),
+    buildMemberListMarkup(members)
+  );
+
+  return json({ ok: true });
+}
+
+function isMemberQueryCommand(text) {
+  const t = String(text || "").trim().toLowerCase();
+  return (
+    t === "查詢用戶" ||
+    t === "查询用户" ||
+    t === "查詢會員" ||
+    t === "查询会员" ||
+    t === "會員查詢" ||
+    t === "会员查询" ||
+    t === "/members" ||
+    t === "/member" ||
+    t === "members"
+  );
+}
+
+async function handleMemberQueryAction(env, cq, data) {
+  const sep = data.indexOf(":");
+  const action = sep >= 0 ? data.slice(0, sep) : "";
+  const arg = sep >= 0 ? data.slice(sep + 1) : "";
+  const chatId = cq.message && cq.message.chat ? cq.message.chat.id : env.TELEGRAM_CHAT_ID;
+  const messageId = cq.message ? cq.message.message_id : null;
+
+  if (action === "member_list") {
+    const members = await listTelegramMembers(env);
+    await editTelegramMessage(env, chatId, messageId, buildMemberListText(members), buildMemberListMarkup(members));
+    return stop(env, cq, "已返回用戶列表");
+  }
+
+  if (action === "member_view_active" || action === "member_view_deleted") {
+    const phone = normalizePhone(arg);
+    if (!phone) return stop(env, cq, "找不到會員電話");
+
+    const deleted = action === "member_view_deleted";
+    let member = await getMemberForTelegramView(env, phone, deleted);
+
+    if (!member) return stop(env, cq, "找不到會員資料");
+
+    if (!deleted) {
+      member = await enrichMemberStatsForTelegram(env, member);
+    }
+
+    await editTelegramMessage(
+      env,
+      chatId,
+      messageId,
+      buildMemberDetailText(member, deleted),
+      buildMemberDetailReplyMarkup(member, deleted)
+    );
+
+    return stop(env, cq, "已載入會員資料");
+  }
+
+  return stop(env, cq, "未知會員查詢操作");
+}
+
+async function listTelegramMembers(env) {
+  const active = await listMembersByPrefix(env, "member:", false);
+  const deleted = await listMembersByPrefix(env, "member_deleted:", true);
+
+  const members = active.concat(deleted);
+  members.sort((a, b) => {
+    if (a._deleted !== b._deleted) return a._deleted ? 1 : -1;
+    return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
+  });
+
+  return members;
+}
+
+async function listMembersByPrefix(env, prefix, deleted) {
+  let cursor = undefined;
+  const out = [];
+
+  do {
+    const page = await env.ORDERS.list({ prefix, cursor });
+
+    for (const key of (page.keys || [])) {
+      const raw = await env.ORDERS.get(key.name);
+      if (!raw) continue;
+
+      try {
+        const member = JSON.parse(raw);
+        if (!member || !member.phone) continue;
+        member._deleted = !!deleted;
+        out.push(member);
+      } catch (_) {}
+    }
+
+    cursor = page.cursor;
+    if (page.list_complete !== false) break;
+  } while (cursor);
+
+  return out;
+}
+
+function buildMemberListText(members) {
+  const activeCount = members.filter(m => !m._deleted).length;
+  const deletedCount = members.filter(m => m._deleted).length;
+
+  const lines = [];
+  lines.push("👥 SKY31 用戶查詢");
+  lines.push("");
+  lines.push("有效會員：" + activeCount);
+  lines.push("已刪除會員：" + deletedCount);
+  lines.push("");
+  if (!members.length) {
+    lines.push("目前未有會員資料。");
+  } else {
+    lines.push("請點擊下方用戶查看詳細資料。");
+  }
+  return lines.join("\n").trim();
+}
+
+function buildMemberListMarkup(members) {
+  const rows = [];
+
+  members.slice(0, 80).forEach(member => {
+    const phone = normalizePhone(member.phone);
+    const name = member.name || "未命名";
+    const deleted = !!member._deleted;
+    const label = (deleted ? "🗑️ " : "👤 ") + name + "｜" + phone + (deleted ? "｜已刪除" : "");
+    rows.push([{
+      text: label.slice(0, 60),
+      callback_data: (deleted ? "member_view_deleted:" : "member_view_active:") + phone
+    }]);
+  });
+
+  if (members.length > 80) {
+    rows.push([{ text: "只顯示前 80 位，請到 KV 後台查看完整資料", callback_data: "member_list:all" }]);
+  }
+
+  return { inline_keyboard: rows };
+}
+
+async function getMemberForTelegramView(env, phone, deleted) {
+  const key = deleted ? "member_deleted:" + phone : "member:" + phone;
+  const raw = await env.ORDERS.get(key);
+  if (!raw) return null;
+
+  try {
+    const member = JSON.parse(raw);
+    member._deleted = !!deleted;
+    return member;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function enrichMemberStatsForTelegram(env, member) {
+  const phone = normalizePhone(member.phone);
+  const prefix = "phone:" + phone + ":";
+  let cursor = undefined;
+  let totalOrders = 0;
+  let totalCups = 0;
+  let totalSpent = 0;
+  const recentOrders = [];
+
+  do {
+    const page = await env.ORDERS.list({ prefix, cursor });
+
+    for (const key of (page.keys || [])) {
+      const orderNo = key.name.replace(prefix, "");
+      if (!orderNo) continue;
+
+      const raw = await env.ORDERS.get("order:" + orderNo);
+      if (!raw) continue;
+
+      let order = null;
+      try { order = JSON.parse(raw); } catch (_) { continue; }
+      if (!order || normalizePhone(order.phone) !== phone) continue;
+
+      const cups = orderCupsForMemberQuery(order);
+      const amount = Number(order.totalAmount || cartTotalForMemberQuery(order.cart) || 0);
+
+      if (order.status !== "cancelled") {
+        totalOrders += 1;
+        totalCups += cups;
+        totalSpent += amount;
+      }
+
+      recentOrders.push({
+        orderNo: order.orderNo || orderNo,
+        status: order.status || "pending",
+        createdAt: order.createdAt || "",
+        cups,
+        totalAmount: amount
+      });
+    }
+
+    cursor = page.cursor;
+    if (page.list_complete !== false) break;
+  } while (cursor);
+
+  recentOrders.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+
+  return {
+    ...member,
+    totalOrders,
+    totalCups,
+    totalSpent: Math.round(totalSpent * 100) / 100,
+    recentOrders: recentOrders.slice(0, 5)
+  };
+}
+
+function buildMemberDetailText(member, deleted = false) {
+  const lines = [];
+  lines.push("👤 SKY31 會員詳細資料");
+  lines.push("");
+  lines.push(deleted ? "狀態：已刪除" : "狀態：有效會員");
+  lines.push("姓名：" + (member.name || "-"));
+  lines.push("電話：" + (member.phone || "-"));
+  lines.push("生日：" + (member.birthday || "-"));
+  if (member.note) lines.push("備註：" + member.note);
+  if (member.createdAt) lines.push("註冊時間：" + formatDateTime(member.createdAt));
+  if (member.deletedAt) lines.push("刪除時間：" + formatDateTime(member.deletedAt));
+  if (member.restoredAt && !deleted) lines.push("恢復時間：" + formatDateTime(member.restoredAt));
+  lines.push("");
+  lines.push("累積訂單：" + Number(member.totalOrders || 0));
+  lines.push("累積杯數：" + Number(member.totalCups || 0));
+  lines.push("累積消費：MOP " + String(Math.round(Number(member.totalSpent || 0) * 100) / 100));
+
+  if (deleted && member.deletedOrders != null) {
+    lines.push("已刪除相關訂單：" + Number(member.deletedOrders || 0));
+  }
+
+  const recent = Array.isArray(member.recentOrders) ? member.recentOrders : [];
+  if (recent.length) {
+    lines.push("");
+    lines.push("最近訂單：");
+    recent.forEach(order => {
+      lines.push("#" + order.orderNo + "｜" + statusLabel(order.status) + "｜" + Number(order.cups || 0) + "杯｜MOP " + String(Math.round(Number(order.totalAmount || 0) * 100) / 100));
+    });
+  }
+
+  lines.push("");
+  if (deleted) {
+    lines.push("此會員已刪除。可按「恢復賬號」恢復會員。");
+  } else {
+    lines.push("可按「刪除賬號」刪除會員及相關訂單。");
+  }
+
+  return lines.join("\n").trim();
+}
+
+function buildMemberDetailReplyMarkup(member, deleted = false) {
+  const phone = normalizePhone(member.phone);
+  if (deleted) {
+    return {
+      inline_keyboard: [
+        [{ text: "↩️ 恢復賬號", callback_data: "member_restore:" + phone }],
+        [{ text: "📋 返回用戶列表", callback_data: "member_list:all" }]
+      ]
+    };
+  }
+
+  return {
+    inline_keyboard: [
+      [{ text: "🗑️ 刪除賬號", callback_data: "member_delete:" + phone }],
+      [{ text: "📋 返回用戶列表", callback_data: "member_list:all" }]
+    ]
+  };
+}
+
+function orderCupsForMemberQuery(order) {
+  return Array.isArray(order.cart)
+    ? order.cart.reduce((sum, item) => sum + Number(item.qty || item.quantity || 1), 0)
+    : 0;
+}
+
+function cartTotalForMemberQuery(cart) {
+  return (Array.isArray(cart) ? cart : []).reduce((sum, item) => {
+    const qty = Number(item.qty || item.quantity || 1);
+    const unit = Number(item.unitPrice || item.price || 0);
+    return sum + Number(item.subtotal || unit * qty || 0);
+  }, 0);
+}
+
+async function sendTelegramMessage(env, chatId, text, replyMarkup) {
+  const body = { chat_id: chatId, text };
+  if (replyMarkup) body.reply_markup = replyMarkup;
+
+  await fetch("https://api.telegram.org/bot" + env.TELEGRAM_BOT_TOKEN + "/sendMessage", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(body)
+  });
+}
 
 async function handleMemberAction(env, cq, data) {
   try {
