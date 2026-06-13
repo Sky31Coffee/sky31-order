@@ -67,15 +67,71 @@ export async function onRequestPost(context) {
 }
 
 async function loadMember(env, phone) {
-  const raw = await env.ORDERS.get("member:" + phone);
-  if (!raw) return null;
-  try {
-    const member = JSON.parse(raw);
-    if (member && member.deletedAt) return null;
-    return member;
-  } catch (_) {
-    return null;
+  phone = normalizePhone(phone);
+  if (!phone) return null;
+
+  // 1) Fast direct lookup with common phone variants.
+  const candidates = memberPhoneCandidates(phone);
+  for (const candidate of candidates) {
+    const raw = await env.ORDERS.get("member:" + candidate);
+    if (!raw) continue;
+
+    try {
+      const member = JSON.parse(raw);
+      if (member && !member.deletedAt) {
+        member.phone = normalizePhone(member.phone || candidate);
+        return member;
+      }
+    } catch (_) {}
   }
+
+  // 2) Fallback scan for older data whose KV key or stored phone uses another format.
+  // This prevents the contradictory case:
+  // login says not found, but registration says the phone already exists.
+  let cursor = undefined;
+  let checked = 0;
+
+  do {
+    const page = await env.ORDERS.list({ prefix: "member:", cursor });
+
+    for (const key of (page.keys || [])) {
+      checked += 1;
+      if (checked > 500) return null;
+
+      const keyPhone = normalizePhone(key.name.replace("member:", ""));
+      if (!samePhoneForMemberLookup(keyPhone, phone)) {
+        // If the key itself does not match, still inspect stored phone below.
+      }
+
+      const raw = await env.ORDERS.get(key.name);
+      if (!raw) continue;
+
+      try {
+        const member = JSON.parse(raw);
+        if (!member || member.deletedAt) continue;
+
+        const storedPhone = normalizePhone(member.phone || keyPhone);
+        if (samePhoneForMemberLookup(storedPhone, phone) || samePhoneForMemberLookup(keyPhone, phone)) {
+          member.phone = storedPhone || keyPhone || phone;
+
+          // Self-heal: save a normalized lookup key for future fast login.
+          const normalizedKey = "member:" + phone;
+          if (key.name !== normalizedKey) {
+            try {
+              await env.ORDERS.put(normalizedKey, JSON.stringify(member));
+            } catch (_) {}
+          }
+
+          return member;
+        }
+      } catch (_) {}
+    }
+
+    cursor = page.cursor;
+    if (page.list_complete !== false) break;
+  } while (cursor);
+
+  return null;
 }
 
 async function enrichMemberWithOrders(env, member) {
@@ -237,6 +293,30 @@ function normalizeCart(cart, currency = "MOP") {
 
 function normalizePhone(phone) {
   return String(phone || "").replace(/\D/g, "");
+}
+
+function phoneWithoutMacauCode(phone) {
+  phone = normalizePhone(phone);
+  if (phone.length === 11 && phone.startsWith("853")) return phone.slice(3);
+  return phone;
+}
+
+function samePhoneForMemberLookup(a, b) {
+  a = normalizePhone(a);
+  b = normalizePhone(b);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  if (phoneWithoutMacauCode(a) === phoneWithoutMacauCode(b)) return true;
+  return false;
+}
+
+function memberPhoneCandidates(phone) {
+  phone = normalizePhone(phone);
+  const out = [];
+  if (phone) out.push(phone);
+  if (phone.length === 8) out.push("853" + phone);
+  if (phone.length === 11 && phone.startsWith("853")) out.push(phone.slice(3));
+  return Array.from(new Set(out.filter(Boolean)));
 }
 
 function orderCups(order) {
