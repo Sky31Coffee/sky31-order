@@ -4764,6 +4764,39 @@ input.input-error{
   order:3 !important;
 }
 
+
+/* V139 notice text record toggle */
+.member-record-toggle{
+  width:100%;
+  margin:10px 0 12px;
+  border:0;
+  border-radius:999px;
+  padding:11px 14px;
+  background:rgba(255,255,255,.62);
+  color:#2f2a24;
+  font-size:13px;
+  font-weight:850;
+  cursor:pointer;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.78), 0 8px 22px rgba(0,0,0,.06);
+  transition:transform .14s ease, filter .14s ease;
+}
+.member-record-toggle:active{
+  transform:scale(.97);
+  filter:brightness(.96);
+}
+.member-record-list.collapsed .member-notice-mini:nth-child(n+3){
+  display:none;
+}
+.member-record-list.expanded .member-notice-mini{
+  display:block;
+}
+@media(hover:hover){
+  .member-record-toggle:hover{
+    transform:translateY(-1px);
+    filter:brightness(1.04);
+  }
+}
+
 </style>
 
 <style>
@@ -9489,6 +9522,7 @@ window.addEventListener("load", function() {
   var lastRenderOrders = [];
   var activeCompletedOrders = [];
   var pollTimer = null;
+  var memberNoticeRecordsExpanded = false;
 
   function $(id){ return document.getElementById(id); }
 
@@ -9576,6 +9610,28 @@ window.addEventListener("load", function() {
     return body + '<button class="member-notice-footer-close" type="button" onclick="closeMemberNoticeModal()">關閉視窗</button>';
   }
 
+
+  function renderRecordSection(orders){
+    orders = Array.isArray(orders) ? orders : [];
+    if(!orders.length) return "";
+
+    var expanded = memberNoticeRecordsExpanded;
+    var label = expanded ? "收起記錄" : "展開記錄";
+    var cls = expanded ? "expanded" : "collapsed";
+
+    return '' +
+      '<div class="member-notice-list-title">訂單記錄</div>' +
+      '<button class="member-record-toggle" type="button" onclick="toggleMemberNoticeRecords()">' + label + '</button>' +
+      '<div class="member-record-list ' + cls + '">' +
+        orders.slice(0,10).map(miniOrder).join("") +
+      '</div>';
+  }
+
+  window.toggleMemberNoticeRecords = function(){
+    memberNoticeRecordsExpanded = !memberNoticeRecordsExpanded;
+    renderNotice();
+  };
+
   function renderNotice(){
     ensureModal();
 
@@ -9604,11 +9660,10 @@ window.addEventListener("load", function() {
       body.innerHTML = withClose(
         '<div class="member-notice-hero">' +
           '<h3>☕ 你的訂單已完成，可以前來領取</h3>' +
-          '<p>請到 Sky31 Coffee 取餐。店員在 Telegram 按「已領取」後，燈泡會自動熄滅。</p>' +
+          '<p>請到 Sky31 Coffee 取餐。</p>' +
           orderLine(first) +
         '</div>' +
-        '<div class="member-notice-list-title">最近通知</div>' +
-        lastRenderOrders.slice(0,5).map(miniOrder).join("")
+        renderRecordSection(lastRenderOrders)
       );
     }else{
       var recent = lastRenderOrders.slice(0,5);
@@ -9616,10 +9671,9 @@ window.addEventListener("load", function() {
         body.innerHTML = withClose(
           '<div class="member-notice-hero compact">' +
             '<h3>目前沒有待領取提醒</h3>' +
-            '<p>已領取或未完成的訂單會以簡單紀錄保留在下方。</p>' +
+            '' +
           '</div>' +
-          '<div class="member-notice-list-title">簡單訂單紀錄</div>' +
-          recent.map(miniOrder).join("")
+          renderRecordSection(recent)
         );
       }else{
         body.innerHTML = withClose('<div class="member-notice-empty">暫時沒有通知</div>');
