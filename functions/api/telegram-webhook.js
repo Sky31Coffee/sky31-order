@@ -588,10 +588,23 @@ async function handleMemberAction(env, cq, data) {
       if (!deletedRaw) return stop(env, cq, "沒有可撤回的會員資料");
 
       const member = JSON.parse(deletedRaw);
+
+      const restoredOrderResult = await restoreMemberOrders(env, phone);
+
       delete member.deletedAt;
       delete member.deletedBy;
       member.restoredAt = new Date().toISOString();
       member.updatedAt = member.restoredAt;
+      member.restoredOrders = restoredOrderResult.restoredOrders || 0;
+      member.restoredOrderNos = restoredOrderResult.restoredOrderNos || [];
+
+      // Restore visible member statistics from archived orders.
+      member.totalOrders = restoredOrderResult.totalOrders || 0;
+      member.totalCups = restoredOrderResult.totalCups || 0;
+      member.totalSpent = restoredOrderResult.totalSpent || 0;
+      member.recentOrderNos = restoredOrderResult.recentOrderNos || [];
+      member.lastOrderNo = restoredOrderResult.lastOrderNo || "";
+      member.lastOrderAt = restoredOrderResult.lastOrderAt || "";
 
       await env.ORDERS.put("member:" + phone, JSON.stringify(member));
       await env.ORDERS.delete("member_deleted:" + phone);
@@ -604,7 +617,7 @@ async function handleMemberAction(env, cq, data) {
         buildMemberReplyMarkup(member, false)
       );
 
-      return stop(env, cq, "已恢復會員 " + phone);
+      return stop(env, cq, "已恢復會員及相關訂單 " + phone);
     }
 
     return stop(env, cq, "未知會員操作");
@@ -638,14 +651,115 @@ async function deleteMemberOrders(env, phone) {
   } while (cursor);
 
   for (const orderNo of orderNos) {
-    await env.ORDERS.delete("order:" + orderNo);
-    await env.ORDERS.delete(prefix + orderNo);
-    await env.ORDERS.delete("member_ordered:" + phone + ":" + orderNo);
+    const orderKey = "order:" + orderNo;
+    const phoneKey = prefix + orderNo;
+    const markerKey = "member_ordered:" + phone + ":" + orderNo;
+
+    const orderRaw = await env.ORDERS.get(orderKey);
+    const phoneRaw = await env.ORDERS.get(phoneKey);
+    const markerRaw = await env.ORDERS.get(markerKey);
+
+    // Archive before deleting active lookup keys, so future restore can rebuild everything.
+    if (orderRaw) await env.ORDERS.put("member_deleted_order:" + phone + ":" + orderNo, orderRaw);
+    if (phoneRaw != null) await env.ORDERS.put("member_deleted_phone_index:" + phone + ":" + orderNo, phoneRaw);
+    if (markerRaw != null) await env.ORDERS.put("member_deleted_order_marker:" + phone + ":" + orderNo, markerRaw);
+
+    await env.ORDERS.delete(orderKey);
+    await env.ORDERS.delete(phoneKey);
+    await env.ORDERS.delete(markerKey);
+
     deletedOrders += 1;
     deletedIndexKeys += 2;
   }
 
   return { deletedOrders, deletedIndexKeys, orderNos };
+}
+
+async function restoreMemberOrders(env, phone) {
+  phone = normalizePhone(phone);
+  const prefix = "member_deleted_order:" + phone + ":";
+  let cursor = undefined;
+  const orderNos = [];
+  let restoredOrders = 0;
+  let totalCups = 0;
+  let totalSpent = 0;
+  const recentOrderNos = [];
+  let lastOrderNo = "";
+  let lastOrderAt = "";
+
+  do {
+    const page = await env.ORDERS.list({ prefix, cursor });
+    for (const key of (page.keys || [])) {
+      const orderNo = key.name.replace(prefix, "");
+      if (!orderNo) continue;
+      orderNos.push(orderNo);
+    }
+    cursor = page.cursor;
+    if (page.list_complete !== false) break;
+  } while (cursor);
+
+  for (const orderNo of orderNos) {
+    const archivedOrderKey = "member_deleted_order:" + phone + ":" + orderNo;
+    const archivedPhoneIndexKey = "member_deleted_phone_index:" + phone + ":" + orderNo;
+    const archivedMarkerKey = "member_deleted_order_marker:" + phone + ":" + orderNo;
+
+    const orderRaw = await env.ORDERS.get(archivedOrderKey);
+    if (!orderRaw) continue;
+
+    await env.ORDERS.put("order:" + orderNo, orderRaw);
+
+    const phoneIndexRaw = await env.ORDERS.get(archivedPhoneIndexKey);
+    await env.ORDERS.put("phone:" + phone + ":" + orderNo, phoneIndexRaw != null ? phoneIndexRaw : orderNo);
+
+    const markerRaw = await env.ORDERS.get(archivedMarkerKey);
+    await env.ORDERS.put("member_ordered:" + phone + ":" + orderNo, markerRaw != null ? markerRaw : "1");
+
+    let order = null;
+    try { order = JSON.parse(orderRaw); } catch (_) { order = null; }
+
+    if (order && order.status !== "cancelled") {
+      restoredOrders += 1;
+      totalCups += orderCupsForMemberRestore(order);
+      totalSpent += Number(order.totalAmount || cartTotalForMemberRestore(order.cart) || 0);
+      recentOrderNos.push(orderNo);
+
+      if (!lastOrderAt || String(order.createdAt || "").localeCompare(String(lastOrderAt || "")) > 0) {
+        lastOrderAt = order.createdAt || "";
+        lastOrderNo = orderNo;
+      }
+    }
+
+    await env.ORDERS.delete(archivedOrderKey);
+    await env.ORDERS.delete(archivedPhoneIndexKey);
+    await env.ORDERS.delete(archivedMarkerKey);
+  }
+
+  recentOrderNos.sort().reverse();
+
+  return {
+    restoredOrders,
+    restoredOrderNos: orderNos,
+    totalOrders: restoredOrders,
+    totalCups,
+    totalSpent: Math.round(totalSpent * 100) / 100,
+    recentOrderNos: recentOrderNos.slice(0, 10),
+    lastOrderNo,
+    lastOrderAt
+  };
+}
+
+function orderCupsForMemberRestore(order) {
+  return Array.isArray(order.cart)
+    ? order.cart.reduce((sum, item) => sum + Number(item.qty || item.quantity || 1), 0)
+    : 0;
+}
+
+function cartTotalForMemberRestore(cart) {
+  return (Array.isArray(cart) ? cart : []).reduce((sum, item) => {
+    const qty = Number(item.qty || item.quantity || 1);
+    const unit = Number(item.unitPrice || item.price || 0);
+    return sum + Number(item.subtotal || unit * qty || 0);
+  }, 0);
 }
 
 async function getAnyMember(env, phone) {
@@ -698,6 +812,7 @@ function buildMemberTelegramText(member, deleted = false, confirmingDelete = fal
   if (member.deletedAt && !confirmingDelete) lines.push("刪除時間：" + formatDateTime(member.deletedAt));
   if (deleted && !confirmingDelete) lines.push("已刪除相關訂單：" + Number(member.deletedOrders || 0));
   if (member.restoredAt && !deleted && !confirmingDelete) lines.push("恢復時間：" + formatDateTime(member.restoredAt));
+  if (member.restoredAt && !deleted && !confirmingDelete) lines.push("已恢復相關訂單：" + Number(member.restoredOrders || 0));
   lines.push("");
   lines.push("累積訂單：" + Number(member.totalOrders || 0));
   lines.push("累積杯數：" + Number(member.totalCups || 0));
