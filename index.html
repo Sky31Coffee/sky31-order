@@ -5251,6 +5251,259 @@ button[disabled],
   line-height:1.55 !important;
 }
 
+
+/* V144 reliable idle logout popup */
+.member-security-modal{
+  position:fixed;
+  inset:0;
+  z-index:10300;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  padding:20px;
+  background:rgba(0,0,0,.32);
+  backdrop-filter:blur(14px);
+  -webkit-backdrop-filter:blur(14px);
+}
+
+.member-security-modal.show{
+  display:flex !important;
+}
+
+.member-security-card{
+  width:min(340px, calc(100vw - 40px));
+  border-radius:28px;
+  padding:24px 20px 20px;
+  background:rgba(250,247,240,.96);
+  color:#2f2a24;
+  border:1px solid rgba(255,255,255,.78);
+  box-shadow:0 28px 90px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.86);
+  text-align:center;
+}
+
+.member-security-icon{
+  width:54px;
+  height:54px;
+  margin:0 auto 12px;
+  border-radius:18px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:rgba(255,255,255,.62);
+  font-size:28px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.82), 0 10px 26px rgba(0,0,0,.08);
+}
+
+.member-security-title{
+  font-size:20px;
+  line-height:1.25;
+  font-weight:950;
+  letter-spacing:-.03em;
+  margin-bottom:7px;
+}
+
+.member-security-text{
+  font-size:14px;
+  line-height:1.5 !important;
+  color:rgba(47,42,36,.72);
+  font-weight:760;
+  margin-bottom:18px;
+}
+
+.member-security-btn{
+  width:100%;
+  border:0;
+  border-radius:999px;
+  padding:13px 16px;
+  background:#1f1d1a;
+  color:#fff;
+  font-weight:900;
+  cursor:pointer;
+}
+
+
+
+/* V151 simplified Apple-style shopping cart button */
+/* Hide the old floatCart to avoid stacked old drag listeners. New cart is independent and always visible on menu page. */
+#floatCart{
+  display:none !important;
+  visibility:hidden !important;
+  opacity:0 !important;
+  pointer-events:none !important;
+}
+
+#sky31PersistentCart{
+  position:fixed !important;
+  right:18px !important;
+  bottom:calc(24px + env(safe-area-inset-bottom, 0px)) !important;
+  left:auto;
+  top:auto;
+  width:66px !important;
+  height:66px !important;
+  min-width:66px !important;
+  min-height:66px !important;
+  border-radius:20px !important;
+  z-index:100000 !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  cursor:pointer !important;
+  touch-action:none !important;
+  user-select:none !important;
+  -webkit-user-select:none !important;
+  -webkit-tap-highlight-color:transparent !important;
+  will-change:left, top, transform, box-shadow;
+  transition:transform .18s ease, box-shadow .18s ease, opacity .16s ease !important;
+  background:transparent !important;
+  border:none !important;
+  box-shadow:none !important;
+  color:#2a67cf !important;
+}
+
+#orderApp.hidden #sky31PersistentCart{
+  display:none !important;
+}
+
+body:has(#orderApp.hidden) #sky31PersistentCart.sky31-cart-body-level{
+  display:none !important;
+}
+
+#sky31PersistentCart.sky31-cart-position-ready{
+  right:auto !important;
+  bottom:auto !important;
+}
+
+.sky31-persistent-cart-shell{
+  position:relative;
+  width:100%;
+  height:100%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:20px;
+  background:rgba(255,255,255,.42);
+  border:1px solid rgba(255,255,255,.62);
+  box-shadow:0 12px 28px rgba(34,92,184,.18), inset 0 1px 0 rgba(255,255,255,.58);
+  backdrop-filter:blur(18px) saturate(1.15);
+  -webkit-backdrop-filter:blur(18px) saturate(1.15);
+  overflow:visible;
+}
+
+.sky31-persistent-cart-shell::before{
+  content:"";
+  position:absolute;
+  left:10px;
+  right:10px;
+  top:8px;
+  height:16px;
+  border-radius:999px;
+  background:linear-gradient(180deg, rgba(255,255,255,.62), rgba(255,255,255,0));
+  pointer-events:none;
+}
+
+.sky31-persistent-cart-icon{
+  position:relative;
+  width:28px;
+  height:28px;
+  color:#2a67cf;
+  pointer-events:none;
+  z-index:1;
+}
+
+#sky31PersistentCartBadge{
+  position:absolute;
+  right:-5px;
+  top:-6px;
+  min-width:23px;
+  height:23px;
+  padding:0 6px;
+  border-radius:999px;
+  display:flex !important;
+  align-items:center;
+  justify-content:center;
+  background:linear-gradient(180deg,#ff6666,#ef4444);
+  color:#fff;
+  border:2px solid rgba(255,255,255,.95);
+  font-size:11px;
+  font-weight:900;
+  line-height:1;
+  box-shadow:0 8px 18px rgba(241,67,67,.26);
+  pointer-events:none;
+  z-index:3;
+}
+
+#sky31PersistentCart.sky31-cart-holding{
+  transform:scale(1.03) !important;
+}
+#sky31PersistentCart.sky31-cart-dragging{
+  cursor:grabbing !important;
+  transform:scale(1.05) !important;
+  transition:none !important;
+}
+#sky31PersistentCart.sky31-cart-dragging .sky31-persistent-cart-shell{
+  box-shadow:0 18px 36px rgba(34,92,184,.22), inset 0 1px 0 rgba(255,255,255,.58) !important;
+}
+#sky31PersistentCart.sky31-cart-tap-feedback{
+  transform:scale(.96) !important;
+}
+#sky31PersistentCart:focus-visible{
+  outline:none;
+}
+#sky31PersistentCart:focus-visible .sky31-persistent-cart-shell{
+  box-shadow:0 0 0 3px rgba(69,128,219,.18), 0 12px 28px rgba(34,92,184,.18), inset 0 1px 0 rgba(255,255,255,.58);
+}
+
+@media(hover:hover){
+  #sky31PersistentCart:hover{
+    transform:translateY(-1px) scale(1.02) !important;
+  }
+}
+
+@media(max-width:480px){
+  #sky31PersistentCart{
+    width:64px !important;
+    height:64px !important;
+    min-width:64px !important;
+    min-height:64px !important;
+    right:14px !important;
+    bottom:calc(18px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+  .sky31-persistent-cart-shell{
+    border-radius:19px;
+  }
+  .sky31-persistent-cart-icon{
+    width:27px;
+    height:27px;
+  }
+}
+
+/* V152 cart drag fix */
+/* Keep V151 simple cart design, but make drag reliable on desktop and mobile. */
+
+#sky31PersistentCart{
+  touch-action:none !important;
+  cursor:grab !important;
+  user-select:none !important;
+  -webkit-user-select:none !important;
+  -webkit-touch-callout:none !important;
+}
+
+#sky31PersistentCart.sky31-v152-pressing{
+  cursor:grabbing !important;
+  transform:scale(1.025) !important;
+}
+
+#sky31PersistentCart.sky31-v152-dragging{
+  cursor:grabbing !important;
+  transform:scale(1.045) !important;
+  transition:none !important;
+  opacity:.98 !important;
+}
+
+#sky31PersistentCart.sky31-v152-dragging .sky31-persistent-cart-shell{
+  box-shadow:0 20px 42px rgba(34,92,184,.24), inset 0 1px 0 rgba(255,255,255,.58) !important;
+}
+
 </style>
 
 <style>
@@ -5580,6 +5833,17 @@ line-height:1.6;
   <div class="footer">THANK YOU FOR YOUR SUPPORT</div>
 </div>
 <div class="float-cart" id="floatCart">🛒 <span id="cartBadge" class="badge">0</span></div>
+<div id="sky31PersistentCart" class="sky31-persistent-cart" role="button" aria-label="購物車" title="購物車">
+  <div class="sky31-persistent-cart-shell" aria-hidden="true">
+    <svg class="sky31-persistent-cart-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M3.75 5.5H6.1L7.55 14.15C7.68 14.91 8.34 15.46 9.1 15.46H17.1C17.84 15.46 18.48 14.97 18.69 14.26L20.02 9.72C20.27 8.88 19.64 8.03 18.77 8.03H7.2" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="9.55" cy="18.2" r="1.35" fill="currentColor"/>
+      <circle cx="17.05" cy="18.2" r="1.35" fill="currentColor"/>
+    </svg>
+  </div>
+  <span id="sky31PersistentCartBadge" class="sky31-persistent-cart-badge">0</span>
+</div>
+
 
 <div id="cartModal" class="cart-modal">
   <div class="cart-sheet">
@@ -8217,207 +8481,6 @@ window.addEventListener("load", function() {
 
 
 <script>
-/* V143 idle 15min auto logout */
-(function(){
-  var MEMBER_KEY = "sky31_member_v1";
-  var LAST_ACTIVITY_KEY = "sky31_member_last_activity_v143";
-  var IDLE_LOGOUT_MS = 15 * 60 * 1000;
-  var CHECK_MS = 15 * 1000;
-  var lastTouch = 0;
-  var loggedOutByIdle = false;
-
-  function $(id){ return document.getElementById(id); }
-
-  function hasMember(){
-    try{
-      var raw = localStorage.getItem(MEMBER_KEY);
-      if(!raw) return false;
-      var obj = JSON.parse(raw);
-      return !!(obj && String(obj.phone || "").replace(/\D/g, ""));
-    }catch(e){
-      return false;
-    }
-  }
-
-  function setLastActivity(force){
-    if(!hasMember()){
-      try{ localStorage.removeItem(LAST_ACTIVITY_KEY); }catch(e){}
-      return;
-    }
-
-    var now = Date.now();
-
-    // Avoid writing too often on scroll/mousemove.
-    if(!force && now - lastTouch < 10000) return;
-
-    lastTouch = now;
-    try{ localStorage.setItem(LAST_ACTIVITY_KEY, String(now)); }catch(e){}
-  }
-
-  function getLastActivity(){
-    try{ return Number(localStorage.getItem(LAST_ACTIVITY_KEY) || 0); }catch(e){ return 0; }
-  }
-
-  function clearMemberFields(){
-    try{
-      localStorage.removeItem(MEMBER_KEY);
-      localStorage.removeItem(LAST_ACTIVITY_KEY);
-      localStorage.removeItem("sky31_member_login_at_v1");
-    }catch(e){}
-
-    var nameEl = $("name");
-    var phoneEl = $("phone");
-    if(nameEl) nameEl.value = "";
-    if(phoneEl) phoneEl.value = "";
-
-    var modalName = $("modalName");
-    var modalPhone = $("modalPhone");
-    if(modalName) modalName.value = "";
-    if(modalPhone) modalPhone.value = "";
-
-    var btn = $("profileButton");
-    if(btn){
-      btn.classList.remove("member-logged");
-      btn.title = "會員中心";
-      btn.setAttribute("aria-label", "會員中心");
-    }
-
-    try{ if(typeof updateCheckoutCustomerInfo === "function") updateCheckoutCustomerInfo(); }catch(e){}
-    try{ if(typeof updateMemberProfileButton === "function") updateMemberProfileButton(); }catch(e){}
-    try{ if(typeof renderLoggedPanel === "function") renderLoggedPanel(null); }catch(e){}
-    try{ if(typeof renderHomeQuickCard === "function") renderHomeQuickCard(); }catch(e){}
-  }
-
-  function ensureSecurityModal(){
-    var modal = $("memberSecurityModal");
-    if(modal) return modal;
-
-    modal = document.createElement("div");
-    modal.id = "memberSecurityModal";
-    modal.className = "member-security-modal";
-    modal.innerHTML =
-      '<div class="member-security-card">' +
-        '<div class="member-security-icon">🔒</div>' +
-        '<div class="member-security-title">已自動登出</div>' +
-        '<div class="member-security-text">為確保安全，十五分鐘後自動登出</div>' +
-        '<button class="member-security-btn" type="button" onclick="closeMemberSecurityModal()">知道了</button>' +
-      '</div>';
-    document.body.appendChild(modal);
-    return modal;
-  }
-
-  function updateSecurityModalText(){
-    var modal = ensureSecurityModal();
-    var title = modal.querySelector(".member-security-title");
-    var text = modal.querySelector(".member-security-text");
-    if(title) title.textContent = "已自動登出";
-    if(text) text.textContent = "為確保安全，十五分鐘後自動登出";
-  }
-
-  window.closeMemberSecurityModal = function(){
-    var modal = $("memberSecurityModal");
-    if(modal) modal.classList.remove("show");
-    try{
-      var memberModal = $("memberModal");
-      if(memberModal) memberModal.classList.remove("show");
-      document.body.style.overflow = "";
-    }catch(e){}
-  };
-
-  function showIdleLogoutPrompt(){
-    updateSecurityModalText();
-    var modal = ensureSecurityModal();
-    modal.classList.add("show");
-
-    try{
-      var memberModal = $("memberModal");
-      if(memberModal) memberModal.classList.remove("show");
-      document.body.style.overflow = "";
-    }catch(e){}
-
-    try{
-      if(location.hash) history.replaceState(null, "", location.pathname + location.search);
-    }catch(e){}
-  }
-
-  function idleLogoutNow(){
-    if(loggedOutByIdle) return;
-    loggedOutByIdle = true;
-    clearMemberFields();
-    showIdleLogoutPrompt();
-  }
-
-  function checkIdleExpiry(){
-    if(!hasMember()){
-      loggedOutByIdle = false;
-      try{ localStorage.removeItem(LAST_ACTIVITY_KEY); }catch(e){}
-      return;
-    }
-
-    var last = getLastActivity();
-    if(!last){
-      setLastActivity(true);
-      return;
-    }
-
-    if(Date.now() - last >= IDLE_LOGOUT_MS){
-      idleLogoutNow();
-    }
-  }
-
-  function activityHandler(){
-    if(!hasMember()) return;
-    loggedOutByIdle = false;
-    setLastActivity(false);
-  }
-
-  function bootIdleLogout(){
-    if(hasMember() && !getLastActivity()){
-      setLastActivity(true);
-    }
-
-    checkIdleExpiry();
-  }
-
-  ["pointerdown","keydown","touchstart","scroll","mousemove"].forEach(function(evt){
-    window.addEventListener(evt, activityHandler, {passive:true});
-    document.addEventListener(evt, activityHandler, {passive:true});
-  });
-
-  document.addEventListener("visibilitychange", function(){
-    if(!document.hidden){
-      checkIdleExpiry();
-      setLastActivity(false);
-    }
-  });
-
-  window.addEventListener("focus", function(){
-    checkIdleExpiry();
-    setLastActivity(false);
-  });
-
-  // After login/register clicks, wait a moment for existing login code to save MEMBER_KEY.
-  document.addEventListener("click", function(){
-    setTimeout(function(){
-      if(hasMember()) setLastActivity(true);
-    }, 250);
-  }, true);
-
-  if(document.readyState === "loading"){
-    document.addEventListener("DOMContentLoaded", bootIdleLogout);
-  }else{
-    bootIdleLogout();
-  }
-
-  setTimeout(bootIdleLogout, 600);
-  setTimeout(bootIdleLogout, 1600);
-  setInterval(checkIdleExpiry, CHECK_MS);
-})();
-</script>
-
-
-
-<script>
 /* V108 query buttons fix */
 (function(){
   function norm(s){ return String(s || "").replace(/\s+/g,""); }
@@ -10113,7 +10176,7 @@ window.addEventListener("load", function() {
 
     return '' +
       '<div class="member-notice-list-title">訂單記錄</div>' +
-      '<button class="member-record-toggle" type="button" onclick="toggleMemberNoticeRecords()">' + label + '</button>' +
+      '<button class="member-record-toggle" type="button" onclick="toggleMemberNoticeRecords()">' + label + '<span class="member-record-arrow">' + (expanded ? '↑' : '↓') + '</span></button>' +
       '<div class="member-record-list ' + cls + '">' +
         orders.slice(0,10).map(miniOrder).join("") +
       '</div>';
@@ -10439,6 +10502,863 @@ window.addEventListener("load", function() {
   document.addEventListener("click", function(){
     setTimeout(patchKnownLogoutFunctions, 80);
   }, true);
+})();
+</script>
+
+
+<script>
+/* V144 reliable idle logout popup */
+(function(){
+  var MEMBER_KEY = "sky31_member_v1";
+  var LAST_ACTIVITY_KEY = "sky31_member_last_activity_v144";
+  var IDLE_MS = 15 * 60 * 1000;
+  var PROMPT_TEXT = "為確保安全，十五分鐘後自動登出";
+  var timer = null;
+  var checkTimer = null;
+  var lastTouchWrite = 0;
+  var isLoggingOutByIdle = false;
+
+  function $(id){ return document.getElementById(id); }
+
+  function now(){ return Date.now(); }
+
+  function normalizePhone(v){
+    return String(v || "").replace(/\D/g, "");
+  }
+
+  function getStoredMember(){
+    try{
+      var raw = localStorage.getItem(MEMBER_KEY);
+      if(!raw) return null;
+      var obj = JSON.parse(raw);
+      if(!obj || !normalizePhone(obj.phone)) return null;
+      return obj;
+    }catch(e){
+      return null;
+    }
+  }
+
+  function isLoggedIn(){
+    return !!getStoredMember();
+  }
+
+  function writeActivity(force){
+    if(!isLoggedIn()){
+      try{ localStorage.removeItem(LAST_ACTIVITY_KEY); }catch(e){}
+      stopIdleTimer();
+      return;
+    }
+
+    var t = now();
+
+    if(!force && t - lastTouchWrite < 3000) return;
+
+    lastTouchWrite = t;
+    try{ localStorage.setItem(LAST_ACTIVITY_KEY, String(t)); }catch(e){}
+    scheduleIdleTimer();
+  }
+
+  function readActivity(){
+    try{
+      var t = Number(localStorage.getItem(LAST_ACTIVITY_KEY) || 0);
+      return isFinite(t) ? t : 0;
+    }catch(e){
+      return 0;
+    }
+  }
+
+  function stopIdleTimer(){
+    if(timer){
+      clearTimeout(timer);
+      timer = null;
+    }
+  }
+
+  function scheduleIdleTimer(){
+    stopIdleTimer();
+
+    if(!isLoggedIn()) return;
+
+    var last = readActivity();
+    if(!last){
+      writeActivity(true);
+      return;
+    }
+
+    var remaining = IDLE_MS - (now() - last);
+
+    if(remaining <= 0){
+      idleLogoutNow();
+      return;
+    }
+
+    timer = setTimeout(function(){
+      idleLogoutNow();
+    }, Math.min(remaining, 2147483647));
+  }
+
+  function ensureSecurityModal(){
+    var modal = $("memberSecurityModal");
+    if(!modal){
+      modal = document.createElement("div");
+      modal.id = "memberSecurityModal";
+      modal.className = "member-security-modal";
+      modal.innerHTML =
+        '<div class="member-security-card">' +
+          '<div class="member-security-icon">🔒</div>' +
+          '<div class="member-security-title">已自動登出</div>' +
+          '<div class="member-security-text">' + PROMPT_TEXT + '</div>' +
+          '<button class="member-security-btn" type="button" onclick="closeMemberSecurityModal()">知道了</button>' +
+        '</div>';
+      document.body.appendChild(modal);
+    }
+
+    var title = modal.querySelector(".member-security-title");
+    var text = modal.querySelector(".member-security-text");
+
+    if(title) title.textContent = "已自動登出";
+    if(text) text.textContent = PROMPT_TEXT;
+
+    return modal;
+  }
+
+  window.closeMemberSecurityModal = function(){
+    var modal = $("memberSecurityModal");
+    if(modal) modal.classList.remove("show");
+
+    try{
+      var memberModal = $("memberModal");
+      if(memberModal) memberModal.classList.remove("show");
+      document.body.style.overflow = "";
+    }catch(e){}
+  };
+
+  function showIdlePrompt(){
+    var modal = ensureSecurityModal();
+    modal.classList.add("show");
+
+    try{
+      var memberModal = $("memberModal");
+      if(memberModal) memberModal.classList.remove("show");
+      document.body.style.overflow = "";
+    }catch(e){}
+  }
+
+  function clearMemberLoginOnly(){
+    try{
+      localStorage.removeItem(MEMBER_KEY);
+      localStorage.removeItem(LAST_ACTIVITY_KEY);
+      localStorage.removeItem("sky31_member_last_activity_v143");
+      localStorage.removeItem("sky31_member_login_at_v1");
+    }catch(e){}
+
+    var nameEl = $("name");
+    var phoneEl = $("phone");
+    if(nameEl) nameEl.value = "";
+    if(phoneEl) phoneEl.value = "";
+
+    var modalName = $("modalName");
+    var modalPhone = $("modalPhone");
+    if(modalName) modalName.value = "";
+    if(modalPhone) modalPhone.value = "";
+
+    var btn = $("profileButton");
+    if(btn){
+      btn.classList.remove("member-logged");
+      btn.title = "會員中心";
+      btn.setAttribute("aria-label", "會員中心");
+    }
+
+    try{ if(typeof updateCheckoutCustomerInfo === "function") updateCheckoutCustomerInfo(); }catch(e){}
+    try{ if(typeof updateMemberProfileButton === "function") updateMemberProfileButton(); }catch(e){}
+    try{ if(typeof renderLoggedPanel === "function") renderLoggedPanel(null); }catch(e){}
+    try{ if(typeof renderHomeQuickCard === "function") renderHomeQuickCard(); }catch(e){}
+  }
+
+  function idleLogoutNow(){
+    if(isLoggingOutByIdle) return;
+    if(!isLoggedIn()) return;
+
+    isLoggingOutByIdle = true;
+
+    stopIdleTimer();
+    clearMemberLoginOnly();
+    showIdlePrompt();
+
+    setTimeout(function(){
+      isLoggingOutByIdle = false;
+    }, 1000);
+  }
+
+  function checkExpiry(){
+    if(!isLoggedIn()){
+      stopIdleTimer();
+      try{ localStorage.removeItem(LAST_ACTIVITY_KEY); }catch(e){}
+      return;
+    }
+
+    var last = readActivity();
+    if(!last){
+      writeActivity(true);
+      return;
+    }
+
+    if(now() - last >= IDLE_MS){
+      idleLogoutNow();
+    }else{
+      scheduleIdleTimer();
+    }
+  }
+
+  function userActivity(){
+    if(!isLoggedIn()) return;
+    writeActivity(false);
+  }
+
+  function boot(){
+    if(isLoggedIn() && !readActivity()){
+      writeActivity(true);
+    }
+    checkExpiry();
+
+    if(!checkTimer){
+      checkTimer = setInterval(checkExpiry, 10000);
+    }
+  }
+
+  // Important: detect login immediately when member code saves localStorage.
+  var originalSetItem = localStorage.setItem;
+  if(!localStorage.__sky31V144SetItemPatched){
+    try{
+      localStorage.setItem = function(key, value){
+        var result = originalSetItem.apply(this, arguments);
+        if(key === MEMBER_KEY){
+          setTimeout(function(){
+            if(isLoggedIn()){
+              writeActivity(true);
+              scheduleIdleTimer();
+            }
+          }, 30);
+        }
+        return result;
+      };
+      localStorage.__sky31V144SetItemPatched = true;
+    }catch(e){}
+  }
+
+  ["pointerdown","touchstart","keydown","wheel","scroll"].forEach(function(evt){
+    window.addEventListener(evt, userActivity, {passive:true});
+    document.addEventListener(evt, userActivity, {passive:true});
+  });
+
+  document.addEventListener("visibilitychange", function(){
+    if(document.hidden) return;
+
+    // When user returns to the page, first check whether idle already expired.
+    checkExpiry();
+
+    // If still logged in, returning to the page counts as activity.
+    if(isLoggedIn()){
+      writeActivity(true);
+    }
+  });
+
+  window.addEventListener("focus", function(){
+    checkExpiry();
+    if(isLoggedIn()){
+      writeActivity(true);
+    }
+  });
+
+  // Login may be triggered by button, Enter key, or programmatic flow.
+  document.addEventListener("click", function(){
+    setTimeout(boot, 100);
+    setTimeout(boot, 500);
+  }, true);
+
+  document.addEventListener("keydown", function(e){
+    if(e.key === "Enter"){
+      setTimeout(boot, 120);
+      setTimeout(boot, 500);
+    }
+  }, true);
+
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", boot);
+  }else{
+    boot();
+  }
+
+  setTimeout(boot, 500);
+  setTimeout(boot, 1500);
+  setTimeout(boot, 3000);
+
+  // Expose small debug helpers for browser console testing.
+  window.sky31IdleLogoutDebug = {
+    check: checkExpiry,
+    logoutNow: idleLogoutNow,
+    reset: function(){ writeActivity(true); },
+    last: function(){ return readActivity(); },
+    remainingMs: function(){
+      if(!isLoggedIn()) return 0;
+      return Math.max(0, IDLE_MS - (now() - readActivity()));
+    }
+  };
+})();
+</script>
+
+
+
+
+<script>
+/* V150 premium Apple-style shopping cart button */
+(function(){
+  var CART_LEFT_KEY = "sky31_persistent_cart_left";
+  var CART_TOP_KEY = "sky31_persistent_cart_top";
+  var HOLD_MS = 260;
+  var MOVE_THRESHOLD = 6;
+
+  function clamp(v, min, max){
+    return Math.max(min, Math.min(max, v));
+  }
+
+  function getBtn(){
+    return document.getElementById("sky31PersistentCart");
+  }
+
+  function getBadge(){
+    return document.getElementById("sky31PersistentCartBadge");
+  }
+
+  function cartSvgMarkup(){
+    return '<div class="sky31-persistent-cart-shell" aria-hidden="true">' +
+      '<svg class="sky31-persistent-cart-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+      '<path d="M3.75 5.5H6.1L7.55 14.15C7.68 14.91 8.34 15.46 9.1 15.46H17.1C17.84 15.46 18.48 14.97 18.69 14.26L20.02 9.72C20.27 8.88 19.64 8.03 18.77 8.03H7.2" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>' +
+      '<circle cx="9.55" cy="18.2" r="1.35" fill="currentColor"/>' +
+      '<circle cx="17.05" cy="18.2" r="1.35" fill="currentColor"/>' +
+      '</svg></div><span id="sky31PersistentCartBadge" class="sky31-persistent-cart-badge">0</span>';
+  }
+
+  function ensureBtn(){
+    var btn = getBtn();
+    if(!btn){
+      btn = document.createElement("div");
+      btn.id = "sky31PersistentCart";
+      btn.className = "sky31-persistent-cart sky31-cart-body-level";
+      btn.setAttribute("role", "button");
+      btn.setAttribute("aria-label", "購物車");
+      btn.setAttribute("title", "購物車");
+      var orderApp = document.getElementById("orderApp");
+      if(orderApp){ orderApp.appendChild(btn); }
+      else { document.body.appendChild(btn); }
+    }
+    if(!btn.querySelector('.sky31-persistent-cart-icon')){
+      btn.innerHTML = cartSvgMarkup();
+    }
+    return btn;
+  }
+
+  function size(btn){
+    return Math.max(btn.offsetWidth || 64, 48);
+  }
+
+  function defaultPos(btn){
+    var s = size(btn);
+    return { left: window.innerWidth - s - 18, top: window.innerHeight - s - 26 };
+  }
+
+  function place(btn, left, top){
+    if(!btn) return;
+    var s = size(btn);
+    var safe = 8;
+    var maxLeft = Math.max(safe, window.innerWidth - s - safe);
+    var maxTop = Math.max(safe, window.innerHeight - s - safe);
+    var x = Number(left);
+    var y = Number(top);
+    if(!isFinite(x) || !isFinite(y)){
+      var d = defaultPos(btn); x = d.left; y = d.top;
+    }
+    x = clamp(x, safe, maxLeft);
+    y = clamp(y, safe, maxTop);
+    btn.style.left = x + "px";
+    btn.style.top = y + "px";
+    btn.style.right = "auto";
+    btn.style.bottom = "auto";
+    btn.style.display = "flex";
+    btn.style.visibility = "visible";
+    btn.style.opacity = "1";
+    btn.style.pointerEvents = "auto";
+    btn.classList.add("sky31-cart-position-ready");
+  }
+
+  function restorePosition(){
+    var btn = ensureBtn();
+    var left = NaN, top = NaN;
+    try{
+      left = parseFloat(localStorage.getItem(CART_LEFT_KEY));
+      top = parseFloat(localStorage.getItem(CART_TOP_KEY));
+    }catch(e){}
+    place(btn, left, top);
+  }
+
+  function savePosition(btn){
+    if(!btn) return;
+    var rect = btn.getBoundingClientRect();
+    try{
+      localStorage.setItem(CART_LEFT_KEY, String(Math.round(rect.left)));
+      localStorage.setItem(CART_TOP_KEY, String(Math.round(rect.top)));
+    }catch(e){}
+  }
+
+  function openCart(){
+    var btn = ensureBtn();
+    btn.classList.add("sky31-cart-tap-feedback");
+    setTimeout(function(){ btn.classList.remove("sky31-cart-tap-feedback"); }, 140);
+    try{
+      if(typeof window.openCartModal === "function") return window.openCartModal();
+      if(typeof openCartModal === "function") return openCartModal();
+    }catch(e){}
+  }
+
+  function syncBadge(){
+    var badge = getBadge();
+    if(!badge) return;
+    var oldBadge = document.getElementById("cartBadge");
+    var value = "0";
+    if(oldBadge){
+      value = String(oldBadge.textContent || "0").trim() || "0";
+    }else{
+      try{
+        if(Array.isArray(window.cart)){
+          value = String(window.cart.reduce(function(sum, item){
+            return sum + Number(item.qty || item.quantity || 1);
+          }, 0));
+        }
+      }catch(e){}
+    }
+    badge.textContent = value;
+  }
+
+  function observeOldBadge(){
+    var oldBadge = document.getElementById("cartBadge");
+    if(!oldBadge || oldBadge.__sky31V151Observed) return;
+    oldBadge.__sky31V151Observed = true;
+    try{
+      var mo = new MutationObserver(syncBadge);
+      mo.observe(oldBadge, {childList:true, characterData:true, subtree:true});
+    }catch(e){}
+  }
+
+  function bindDrag(){
+    var btn = ensureBtn();
+    if(!btn || btn.__sky31V151Bound) return;
+    btn.__sky31V151Bound = true;
+
+    var down = false;
+    var holding = false;
+    var dragging = false;
+    var pointerId = null;
+    var sx = 0, sy = 0, sl = 0, st = 0, downAt = 0;
+    var holdTimer = null;
+
+    function clearHold(){
+      if(holdTimer){ clearTimeout(holdTimer); holdTimer = null; }
+    }
+
+    function clearClasses(){
+      btn.classList.remove("sky31-cart-holding");
+      btn.classList.remove("sky31-cart-dragging");
+    }
+
+    btn.addEventListener("pointerdown", function(e){
+      if(e.pointerType === "mouse" && e.button !== 0) return;
+      down = true;
+      holding = false;
+      dragging = false;
+      pointerId = e.pointerId;
+      downAt = Date.now();
+      var rect = btn.getBoundingClientRect();
+      sx = e.clientX; sy = e.clientY; sl = rect.left; st = rect.top;
+      clearHold();
+      holdTimer = setTimeout(function(){
+        if(!down) return;
+        holding = true;
+        btn.classList.add("sky31-cart-holding");
+      }, HOLD_MS);
+      try{ btn.setPointerCapture(pointerId); }catch(err){}
+    }, {passive:true});
+
+    btn.addEventListener("pointermove", function(e){
+      if(!down || e.pointerId !== pointerId) return;
+      var dx = e.clientX - sx;
+      var dy = e.clientY - sy;
+      var dist = Math.hypot(dx, dy);
+
+      if(!holding){
+        if(dist > MOVE_THRESHOLD * 1.6){
+          clearHold();
+        }
+        return;
+      }
+      if(dist < MOVE_THRESHOLD) return;
+
+      dragging = true;
+      btn.classList.add("sky31-cart-dragging");
+      if(e.cancelable) e.preventDefault();
+      place(btn, sl + dx, st + dy);
+    }, {passive:false});
+
+    function finishPointer(e){
+      if(!down || (e && e.pointerId != null && e.pointerId !== pointerId)) return;
+      clearHold();
+      var dx = e ? (e.clientX - sx) : 0;
+      var dy = e ? (e.clientY - sy) : 0;
+      var dist = Math.hypot(dx, dy);
+      var elapsed = Date.now() - downAt;
+      try{ if(pointerId != null) btn.releasePointerCapture(pointerId); }catch(err){}
+      down = false; pointerId = null;
+      clearClasses();
+      if(dragging){
+        dragging = false; holding = false;
+        savePosition(btn);
+        return;
+      }
+      holding = false;
+      if(elapsed < 520 && dist < MOVE_THRESHOLD){
+        openCart();
+      }
+    }
+
+    btn.addEventListener("pointerup", finishPointer, {passive:false});
+    btn.addEventListener("pointercancel", function(){
+      clearHold();
+      down = false; holding = false; dragging = false; pointerId = null;
+      clearClasses();
+    }, {passive:true});
+  }
+
+  function hideOldFloatCart(){
+    var old = document.getElementById("floatCart");
+    if(old){
+      old.style.display = "none";
+      old.style.visibility = "hidden";
+      old.style.opacity = "0";
+      old.style.pointerEvents = "none";
+    }
+  }
+
+  function boot(){
+    ensureBtn();
+    hideOldFloatCart();
+    restorePosition();
+    bindDrag();
+    syncBadge();
+    observeOldBadge();
+  }
+
+  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
+
+  setTimeout(boot, 80);
+  setTimeout(boot, 300);
+  setTimeout(boot, 1000);
+
+  document.addEventListener("click", function(){
+    setTimeout(syncBadge, 50);
+    setTimeout(syncBadge, 250);
+  }, true);
+
+  window.addEventListener("resize", function(){
+    var btn = ensureBtn();
+    var rect = btn.getBoundingClientRect();
+    place(btn, rect.left, rect.top);
+    savePosition(btn);
+  });
+
+  window.sky31CartDebug = {
+    show: boot,
+    reset: function(){
+      try{
+        localStorage.removeItem(CART_LEFT_KEY);
+        localStorage.removeItem(CART_TOP_KEY);
+      }catch(e){}
+      restorePosition();
+    }
+  };
+})();
+</script>
+
+
+<script>
+/* V152 cart drag fix */
+(function(){
+  var CART_LEFT_KEY = "sky31_persistent_cart_left";
+  var CART_TOP_KEY = "sky31_persistent_cart_top";
+  var DRAG_THRESHOLD = 5;
+
+  function $(id){ return document.getElementById(id); }
+
+  function clamp(v, min, max){
+    return Math.max(min, Math.min(max, v));
+  }
+
+  function getCart(){
+    return $("sky31PersistentCart");
+  }
+
+  function size(btn){
+    return Math.max(btn ? (btn.offsetWidth || 64) : 64, 48);
+  }
+
+  function defaultPosition(btn){
+    var s = size(btn);
+    return {
+      left: window.innerWidth - s - 18,
+      top: window.innerHeight - s - 26
+    };
+  }
+
+  function place(btn, left, top){
+    if(!btn) return;
+
+    var s = size(btn);
+    var safe = 8;
+    var maxLeft = Math.max(safe, window.innerWidth - s - safe);
+    var maxTop = Math.max(safe, window.innerHeight - s - safe);
+
+    var x = Number(left);
+    var y = Number(top);
+
+    if(!isFinite(x) || !isFinite(y)){
+      var d = defaultPosition(btn);
+      x = d.left;
+      y = d.top;
+    }
+
+    x = clamp(x, safe, maxLeft);
+    y = clamp(y, safe, maxTop);
+
+    btn.style.position = "fixed";
+    btn.style.left = x + "px";
+    btn.style.top = y + "px";
+    btn.style.right = "auto";
+    btn.style.bottom = "auto";
+    btn.style.display = "flex";
+    btn.style.visibility = "visible";
+    btn.style.opacity = "1";
+    btn.style.pointerEvents = "auto";
+    btn.classList.add("sky31-cart-position-ready");
+  }
+
+  function save(btn){
+    if(!btn) return;
+    var r = btn.getBoundingClientRect();
+    try{
+      localStorage.setItem(CART_LEFT_KEY, String(Math.round(r.left)));
+      localStorage.setItem(CART_TOP_KEY, String(Math.round(r.top)));
+    }catch(e){}
+  }
+
+  function restore(btn){
+    if(!btn) return;
+
+    var left = NaN;
+    var top = NaN;
+
+    try{
+      left = parseFloat(localStorage.getItem(CART_LEFT_KEY));
+      top = parseFloat(localStorage.getItem(CART_TOP_KEY));
+    }catch(e){}
+
+    place(btn, left, top);
+  }
+
+  function openCart(){
+    var btn = getCart();
+    if(btn){
+      btn.classList.add("sky31-cart-tap-feedback");
+      setTimeout(function(){
+        btn.classList.remove("sky31-cart-tap-feedback");
+      }, 140);
+    }
+
+    try{
+      if(typeof window.openCartModal === "function"){
+        window.openCartModal();
+        return;
+      }
+      if(typeof openCartModal === "function"){
+        openCartModal();
+        return;
+      }
+    }catch(e){}
+  }
+
+  function clientPoint(e){
+    if(e.touches && e.touches.length){
+      return {x:e.touches[0].clientX, y:e.touches[0].clientY};
+    }
+    if(e.changedTouches && e.changedTouches.length){
+      return {x:e.changedTouches[0].clientX, y:e.changedTouches[0].clientY};
+    }
+    return {x:e.clientX, y:e.clientY};
+  }
+
+  function bindCartDragV152(){
+    var btn = getCart();
+    if(!btn) return;
+
+    restore(btn);
+
+    if(btn.__sky31V152Bound) return;
+    btn.__sky31V152Bound = true;
+
+    var down = false;
+    var dragging = false;
+    var startX = 0;
+    var startY = 0;
+    var startLeft = 0;
+    var startTop = 0;
+    var downAt = 0;
+    var activePointerId = null;
+
+    function start(e){
+      if(e.type === "mousedown" && e.button !== 0) return;
+
+      var p = clientPoint(e);
+      var rect = btn.getBoundingClientRect();
+
+      down = true;
+      dragging = false;
+      startX = p.x;
+      startY = p.y;
+      startLeft = rect.left;
+      startTop = rect.top;
+      downAt = Date.now();
+
+      if(e.pointerId !== undefined){
+        activePointerId = e.pointerId;
+        try{ btn.setPointerCapture(activePointerId); }catch(err){}
+      }
+
+      btn.classList.add("sky31-v152-pressing");
+
+      if(e.cancelable) e.preventDefault();
+      if(e.stopPropagation) e.stopPropagation();
+    }
+
+    function move(e){
+      if(!down) return;
+      if(activePointerId !== null && e.pointerId !== undefined && e.pointerId !== activePointerId) return;
+
+      var p = clientPoint(e);
+      var dx = p.x - startX;
+      var dy = p.y - startY;
+
+      if(!dragging && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+
+      dragging = true;
+      btn.classList.add("sky31-v152-dragging");
+      btn.classList.add("sky31-cart-dragging");
+
+      if(e.cancelable) e.preventDefault();
+      if(e.stopPropagation) e.stopPropagation();
+
+      place(btn, startLeft + dx, startTop + dy);
+    }
+
+    function end(e){
+      if(!down) return;
+      if(activePointerId !== null && e && e.pointerId !== undefined && e.pointerId !== activePointerId) return;
+
+      var p = e ? clientPoint(e) : {x:startX, y:startY};
+      var dx = p.x - startX;
+      var dy = p.y - startY;
+      var dist = Math.hypot(dx, dy);
+      var elapsed = Date.now() - downAt;
+
+      down = false;
+
+      btn.classList.remove("sky31-v152-pressing");
+      btn.classList.remove("sky31-v152-dragging");
+      btn.classList.remove("sky31-cart-dragging");
+
+      try{
+        if(activePointerId !== null) btn.releasePointerCapture(activePointerId);
+      }catch(err){}
+      activePointerId = null;
+
+      if(dragging){
+        dragging = false;
+        save(btn);
+        return;
+      }
+
+      if(elapsed < 550 && dist < DRAG_THRESHOLD){
+        openCart();
+      }
+    }
+
+    // Pointer events first
+    btn.addEventListener("pointerdown", start, {passive:false});
+    window.addEventListener("pointermove", move, {passive:false});
+    window.addEventListener("pointerup", end, {passive:false});
+    window.addEventListener("pointercancel", end, {passive:false});
+
+    // Fallbacks for browsers / embedded WebViews where pointer capture can be unreliable.
+    btn.addEventListener("mousedown", start, {passive:false});
+    window.addEventListener("mousemove", move, {passive:false});
+    window.addEventListener("mouseup", end, {passive:false});
+
+    btn.addEventListener("touchstart", start, {passive:false});
+    window.addEventListener("touchmove", move, {passive:false});
+    window.addEventListener("touchend", end, {passive:false});
+    window.addEventListener("touchcancel", end, {passive:false});
+
+    // Prevent native click after drag, but allow normal quick tap openCart through our own logic.
+    btn.addEventListener("click", function(e){
+      if(dragging){
+        if(e.cancelable) e.preventDefault();
+        if(e.stopPropagation) e.stopPropagation();
+      }
+    }, true);
+  }
+
+  function boot(){
+    var btn = getCart();
+    if(!btn) return;
+    restore(btn);
+    bindCartDragV152();
+  }
+
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", boot);
+  }else{
+    boot();
+  }
+
+  setTimeout(boot, 100);
+  setTimeout(boot, 500);
+  setTimeout(boot, 1200);
+
+  window.addEventListener("resize", function(){
+    var btn = getCart();
+    if(!btn) return;
+    var r = btn.getBoundingClientRect();
+    place(btn, r.left, r.top);
+    save(btn);
+  });
+
+  window.sky31CartDragDebug = {
+    reset:function(){
+      try{
+        localStorage.removeItem(CART_LEFT_KEY);
+        localStorage.removeItem(CART_TOP_KEY);
+      }catch(e){}
+      boot();
+    },
+    show:boot
+  };
 })();
 </script>
 
