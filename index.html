@@ -4431,6 +4431,254 @@ input.input-error{
   filter:saturate(.85) !important;
 }
 
+
+/* V129 member bulb notifications */
+.member-notice-bulb{
+  position:fixed;
+  right:18px;
+  top:calc(env(safe-area-inset-top, 0px) + 86px);
+  z-index:9000;
+  width:46px;
+  height:46px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.70);
+  background:rgba(255,255,255,.50);
+  color:#6f6558;
+  box-shadow:0 12px 36px rgba(0,0,0,.14), inset 0 1px 0 rgba(255,255,255,.75);
+  backdrop-filter:blur(16px);
+  -webkit-backdrop-filter:blur(16px);
+  display:none;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  font-size:23px;
+  transition:transform .16s ease, filter .16s ease, background .16s ease, box-shadow .16s ease;
+}
+
+.member-notice-bulb.show{
+  display:flex;
+}
+
+.member-notice-bulb.active{
+  color:#7a4b00;
+  background:rgba(255,220,98,.88);
+  box-shadow:0 14px 42px rgba(232,173,39,.34), inset 0 1px 0 rgba(255,255,255,.88);
+  animation:sky31BulbPulse 1.6s ease-in-out infinite;
+}
+
+.member-notice-bulb.active::after{
+  content:"";
+  position:absolute;
+  right:4px;
+  top:4px;
+  width:10px;
+  height:10px;
+  border-radius:50%;
+  background:#e23b2e;
+  box-shadow:0 0 0 4px rgba(226,59,46,.14);
+}
+
+.member-notice-bulb:active{
+  transform:scale(.94);
+}
+
+@media(hover:hover){
+  .member-notice-bulb:hover{
+    transform:translateY(-2px) scale(1.04);
+    filter:brightness(1.03);
+  }
+}
+
+@keyframes sky31BulbPulse{
+  0%,100%{ transform:scale(1); }
+  50%{ transform:scale(1.055); }
+}
+
+.member-notice-modal{
+  position:fixed;
+  inset:0;
+  z-index:10180;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  padding:18px;
+  background:rgba(0,0,0,.30);
+  backdrop-filter:blur(14px);
+  -webkit-backdrop-filter:blur(14px);
+}
+
+.member-notice-modal.show{
+  display:flex;
+}
+
+.member-notice-card{
+  width:min(430px, 100%);
+  max-height:86vh;
+  overflow:auto;
+  border-radius:30px;
+  background:rgba(250,247,240,.96);
+  color:#2f2a24;
+  border:1px solid rgba(255,255,255,.78);
+  box-shadow:0 28px 90px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.86);
+}
+
+.member-notice-top{
+  position:sticky;
+  top:0;
+  z-index:2;
+  min-height:54px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:0 54px;
+  border-bottom:1px solid rgba(47,42,36,.08);
+  background:rgba(250,247,240,.88);
+  backdrop-filter:blur(18px);
+  -webkit-backdrop-filter:blur(18px);
+}
+
+.member-notice-title{
+  font-weight:900;
+  letter-spacing:-.02em;
+}
+
+.member-notice-close{
+  position:absolute;
+  right:10px;
+  top:8px;
+  width:38px;
+  height:38px;
+  border:0;
+  border-radius:999px;
+  background:rgba(255,255,255,.68);
+  color:#2f2a24;
+  font-size:22px;
+  line-height:38px;
+  cursor:pointer;
+}
+
+.member-notice-body{
+  padding:18px;
+}
+
+.member-notice-hero{
+  padding:18px;
+  border-radius:24px;
+  background:linear-gradient(135deg, rgba(255,223,110,.42), rgba(255,255,255,.52));
+  border:1px solid rgba(255,255,255,.70);
+  margin-bottom:14px;
+}
+
+.member-notice-hero.compact{
+  background:rgba(255,255,255,.48);
+}
+
+.member-notice-hero h3{
+  margin:0 0 8px;
+  font-size:21px;
+  letter-spacing:-.03em;
+}
+
+.member-notice-hero p{
+  margin:0;
+  font-size:14px;
+  line-height:1.52;
+  color:rgba(47,42,36,.72);
+  font-weight:700;
+}
+
+.member-notice-order{
+  margin-top:12px;
+  padding:12px;
+  border-radius:18px;
+  background:rgba(255,255,255,.55);
+  border:1px solid rgba(255,255,255,.68);
+  font-size:13px;
+  line-height:1.58;
+  color:rgba(47,42,36,.76);
+}
+
+.member-notice-list-title{
+  margin:16px 2px 10px;
+  font-size:13px;
+  font-weight:900;
+  color:rgba(47,42,36,.60);
+}
+
+.member-notice-mini{
+  padding:12px 13px;
+  border-radius:18px;
+  background:rgba(255,255,255,.48);
+  border:1px solid rgba(255,255,255,.64);
+  margin-bottom:10px;
+  font-size:13px;
+  line-height:1.48;
+}
+
+.member-notice-mini strong{
+  display:block;
+  font-size:14px;
+  margin-bottom:3px;
+}
+
+.member-notice-empty{
+  padding:18px;
+  border-radius:20px;
+  background:rgba(255,255,255,.42);
+  text-align:center;
+  color:rgba(47,42,36,.58);
+  font-weight:700;
+}
+
+@media(max-width:480px){
+  .member-notice-bulb{
+    right:14px;
+    top:calc(env(safe-area-inset-top, 0px) + 78px);
+    width:44px;
+    height:44px;
+  }
+
+  .member-notice-modal{
+    padding:14px;
+  }
+
+  .member-notice-card{
+    border-radius:28px;
+    max-height:84vh;
+  }
+}
+
+
+/* V130 member notice close button */
+.member-notice-footer-close{
+  margin:16px 0 2px;
+  width:100%;
+  border:0;
+  border-radius:999px;
+  padding:13px 16px;
+  background:#1f1d1a;
+  color:#fff;
+  font-weight:850;
+  cursor:pointer;
+  transition:transform .14s ease, filter .14s ease;
+}
+
+.member-notice-footer-close:active{
+  transform:scale(.97);
+  filter:brightness(.94);
+}
+
+@media(hover:hover){
+  .member-notice-footer-close:hover{
+    transform:translateY(-1px);
+    filter:brightness(1.05);
+  }
+}
+
+.member-notice-close{
+  z-index:5 !important;
+}
+
 </style>
 
 <style>
@@ -9141,6 +9389,354 @@ window.addEventListener("load", function() {
 
   setTimeout(boot, 300);
   setTimeout(boot, 1200);
+})();
+</script>
+
+
+<script>
+/* V129 member bulb notifications */
+(function(){
+  var MEMBER_KEY = "sky31_member_v1";
+  var NOTICE_READ_PREFIX = "sky31_notice_read_";
+  var polling = false;
+  var lastRenderOrders = [];
+  var activeCompletedOrders = [];
+  var lastPhone = "";
+  var pollTimer = null;
+
+  function $(id){ return document.getElementById(id); }
+
+  function normalizePhone(phone){
+    return String(phone || "").replace(/\D/g, "");
+  }
+
+  function getMember(){
+    try{
+      var raw = localStorage.getItem(MEMBER_KEY);
+      return raw ? JSON.parse(raw) : null;
+    }catch(e){
+      return null;
+    }
+  }
+
+  function statusLabel(s){
+    var map = {
+      pending:"已下單",
+      confirmed:"已確認",
+      making:"製作中",
+      completed:"已完成，等待領取",
+      picked_up:"已領取",
+      cancelled:"已取消"
+    };
+    return map[s] || s || "-";
+  }
+
+  function esc(s){
+    return String(s == null ? "" : s).replace(/[&<>"']/g,function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+    });
+  }
+
+  function readKey(phone, orderNo){
+    return NOTICE_READ_PREFIX + normalizePhone(phone) + "_" + String(orderNo || "");
+  }
+
+  function isRead(phone, orderNo){
+    try{ return localStorage.getItem(readKey(phone, orderNo)) === "1"; }catch(e){ return false; }
+  }
+
+  function markRead(phone, orderNo){
+    try{ localStorage.setItem(readKey(phone, orderNo), "1"); }catch(e){}
+  }
+
+  function ensureBulb(){
+    if(!$("memberNoticeBulb")){
+      var bulb = document.createElement("button");
+      bulb.id = "memberNoticeBulb";
+      bulb.type = "button";
+      bulb.className = "member-notice-bulb";
+      bulb.title = "會員通知";
+      bulb.setAttribute("aria-label", "會員通知");
+      bulb.innerHTML = "💡";
+      bulb.onclick = openMemberNoticeModal;
+      document.body.appendChild(bulb);
+    }
+
+    if(!$("memberNoticeModal")){
+      var modal = document.createElement("div");
+      modal.id = "memberNoticeModal";
+      modal.className = "member-notice-modal";
+      modal.innerHTML =
+        '<div class="member-notice-card">' +
+          '<div class="member-notice-top">' +
+            '<div class="member-notice-title">會員通知</div>' +
+            '<button class="member-notice-close" type="button" onclick="closeMemberNoticeModal()">×</button>' +
+          '</div>' +
+          '<div class="member-notice-body" id="memberNoticeBody">' +
+            '<div class="member-notice-empty">暫時沒有通知</div>' +
+          '</div>' +
+        '</div>';
+      modal.addEventListener("click", function(e){
+        if(e.target === modal) closeMemberNoticeModal();
+      });
+      document.body.appendChild(modal);
+    }
+  }
+
+  function orderLine(order){
+    return '' +
+      '<div class="member-notice-order">' +
+        '<strong>訂單號：#' + esc(order.orderNo || "-") + '</strong><br>' +
+        '狀態：' + esc(statusLabel(order.status)) + '<br>' +
+        (order.pickupTime ? '取餐時間：' + esc(order.pickupTime) + '<br>' : '') +
+        '杯數：' + esc(order.totalCups || 0) + '　' +
+        '金額：MOP ' + esc(order.totalAmount || 0) +
+      '</div>';
+  }
+
+  function miniOrder(order){
+    return '' +
+      '<div class="member-notice-mini">' +
+        '<strong>#' + esc(order.orderNo || "-") + '｜' + esc(statusLabel(order.status)) + '</strong>' +
+        '<div>杯數：' + esc(order.totalCups || 0) + '　金額：MOP ' + esc(order.totalAmount || 0) + '</div>' +
+      '</div>';
+  }
+
+  function renderNotice(){
+    ensureBulb();
+
+    var bulb = $("memberNoticeBulb");
+    var body = $("memberNoticeBody");
+    var member = getMember();
+    var phone = normalizePhone(member && member.phone);
+
+    if(!member || !phone){
+      bulb.classList.remove("show","active");
+      if(body) body.innerHTML = '<div class="member-notice-empty">請先登入會員</div>';
+      return;
+    }
+
+    bulb.classList.add("show");
+
+    var unreadCompleted = activeCompletedOrders.filter(function(o){
+      return !isRead(phone, o.orderNo);
+    });
+
+    var hasActive = unreadCompleted.length > 0;
+    bulb.classList.toggle("active", hasActive);
+
+    if(!body) return;
+
+    if(hasActive){
+      var first = unreadCompleted[0];
+      body.innerHTML =
+        '<div class="member-notice-hero">' +
+          '<h3>☕ 你的訂單已完成，可以前來領取</h3>' +
+          '<p>請到 Sky31 Coffee 取餐。領取後此提醒會自動簡化。</p>' +
+          orderLine(first) +
+        '</div>' +
+        '<div class="member-notice-list-title">最近通知</div>' +
+        lastRenderOrders.slice(0,5).map(miniOrder).join("");
+    }else{
+      var recent = lastRenderOrders.slice(0,5);
+      if(recent.length){
+        body.innerHTML =
+          '<div class="member-notice-hero compact">' +
+            '<h3>目前沒有待領取提醒</h3>' +
+            '<p>已領取或未完成的訂單會以簡單紀錄保留在下方。</p>' +
+          '</div>' +
+          '<div class="member-notice-list-title">簡單訂單紀錄</div>' +
+          recent.map(miniOrder).join("");
+      }else{
+        body.innerHTML = '<div class="member-notice-empty">暫時沒有通知</div>';
+      }
+    }
+  }
+
+  window.openMemberNoticeModal = function(){
+    ensureBulb();
+
+    var member = getMember();
+    var phone = normalizePhone(member && member.phone);
+
+    activeCompletedOrders.forEach(function(o){
+      if(phone && o.orderNo) markRead(phone, o.orderNo);
+    });
+
+    renderNotice();
+
+    var modal = $("memberNoticeModal");
+    if(modal) modal.classList.add("show");
+    try{ document.body.style.overflow = "hidden"; }catch(e){}
+  };
+
+  window.closeMemberNoticeModal = function(){
+    var modal = $("memberNoticeModal");
+    if(modal) modal.classList.remove("show");
+    try{ document.body.style.overflow = ""; }catch(e){}
+  };
+
+  async function pollMemberOrders(){
+    if(polling) return;
+
+    var member = getMember();
+    var phone = normalizePhone(member && member.phone);
+
+    if(!phone){
+      lastPhone = "";
+      activeCompletedOrders = [];
+      lastRenderOrders = [];
+      renderNotice();
+      return;
+    }
+
+    polling = true;
+
+    try{
+      var res = await fetch("/api/member?phone=" + encodeURIComponent(phone) + "&t=" + Date.now(), {
+        cache:"no-store",
+        headers:{"Cache-Control":"no-store"}
+      });
+
+      var data = await res.json().catch(function(){ return null; });
+
+      if(!res.ok || !data || !data.ok || !data.member){
+        activeCompletedOrders = [];
+        lastRenderOrders = [];
+        renderNotice();
+        return;
+      }
+
+      var orders = Array.isArray(data.member.recentOrders) ? data.member.recentOrders : [];
+      lastRenderOrders = orders;
+
+      // Completed lights the bulb. Picked_up automatically turns it off and simplifies the notice page.
+      activeCompletedOrders = orders.filter(function(o){
+        return String(o.status || "") === "completed";
+      });
+
+      // If an order changed to picked_up, mark it read so it will not light up again.
+      orders.forEach(function(o){
+        if(String(o.status || "") === "picked_up" && o.orderNo){
+          markRead(phone, o.orderNo);
+        }
+      });
+
+      lastPhone = phone;
+      renderNotice();
+    }catch(e){
+      // Network errors should not disturb the UI.
+    }finally{
+      polling = false;
+    }
+  }
+
+  function patchMemberStateChange(){
+    if(window.__sky31V129MemberStatePatched) return;
+    window.__sky31V129MemberStatePatched = true;
+
+    var oldSetItem = localStorage.setItem;
+    localStorage.setItem = function(k, v){
+      var result = oldSetItem.apply(this, arguments);
+      if(k === MEMBER_KEY){
+        setTimeout(pollMemberOrders, 120);
+      }
+      return result;
+    };
+
+    var oldRemoveItem = localStorage.removeItem;
+    localStorage.removeItem = function(k){
+      var result = oldRemoveItem.apply(this, arguments);
+      if(k === MEMBER_KEY){
+        setTimeout(pollMemberOrders, 120);
+      }
+      return result;
+    };
+  }
+
+  function boot(){
+    ensureBulb();
+    patchMemberStateChange();
+    pollMemberOrders();
+
+    if(!pollTimer){
+      pollTimer = setInterval(pollMemberOrders, 10000);
+    }
+  }
+
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", boot);
+  }else{
+    boot();
+  }
+
+  setTimeout(boot, 500);
+  setTimeout(boot, 1500);
+
+  window.addEventListener("focus", pollMemberOrders);
+  document.addEventListener("visibilitychange", function(){
+    if(!document.hidden) pollMemberOrders();
+  });
+
+  document.addEventListener("click", function(){
+    setTimeout(pollMemberOrders, 150);
+  }, true);
+})();
+</script>
+
+
+<script>
+/* V130 member notice close button */
+(function(){
+  function ensureNoticeCloseButton(){
+    var body = document.getElementById("memberNoticeBody");
+    if(!body) return;
+
+    if(!document.getElementById("memberNoticeFooterClose")){
+      var btn = document.createElement("button");
+      btn.id = "memberNoticeFooterClose";
+      btn.type = "button";
+      btn.className = "member-notice-footer-close";
+      btn.textContent = "關閉視窗";
+      btn.onclick = function(){
+        if(typeof closeMemberNoticeModal === "function") closeMemberNoticeModal();
+      };
+      body.appendChild(btn);
+    }
+  }
+
+  function patchNoticeOpen(){
+    if(window.__sky31V130NoticeClosePatched) return;
+    window.__sky31V130NoticeClosePatched = true;
+
+    var oldOpen = window.openMemberNoticeModal;
+    if(typeof oldOpen === "function"){
+      window.openMemberNoticeModal = function(){
+        var result = oldOpen.apply(this, arguments);
+        setTimeout(ensureNoticeCloseButton, 80);
+        setTimeout(ensureNoticeCloseButton, 300);
+        return result;
+      };
+    }
+  }
+
+  function boot(){
+    patchNoticeOpen();
+    ensureNoticeCloseButton();
+  }
+
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", boot);
+  }else{
+    boot();
+  }
+
+  setTimeout(boot, 500);
+  setTimeout(boot, 1500);
+
+  document.addEventListener("click", function(){
+    setTimeout(ensureNoticeCloseButton, 100);
+  }, true);
 })();
 </script>
 
