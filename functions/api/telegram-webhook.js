@@ -507,10 +507,13 @@ async function handleMemberAction(env, cq, data) {
         messageId,
         buildMemberTelegramText(member, !!member.deletedAt, true),
         {
-          inline_keyboard: [[
-            { text: "✅ 確認刪除", callback_data: "member_delete_confirmed:" + phone },
-            { text: "取消", callback_data: "member_cancel_delete:" + phone }
-          ]]
+          inline_keyboard: [
+            [
+              { text: "✅ 確認刪除", callback_data: "member_delete_confirmed:" + phone },
+              { text: "取消", callback_data: "member_cancel_delete:" + phone }
+            ],
+            [{ text: "📋 返回用戶列表", callback_data: "member_list:all" }]
+          ]
         }
       );
 
@@ -780,16 +783,18 @@ function buildMemberReplyMarkup(member, deleted = false) {
   const phone = normalizePhone(member.phone);
   if (deleted) {
     return {
-      inline_keyboard: [[
-        { text: "↩️ 撤回", callback_data: "member_restore:" + phone }
-      ]]
+      inline_keyboard: [
+        [{ text: "↩️ 撤回", callback_data: "member_restore:" + phone }],
+        [{ text: "📋 返回用戶列表", callback_data: "member_list:all" }]
+      ]
     };
   }
 
   return {
-    inline_keyboard: [[
-      { text: "🗑️ 刪除", callback_data: "member_delete:" + phone }
-    ]]
+    inline_keyboard: [
+      [{ text: "🗑️ 刪除", callback_data: "member_delete:" + phone }],
+      [{ text: "📋 返回用戶列表", callback_data: "member_list:all" }]
+    ]
   };
 }
 
