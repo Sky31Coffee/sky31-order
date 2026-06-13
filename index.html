@@ -5083,6 +5083,104 @@ button[disabled],
   }
 }
 
+
+/* V141 top icons button effects */
+/* Dedicated stronger interaction effects for the three header icons: bulb / search / profile. */
+
+.sky31-header-actions > #memberNoticeBulb,
+.sky31-header-actions > #orderStatusButton,
+.sky31-header-actions > #profileButton{
+  transform:translateZ(0) scale(1) !important;
+  transition:
+    transform .16s cubic-bezier(.22,.9,.2,1.1),
+    filter .16s ease,
+    background-color .18s ease,
+    border-color .18s ease,
+    box-shadow .18s ease,
+    opacity .16s ease !important;
+  will-change:transform, filter, box-shadow;
+  cursor:pointer !important;
+  -webkit-tap-highlight-color:transparent !important;
+  touch-action:manipulation !important;
+  overflow:hidden !important;
+}
+
+.sky31-header-actions > #memberNoticeBulb::before,
+.sky31-header-actions > #orderStatusButton::before,
+.sky31-header-actions > #profileButton::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  border-radius:inherit;
+  background:radial-gradient(circle at 50% 20%, rgba(255,255,255,.62), rgba(255,255,255,0) 58%);
+  opacity:0;
+  pointer-events:none;
+  transition:opacity .18s ease;
+}
+
+@media(hover:hover){
+  .sky31-header-actions > #memberNoticeBulb:hover,
+  .sky31-header-actions > #orderStatusButton:hover,
+  .sky31-header-actions > #profileButton:hover{
+    transform:translateY(-3px) scale(1.095) !important;
+    filter:brightness(1.08) saturate(1.08) !important;
+    background:rgba(255,255,255,.82) !important;
+    border-color:rgba(255,255,255,.86) !important;
+    box-shadow:
+      0 16px 36px rgba(0,0,0,.18),
+      inset 0 1px 0 rgba(255,255,255,.88) !important;
+  }
+
+  .sky31-header-actions > #memberNoticeBulb:hover::before,
+  .sky31-header-actions > #orderStatusButton:hover::before,
+  .sky31-header-actions > #profileButton:hover::before{
+    opacity:1;
+  }
+
+  .sky31-header-actions > #memberNoticeBulb.active:hover{
+    background:rgba(255,224,88,.96) !important;
+    box-shadow:
+      0 16px 40px rgba(232,173,39,.42),
+      inset 0 1px 0 rgba(255,255,255,.90) !important;
+  }
+}
+
+.sky31-header-actions > #memberNoticeBulb:active,
+.sky31-header-actions > #orderStatusButton:active,
+.sky31-header-actions > #profileButton:active,
+.sky31-header-actions > #memberNoticeBulb.sky31-top-icon-pressed,
+.sky31-header-actions > #orderStatusButton.sky31-top-icon-pressed,
+.sky31-header-actions > #profileButton.sky31-top-icon-pressed{
+  transform:translateY(1px) scale(.88) !important;
+  filter:brightness(.90) saturate(.94) !important;
+  box-shadow:
+    0 4px 10px rgba(0,0,0,.16),
+    inset 0 2px 5px rgba(0,0,0,.08) !important;
+}
+
+.sky31-header-actions > #memberNoticeBulb:focus-visible,
+.sky31-header-actions > #orderStatusButton:focus-visible,
+.sky31-header-actions > #profileButton:focus-visible{
+  outline:none !important;
+  box-shadow:
+    0 0 0 3px rgba(122,75,0,.20),
+    0 14px 34px rgba(0,0,0,.16),
+    inset 0 1px 0 rgba(255,255,255,.86) !important;
+}
+
+.sky31-header-actions > #memberNoticeBulb.active{
+  animation:sky31BulbPulseV136 1.55s ease-in-out infinite, sky31TopIconGlowV141 2.4s ease-in-out infinite !important;
+}
+
+@keyframes sky31TopIconGlowV141{
+  0%,100%{
+    filter:brightness(1) saturate(1);
+  }
+  50%{
+    filter:brightness(1.08) saturate(1.12);
+  }
+}
+
 </style>
 
 <style>
@@ -10055,6 +10153,65 @@ window.addEventListener("load", function() {
 
   document.addEventListener("click", function(){
     setTimeout(pollMemberOrders, 180);
+  }, true);
+})();
+</script>
+
+
+<script>
+/* V141 top icons button effects */
+(function(){
+  function topIconButtons(){
+    return Array.prototype.slice.call(document.querySelectorAll(
+      ".sky31-header-actions > #memberNoticeBulb, .sky31-header-actions > #orderStatusButton, .sky31-header-actions > #profileButton"
+    ));
+  }
+
+  function addPressed(el){
+    if(!el) return;
+    el.classList.add("sky31-top-icon-pressed");
+    clearTimeout(el.__sky31TopIconTimer);
+    el.__sky31TopIconTimer = setTimeout(function(){
+      el.classList.remove("sky31-top-icon-pressed");
+    }, 180);
+  }
+
+  function bindTopIconEffects(){
+    topIconButtons().forEach(function(btn){
+      if(btn.__sky31V141Bound) return;
+      btn.__sky31V141Bound = true;
+
+      btn.addEventListener("pointerdown", function(){
+        addPressed(btn);
+      }, {passive:true});
+
+      btn.addEventListener("touchstart", function(){
+        addPressed(btn);
+      }, {passive:true});
+
+      btn.addEventListener("keydown", function(e){
+        if(e.key === "Enter" || e.key === " "){
+          addPressed(btn);
+        }
+      });
+    });
+  }
+
+  function boot(){
+    bindTopIconEffects();
+  }
+
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", boot);
+  }else{
+    boot();
+  }
+
+  setTimeout(boot, 300);
+  setTimeout(boot, 1200);
+
+  document.addEventListener("click", function(){
+    setTimeout(boot, 80);
   }, true);
 })();
 </script>
