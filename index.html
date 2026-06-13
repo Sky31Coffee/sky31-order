@@ -1716,7 +1716,7 @@ button[type="submit"] span{
   border-radius:0;
   padding:28px 18px 30px;
   margin:12px 0 18px;
-  box-shadow:none;
+  box-shadow:0 3px 10px rgba(34,92,184,.035), inset 0 1px 0 rgba(255,255,255,.12);
   border:none;
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Microsoft JhengHei",sans-serif;
 }
@@ -3568,7 +3568,7 @@ input.input-error{
   width:100%;
   border:0;
   border-top:1px solid rgba(47,42,36,.08);
-  background:rgba(255,255,255,.22);
+  background:rgba(255,255,255,0.018);
   padding:10px 14px;
   font-weight:820;
   color:#2f2a24;
@@ -4383,6 +4383,22 @@ input.input-error{
   overflow:visible !important;
 }
 
+
+@media(hover:hover){
+  #sky31PersistentCart:hover .sky31-persistent-cart-shell{
+    background:rgba(255,255,255,.34) !important;
+    border:1px solid rgba(255,255,255,.58) !important;
+    box-shadow:0 14px 30px rgba(34,92,184,.16), inset 0 1px 0 rgba(255,255,255,.62), inset 0 -1px 0 rgba(255,255,255,.18) !important;
+    backdrop-filter:blur(28px) saturate(1.28) !important;
+    -webkit-backdrop-filter:blur(28px) saturate(1.28) !important;
+  }
+  #sky31PersistentCart:hover .sky31-persistent-cart-shell::after{
+    background:linear-gradient(135deg, rgba(255,255,255,.22), rgba(255,255,255,.06) 40%, rgba(122,169,255,.12) 100%) !important;
+  }
+  #sky31PersistentCart:hover .sky31-persistent-cart-shell::before{
+    background:linear-gradient(180deg, rgba(255,255,255,.80), rgba(255,255,255,.10)) !important;
+  }
+}
 @media(max-width:480px){
   #orderStatusModal.order-status-modal,
   #orderStatusModal{
@@ -4689,7 +4705,7 @@ input.input-error{
 .member-notice-empty{
   padding:18px;
   border-radius:20px;
-  background:rgba(255,255,255,.22);
+  background:rgba(255,255,255,0.018);
   text-align:center;
   color:rgba(47,42,36,.58);
   font-weight:700;
@@ -5381,11 +5397,11 @@ body:has(#orderApp.hidden) #sky31PersistentCart.sky31-cart-body-level{
   align-items:center;
   justify-content:center;
   border-radius:20px;
-  background:rgba(255,255,255,.22);
-  border:1px solid rgba(255,255,255,.46);
-  box-shadow:0 10px 24px rgba(34,92,184,.12), inset 0 1px 0 rgba(255,255,255,.52), inset 0 -1px 0 rgba(255,255,255,.18);
-  backdrop-filter:blur(24px) saturate(1.22);
-  -webkit-backdrop-filter:blur(24px) saturate(1.22);
+  background:rgba(255,255,255,0.018);
+  border:1px solid rgba(255,255,255,0.18);
+  box-shadow:none;
+  backdrop-filter:blur(6px) saturate(1.04);
+  -webkit-backdrop-filter:blur(6px) saturate(1.04);
   overflow:visible;
 }
 
@@ -5395,7 +5411,7 @@ body:has(#orderApp.hidden) #sky31PersistentCart.sky31-cart-body-level{
   position:absolute;
   inset:0;
   border-radius:inherit;
-  background:linear-gradient(135deg, rgba(255,255,255,.18), rgba(255,255,255,.04) 38%, rgba(122,169,255,.10) 100%);
+  background:linear-gradient(135deg, rgba(255,255,255,.06), rgba(255,255,255,.015) 42%, rgba(122,169,255,.045) 100%);
   pointer-events:none;
 }
 
@@ -5407,7 +5423,7 @@ body:has(#orderApp.hidden) #sky31PersistentCart.sky31-cart-body-level{
   top:8px;
   height:16px;
   border-radius:999px;
-  background:linear-gradient(180deg, rgba(255,255,255,.72), rgba(255,255,255,.08));
+  background:linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,.02));
   pointer-events:none;
 }
 
@@ -5415,7 +5431,7 @@ body:has(#orderApp.hidden) #sky31PersistentCart.sky31-cart-body-level{
   position:relative;
   width:28px;
   height:28px;
-  color:#3f74cc;
+  color:rgba(63,116,204,.92);
   pointer-events:none;
   z-index:1;
 }
