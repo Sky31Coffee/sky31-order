@@ -3862,6 +3862,404 @@ input.input-error{
   letter-spacing:.01em !important;
 }
 
+
+/* V115 force member before order */
+/* Old customer-info modal is disabled; checkout requires logged-in member. */
+#customerModal{
+  display:none !important;
+}
+
+.checkout-member-modal{
+  position:fixed;
+  inset:0;
+  z-index:10060;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  padding:18px;
+  background:rgba(0,0,0,.30);
+  backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(12px);
+}
+
+.checkout-member-modal.show{
+  display:flex;
+}
+
+.checkout-member-card{
+  width:min(430px, 100%);
+  max-height:86vh;
+  overflow:auto;
+  padding:0;
+  border-radius:28px;
+  color:#2f2a24;
+  background:rgba(250,247,240,.96);
+  border:1px solid rgba(255,255,255,.74);
+  box-shadow:0 28px 90px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.86);
+}
+
+.checkout-member-top{
+  position:sticky;
+  top:0;
+  height:54px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:0 54px;
+  background:rgba(250,247,240,.88);
+  backdrop-filter:blur(18px);
+  -webkit-backdrop-filter:blur(18px);
+  border-bottom:1px solid rgba(47,42,36,.08);
+  z-index:2;
+}
+
+.checkout-member-title{
+  font-weight:900;
+  letter-spacing:-.02em;
+}
+
+.checkout-member-close{
+  position:absolute;
+  right:10px;
+  top:8px;
+  width:38px;
+  height:38px;
+  border:0;
+  border-radius:999px;
+  background:rgba(255,255,255,.68);
+  font-size:22px;
+  line-height:38px;
+  cursor:pointer;
+}
+
+.checkout-member-body{
+  padding:20px 20px 22px;
+}
+
+.checkout-member-hero h2{
+  margin:0;
+  font-size:24px;
+  letter-spacing:-.035em;
+  line-height:1.1;
+}
+
+.checkout-member-hero p{
+  margin:8px 0 16px;
+  color:rgba(47,42,36,.62);
+  font-size:14px;
+  line-height:1.45;
+  font-weight:620;
+}
+
+.checkout-member-form label{
+  display:block;
+  margin:12px 0 6px;
+  font-size:12px;
+  font-weight:760;
+  color:rgba(47,42,36,.68);
+}
+
+.checkout-member-form input{
+  width:100%;
+  box-sizing:border-box;
+  border:1px solid rgba(47,42,36,.12);
+  background:rgba(255,255,255,.72);
+  border-radius:16px;
+  padding:13px 14px;
+  font-size:15px;
+  outline:none;
+  color:#2f2a24;
+}
+
+.checkout-member-actions{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:10px;
+  margin-top:14px;
+}
+
+.checkout-member-btn{
+  border:0;
+  border-radius:999px;
+  padding:13px 14px;
+  font-weight:850;
+  cursor:pointer;
+}
+
+.checkout-member-btn.primary{
+  background:#1f1d1a;
+  color:#fff;
+}
+
+.checkout-member-btn.secondary{
+  background:rgba(255,255,255,.66);
+  color:#2f2a24;
+}
+
+.checkout-member-btn.danger{
+  background:rgba(120,36,24,.10);
+  color:#7a251c;
+}
+
+.checkout-member-msg{
+  min-height:18px;
+  margin-top:12px;
+  font-size:13px;
+  font-weight:700;
+  line-height:1.45;
+  color:rgba(47,42,36,.72);
+}
+
+.checkout-member-msg.error{
+  color:#9a2d22;
+}
+
+.checkout-member-msg.success{
+  color:#1f7a47;
+}
+
+.checkout-member-register{
+  display:none;
+  margin-top:14px;
+  padding:14px;
+  border-radius:20px;
+  background:rgba(255,255,255,.56);
+  border:1px solid rgba(255,255,255,.70);
+}
+
+.checkout-member-register.show{
+  display:block;
+}
+
+.checkout-member-warning{
+  margin-bottom:12px;
+  padding:12px 14px;
+  border-radius:18px;
+  background:rgba(120,36,24,.08);
+  color:#7a251c;
+  font-size:13px;
+  line-height:1.45;
+  font-weight:750;
+}
+
+.checkout-customer-info.member-required{
+  background:rgba(120,36,24,.08) !important;
+  border-color:rgba(120,36,24,.14) !important;
+  color:#7a251c !important;
+  font-weight:760 !important;
+}
+
+@media(max-width:430px){
+  .checkout-member-modal{
+    padding:14px;
+  }
+  .checkout-member-card{
+    border-radius:26px;
+  }
+}
+
+
+/* V116 checkout member register page */
+/* Checkout member register becomes an independent page with back button. */
+
+.checkout-member-back{
+  position:absolute;
+  left:10px;
+  top:8px;
+  width:38px;
+  height:38px;
+  border:0;
+  border-radius:999px;
+  background:rgba(255,255,255,.68);
+  color:#2f2a24;
+  font-size:22px;
+  font-weight:900;
+  line-height:38px;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+}
+
+.checkout-member-modal.register-mode .checkout-member-back{
+  display:inline-flex !important;
+}
+
+.checkout-member-modal.register-mode .checkout-member-title{
+  font-size:0;
+}
+
+.checkout-member-modal.register-mode .checkout-member-title::after{
+  content:"會員註冊";
+  font-size:16px;
+  font-weight:900;
+}
+
+.checkout-member-modal.register-mode .checkout-member-hero,
+.checkout-member-modal.register-mode #checkoutMemberWarning,
+.checkout-member-modal.register-mode .checkout-member-body > .checkout-member-form,
+.checkout-member-modal.register-mode .checkout-member-body > .checkout-member-actions,
+.checkout-member-modal.register-mode #checkoutMemberMsg{
+  display:none !important;
+}
+
+.checkout-member-modal.register-mode #checkoutMemberRegister{
+  display:block !important;
+  margin-top:0 !important;
+}
+
+.checkout-member-modal.register-mode #checkoutMemberRegister .checkout-member-warning{
+  margin-top:0;
+}
+
+/* Click feedback for register and action buttons */
+.checkout-member-btn,
+.member-btn,
+.member-menu-card{
+  transition:transform .12s ease, filter .12s ease, opacity .12s ease, box-shadow .12s ease;
+  -webkit-tap-highlight-color:transparent;
+}
+
+.checkout-member-btn:active,
+.member-btn:active,
+.member-menu-card:active{
+  transform:scale(.975);
+  filter:brightness(.96);
+}
+
+.checkout-member-btn.secondary:active{
+  box-shadow:inset 0 2px 8px rgba(0,0,0,.10);
+}
+
+
+/* V117 register page logout center */
+/* Put all member toast messages, including successful logout, in the center of the screen. */
+
+.member-toast{
+  left:50% !important;
+  top:50% !important;
+  bottom:auto !important;
+  transform:translate(-50%, -50%) scale(.96) !important;
+  z-index:10080 !important;
+  max-width:min(320px, calc(100% - 48px)) !important;
+  width:max-content !important;
+  text-align:center !important;
+  padding:15px 20px !important;
+  border-radius:22px !important;
+  background:rgba(31,29,26,.94) !important;
+  color:#fff !important;
+  box-shadow:0 22px 70px rgba(0,0,0,.30) !important;
+}
+
+.member-toast.show{
+  opacity:1 !important;
+  transform:translate(-50%, -50%) scale(1) !important;
+}
+
+
+/* V118 checkout register hover */
+/* Strong hover effect for the checkout login page's "會員註冊" button. */
+
+.checkout-member-btn{
+  position:relative !important;
+  overflow:hidden !important;
+}
+
+.checkout-member-btn.secondary{
+  transition:
+    transform .16s ease,
+    box-shadow .16s ease,
+    background .16s ease,
+    color .16s ease,
+    filter .16s ease !important;
+}
+
+@media (hover:hover){
+  .checkout-member-body > .checkout-member-actions .checkout-member-btn.secondary:hover{
+    transform:translateY(-2px) scale(1.015) !important;
+    background:rgba(31,29,26,.92) !important;
+    color:#fff !important;
+    box-shadow:0 12px 28px rgba(31,29,26,.20), inset 0 1px 0 rgba(255,255,255,.18) !important;
+    filter:none !important;
+  }
+
+  .checkout-member-body > .checkout-member-actions .checkout-member-btn.secondary:hover::after{
+    content:"";
+    position:absolute;
+    inset:0;
+    border-radius:999px;
+    background:linear-gradient(120deg, transparent 0%, rgba(255,255,255,.24) 45%, transparent 75%);
+    transform:translateX(-120%);
+    animation:checkoutRegisterShine .9s ease forwards;
+    pointer-events:none;
+  }
+}
+
+.checkout-member-body > .checkout-member-actions .checkout-member-btn.secondary:focus-visible{
+  outline:3px solid rgba(31,29,26,.24) !important;
+  outline-offset:3px !important;
+  background:rgba(31,29,26,.90) !important;
+  color:#fff !important;
+}
+
+.checkout-member-body > .checkout-member-actions .checkout-member-btn.secondary:active{
+  transform:scale(.965) !important;
+  box-shadow:inset 0 3px 10px rgba(0,0,0,.18) !important;
+}
+
+@keyframes checkoutRegisterShine{
+  from{transform:translateX(-120%);}
+  to{transform:translateX(120%);}
+}
+
+
+/* V119 register cancel hover */
+/* Add the same hover/active feedback to the register page's "取消註冊" button. */
+
+#checkoutMemberRegister .checkout-member-btn.secondary{
+  position:relative !important;
+  overflow:hidden !important;
+  transition:
+    transform .16s ease,
+    box-shadow .16s ease,
+    background .16s ease,
+    color .16s ease,
+    filter .16s ease !important;
+}
+
+@media (hover:hover){
+  #checkoutMemberRegister .checkout-member-btn.secondary:hover{
+    transform:translateY(-2px) scale(1.015) !important;
+    background:rgba(31,29,26,.92) !important;
+    color:#fff !important;
+    box-shadow:0 12px 28px rgba(31,29,26,.20), inset 0 1px 0 rgba(255,255,255,.18) !important;
+    filter:none !important;
+  }
+
+  #checkoutMemberRegister .checkout-member-btn.secondary:hover::after{
+    content:"";
+    position:absolute;
+    inset:0;
+    border-radius:999px;
+    background:linear-gradient(120deg, transparent 0%, rgba(255,255,255,.24) 45%, transparent 75%);
+    transform:translateX(-120%);
+    animation:checkoutRegisterShine .9s ease forwards;
+    pointer-events:none;
+  }
+}
+
+#checkoutMemberRegister .checkout-member-btn.secondary:focus-visible{
+  outline:3px solid rgba(31,29,26,.24) !important;
+  outline-offset:3px !important;
+  background:rgba(31,29,26,.90) !important;
+  color:#fff !important;
+}
+
+#checkoutMemberRegister .checkout-member-btn.secondary:active{
+  transform:scale(.965) !important;
+  box-shadow:inset 0 3px 10px rgba(0,0,0,.18) !important;
+}
+
 </style>
 
 <style>
@@ -7563,6 +7961,575 @@ window.addEventListener("load", function() {
 
   document.addEventListener("click", function(){
     setTimeout(fixTomorrowEveningDisplay, 80);
+  }, true);
+})();
+</script>
+
+
+<script>
+/* V115 force member before order */
+(function(){
+  var MEMBER_KEY = "sky31_member_v1";
+
+  function $(id){ return document.getElementById(id); }
+
+  function phoneNorm(s){
+    return String(s || "").replace(/\D/g, "");
+  }
+
+  function esc(s){
+    return String(s == null ? "" : s).replace(/[&<>"']/g,function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+    });
+  }
+
+  function getMember(){
+    try{
+      var raw = localStorage.getItem(MEMBER_KEY);
+      return raw ? JSON.parse(raw) : null;
+    }catch(e){
+      return null;
+    }
+  }
+
+  function hasMember(){
+    var m = getMember();
+    return !!(m && m.phone);
+  }
+
+  function saveMember(member){
+    localStorage.setItem(MEMBER_KEY, JSON.stringify(member || {}));
+  }
+
+  function setOrderCustomerFromMember(member){
+    if(!member || !member.phone) return false;
+
+    var nameEl = $("name");
+    var phoneEl = $("phone");
+    if(nameEl) nameEl.value = member.name || "";
+    if(phoneEl) phoneEl.value = member.phone || "";
+
+    var modalName = $("modalName");
+    var modalPhone = $("modalPhone");
+    if(modalName) modalName.value = member.name || "";
+    if(modalPhone) modalPhone.value = member.phone || "";
+
+    try{
+      if(typeof updateCheckoutCustomerInfo === "function") updateCheckoutCustomerInfo();
+    }catch(e){}
+
+    try{
+      var btn = $("profileButton");
+      if(btn){
+        btn.classList.add("member-logged");
+        btn.title = "會員：" + (member.name || member.phone);
+        btn.setAttribute("aria-label", btn.title);
+      }
+    }catch(e){}
+
+    return true;
+  }
+
+  function setCheckoutMsg(msg, type){
+    var el = $("checkoutMemberMsg");
+    if(!el) return;
+    el.textContent = msg || "";
+    el.classList.toggle("error", type === "error");
+    el.classList.toggle("success", type === "success");
+  }
+
+  function ensureCheckoutMemberModal(){
+    if($("checkoutMemberModal")) return;
+
+    var div = document.createElement("div");
+    div.id = "checkoutMemberModal";
+    div.className = "checkout-member-modal";
+    div.innerHTML =
+      '<div class="checkout-member-card">' +
+        '<div class="checkout-member-top">' +
+          '<div class="checkout-member-title">會員登入</div>' +
+          '<button class="checkout-member-close" type="button" onclick="closeCheckoutMemberModal()">×</button>' +
+        '</div>' +
+        '<div class="checkout-member-body">' +
+          '<div class="checkout-member-hero">' +
+            '<h2>請先登入會員</h2>' +
+            '<p>尚未登入會員，請先登入會員後再發送訂單。</p>' +
+          '</div>' +
+
+          '<div id="checkoutMemberWarning" class="checkout-member-warning">尚未登入會員，請先登入會員後再發送訂單。</div>' +
+
+          '<div class="checkout-member-form">' +
+            '<label>手機 Phone</label>' +
+            '<input id="checkoutMemberPhone" inputmode="tel" placeholder="輸入會員手機號碼">' +
+          '</div>' +
+
+          '<div class="checkout-member-actions">' +
+            '<button class="checkout-member-btn primary" type="button" onclick="checkoutMemberLogin()">確定登入</button>' +
+            '<button class="checkout-member-btn secondary" type="button" onclick="checkoutShowRegister()">會員註冊</button>' +
+          '</div>' +
+
+          '<div id="checkoutMemberMsg" class="checkout-member-msg"></div>' +
+
+          '<div id="checkoutMemberRegister" class="checkout-member-register">' +
+            '<div class="checkout-member-warning">此電話尚未登記會員。請補充資料完成會員註冊。</div>' +
+            '<div class="checkout-member-form">' +
+              '<label>手機 Phone</label>' +
+              '<input id="checkoutRegPhone" inputmode="tel" placeholder="手機號碼">' +
+              '<label>姓名 Name</label>' +
+              '<input id="checkoutRegName" placeholder="輸入姓名">' +
+              '<label>生日日期 Birthday</label>' +
+              '<input id="checkoutRegBirthday" type="date">' +
+            '</div>' +
+            '<div class="checkout-member-actions">' +
+              '<button class="checkout-member-btn primary" type="button" onclick="checkoutMemberRegister()">確認註冊</button>' +
+              '<button class="checkout-member-btn secondary" type="button" onclick="checkoutHideRegister()">取消註冊</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+
+    document.body.appendChild(div);
+
+    div.addEventListener("click", function(e){
+      if(e.target === div) closeCheckoutMemberModal();
+    });
+  }
+
+  window.closeCheckoutMemberModal = function(){
+    var modal = $("checkoutMemberModal");
+    if(modal) modal.classList.remove("show");
+    try{ document.body.style.overflow = ""; }catch(e){}
+  };
+
+  window.openCheckoutMemberModal = function(){
+    ensureCheckoutMemberModal();
+
+    var modal = $("checkoutMemberModal");
+    var phone = $("checkoutMemberPhone");
+    var reg = $("checkoutMemberRegister");
+
+    if(phone) phone.value = phone.value || "";
+    if(reg) reg.classList.remove("show");
+    setCheckoutMsg("");
+
+    modal.classList.add("show");
+    document.body.style.overflow = "hidden";
+
+    setTimeout(function(){
+      if(phone) phone.focus();
+    },80);
+  };
+
+  async function fetchMemberByPhone(phone){
+    var res = await fetch("/api/member?phone=" + encodeURIComponent(phoneNorm(phone)) + "&t=" + Date.now(), {cache:"no-store"});
+    var data = await res.json();
+    if(!res.ok || !data.ok) throw new Error(data.error || "查詢不到會員資料");
+    return data.member;
+  }
+
+  async function registerMember(payload){
+    var res = await fetch("/api/member", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify(payload)
+    });
+    var data = await res.json();
+    if(!res.ok || !data.ok) throw new Error(data.error || "會員註冊失敗");
+    return data.member;
+  }
+
+  window.checkoutMemberLogin = async function(){
+    ensureCheckoutMemberModal();
+
+    var phone = phoneNorm(($("checkoutMemberPhone") || {}).value || "");
+    if(!phone){
+      setCheckoutMsg("請輸入會員手機號碼。", "error");
+      return;
+    }
+
+    setCheckoutMsg("登入中...");
+    try{
+      var member = await fetchMemberByPhone(phone);
+      saveMember(member);
+      setOrderCustomerFromMember(member);
+
+      setCheckoutMsg("登入成功，請再次按「確認訂單」發送訂單。", "success");
+
+      setTimeout(function(){
+        closeCheckoutMemberModal();
+        try{ if(typeof updateCheckoutCustomerInfo === "function") updateCheckoutCustomerInfo(); }catch(e){}
+      }, 900);
+    }catch(e){
+      setCheckoutMsg("該賬號不存在，是否需要註冊賬戶？請按「會員註冊」補充資料。", "error");
+      var reg = $("checkoutMemberRegister");
+      var regPhone = $("checkoutRegPhone");
+      if(regPhone) regPhone.value = phone;
+      if(reg) reg.classList.add("show");
+      setTimeout(function(){
+        var name = $("checkoutRegName");
+        if(name) name.focus();
+      },80);
+    }
+  };
+
+  window.checkoutShowRegister = function(){
+    ensureCheckoutMemberModal();
+
+    var phone = phoneNorm(($("checkoutMemberPhone") || {}).value || "");
+    var reg = $("checkoutMemberRegister");
+    var regPhone = $("checkoutRegPhone");
+    var regName = $("checkoutRegName");
+
+    if(regPhone) regPhone.value = phone;
+    if(reg) reg.classList.add("show");
+    setCheckoutMsg("請補充資料完成會員註冊。");
+
+    setTimeout(function(){
+      if(!phone && regPhone) regPhone.focus();
+      else if(regName) regName.focus();
+    },80);
+  };
+
+  window.checkoutHideRegister = function(){
+    var reg = $("checkoutMemberRegister");
+    if(reg) reg.classList.remove("show");
+    setCheckoutMsg("");
+  };
+
+  window.checkoutMemberRegister = async function(){
+    ensureCheckoutMemberModal();
+
+    var phone = phoneNorm(($("checkoutRegPhone") || {}).value || "");
+    var name = (($("checkoutRegName") || {}).value || "").trim();
+    var birthday = (($("checkoutRegBirthday") || {}).value || "").trim();
+
+    if(!phone || !name || !birthday){
+      setCheckoutMsg("請完整填寫手機、姓名和生日日期。", "error");
+      return;
+    }
+
+    setCheckoutMsg("註冊中...");
+    try{
+      try{
+        await fetchMemberByPhone(phone);
+        setCheckoutMsg("此電話已經登記為會員，請直接登入。", "error");
+        return;
+      }catch(_){}
+
+      var member = await registerMember({phone:phone, name:name, birthday:birthday});
+      saveMember(member);
+      setOrderCustomerFromMember(member);
+
+      setCheckoutMsg("帳號資料已經成功登記為會員。", "success");
+
+      setTimeout(function(){
+        closeCheckoutMemberModal();
+        try{ if(typeof updateCheckoutCustomerInfo === "function") updateCheckoutCustomerInfo(); }catch(e){}
+      }, 1100);
+    }catch(e){
+      setCheckoutMsg(e.message || "會員註冊失敗，請稍後再試。", "error");
+    }
+  };
+
+  function showNeedLogin(){
+    var err = document.getElementById("errorMsg");
+    if(err){
+      err.textContent = "尚未登入會員，請先登入會員後再發送訂單。";
+      err.style.display = "block";
+    }
+    openCheckoutMemberModal();
+  }
+
+  function patchCheckoutSubmit(){
+    if(window.__sky31V115Patched) return;
+    window.__sky31V115Patched = true;
+
+    var oldSubmit = window.submitOrder;
+    window.submitOrder = async function(){
+      try{
+        if(typeof cart !== "undefined" && Array.isArray(cart) && !cart.length){
+          if(typeof oldSubmit === "function") return oldSubmit.apply(this, arguments);
+          return;
+        }
+      }catch(e){}
+
+      var member = getMember();
+      if(!member || !member.phone){
+        showNeedLogin();
+        return;
+      }
+
+      setOrderCustomerFromMember(member);
+
+      if(typeof oldSubmit === "function"){
+        return oldSubmit.apply(this, arguments);
+      }
+    };
+
+    // Disable the old customer data modal as a fallback.
+    window.openCustomerModal = function(){
+      showNeedLogin();
+    };
+  }
+
+  function patchCheckoutCustomerInfo(){
+    if(window.__sky31V115InfoPatched) return;
+    window.__sky31V115InfoPatched = true;
+
+    var oldUpdate = window.updateCheckoutCustomerInfo;
+    window.updateCheckoutCustomerInfo = function(){
+      if(typeof oldUpdate === "function") oldUpdate.apply(this, arguments);
+
+      var box = $("checkoutCustomerInfo");
+      if(!box) return;
+
+      var member = getMember();
+      if(member && member.phone){
+        box.classList.remove("member-required");
+        box.innerHTML = '<span>👤 ' + esc(member.name || "-") + '</span> <span>｜</span> <span>📞 ' + esc(member.phone || "-") + '</span>';
+      }else{
+        box.classList.add("member-required");
+        box.innerHTML = '請先登入會員後再發送訂單';
+      }
+    };
+  }
+
+  function boot(){
+    ensureCheckoutMemberModal();
+    patchCheckoutSubmit();
+    patchCheckoutCustomerInfo();
+
+    var member = getMember();
+    if(member && member.phone){
+      setOrderCustomerFromMember(member);
+    }else{
+      try{ if(typeof updateCheckoutCustomerInfo === "function") updateCheckoutCustomerInfo(); }catch(e){}
+    }
+  }
+
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", boot);
+  }else{
+    boot();
+  }
+
+  setTimeout(boot, 300);
+  setTimeout(boot, 1000);
+
+  document.addEventListener("click", function(){
+    setTimeout(function(){
+      try{ if(typeof updateCheckoutCustomerInfo === "function") updateCheckoutCustomerInfo(); }catch(e){}
+    }, 80);
+  }, true);
+})();
+</script>
+
+
+<script>
+/* V116 checkout member register page */
+(function(){
+  function $(id){ return document.getElementById(id); }
+
+  function ensureCheckoutBackButton(){
+    var modal = $("checkoutMemberModal");
+    if(!modal) return;
+
+    var top = modal.querySelector(".checkout-member-top");
+    if(!top) return;
+
+    if(!modal.querySelector(".checkout-member-back")){
+      var back = document.createElement("button");
+      back.type = "button";
+      back.className = "checkout-member-back";
+      back.textContent = "‹";
+      back.title = "返回";
+      back.setAttribute("aria-label", "返回");
+      back.onclick = function(e){
+        if(e) e.preventDefault();
+        window.checkoutBackToLogin();
+        return false;
+      };
+      top.insertBefore(back, top.firstChild);
+    }
+  }
+
+  function checkoutSetRegisterMode(on){
+    var modal = $("checkoutMemberModal");
+    if(!modal) return;
+
+    ensureCheckoutBackButton();
+
+    modal.classList.toggle("register-mode", !!on);
+
+    var title = modal.querySelector(".checkout-member-title");
+    if(title){
+      title.textContent = on ? "會員註冊" : "會員登入";
+    }
+
+    var register = $("checkoutMemberRegister");
+    if(register){
+      register.classList.toggle("show", !!on);
+    }
+
+    if(!on){
+      var msg = $("checkoutMemberMsg");
+      if(msg){
+        msg.textContent = "";
+        msg.classList.remove("error","success");
+      }
+    }
+  }
+
+  window.checkoutBackToLogin = function(){
+    checkoutSetRegisterMode(false);
+    setTimeout(function(){
+      var phone = $("checkoutMemberPhone");
+      if(phone) phone.focus();
+    }, 80);
+  };
+
+  function patchCheckoutMemberRegisterFlow(){
+    if(window.__sky31V116RegisterFlowPatched) return;
+    window.__sky31V116RegisterFlowPatched = true;
+
+    var oldOpen = window.openCheckoutMemberModal;
+    if(typeof oldOpen === "function"){
+      window.openCheckoutMemberModal = function(){
+        var result = oldOpen.apply(this, arguments);
+        setTimeout(function(){
+          ensureCheckoutBackButton();
+          checkoutSetRegisterMode(false);
+        }, 80);
+        return result;
+      };
+    }
+
+    var oldClose = window.closeCheckoutMemberModal;
+    if(typeof oldClose === "function"){
+      window.closeCheckoutMemberModal = function(){
+        checkoutSetRegisterMode(false);
+        return oldClose.apply(this, arguments);
+      };
+    }
+
+    var oldShowRegister = window.checkoutShowRegister;
+    window.checkoutShowRegister = function(){
+      if(typeof oldShowRegister === "function"){
+        oldShowRegister.apply(this, arguments);
+      }
+
+      ensureCheckoutBackButton();
+      checkoutSetRegisterMode(true);
+
+      var phone = $("checkoutMemberPhone");
+      var regPhone = $("checkoutRegPhone");
+      if(regPhone && phone && !regPhone.value){
+        regPhone.value = phone.value || "";
+      }
+
+      setTimeout(function(){
+        var target = $("checkoutRegPhone");
+        var name = $("checkoutRegName");
+        if(target && !target.value) target.focus();
+        else if(name) name.focus();
+      }, 100);
+    };
+
+    var oldHideRegister = window.checkoutHideRegister;
+    window.checkoutHideRegister = function(){
+      checkoutSetRegisterMode(false);
+      if(typeof oldHideRegister === "function"){
+        return oldHideRegister.apply(this, arguments);
+      }
+    };
+
+    var oldLogin = window.checkoutMemberLogin;
+    if(typeof oldLogin === "function"){
+      window.checkoutMemberLogin = async function(){
+        var result = await oldLogin.apply(this, arguments);
+
+        // If login failed, V115 shows register panel. Turn it into a separate register page.
+        setTimeout(function(){
+          var reg = $("checkoutMemberRegister");
+          if(reg && reg.classList.contains("show")){
+            ensureCheckoutBackButton();
+            checkoutSetRegisterMode(true);
+          }
+        }, 120);
+
+        return result;
+      };
+    }
+
+    var oldRegister = window.checkoutMemberRegister;
+    if(typeof oldRegister === "function"){
+      window.checkoutMemberRegister = async function(){
+        var result = await oldRegister.apply(this, arguments);
+        setTimeout(function(){
+          // Keep register page until success modal closes itself, but avoid showing login content underneath.
+          var reg = $("checkoutMemberRegister");
+          if(reg && reg.classList.contains("show")){
+            checkoutSetRegisterMode(true);
+          }
+        }, 80);
+        return result;
+      };
+    }
+  }
+
+  function boot(){
+    ensureCheckoutBackButton();
+    patchCheckoutMemberRegisterFlow();
+
+    var reg = $("checkoutMemberRegister");
+    var modal = $("checkoutMemberModal");
+    if(modal && reg && reg.classList.contains("show")){
+      checkoutSetRegisterMode(true);
+    }
+  }
+
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", boot);
+  }else{
+    boot();
+  }
+
+  setTimeout(boot, 300);
+  setTimeout(boot, 1000);
+
+  document.addEventListener("click", function(){
+    setTimeout(boot, 60);
+  }, true);
+})();
+</script>
+
+
+<script>
+/* V117 register page logout center */
+(function(){
+  function centerMemberToast(){
+    var toast = document.getElementById("memberToast");
+    if(!toast) return;
+    toast.style.left = "50%";
+    toast.style.top = "50%";
+    toast.style.bottom = "auto";
+    toast.style.transform = toast.classList.contains("show")
+      ? "translate(-50%, -50%) scale(1)"
+      : "translate(-50%, -50%) scale(.96)";
+    toast.style.textAlign = "center";
+  }
+
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", centerMemberToast);
+  }else{
+    centerMemberToast();
+  }
+
+  setInterval(centerMemberToast, 300);
+
+  document.addEventListener("click", function(){
+    setTimeout(centerMemberToast, 50);
+    setTimeout(centerMemberToast, 300);
   }, true);
 })();
 </script>
