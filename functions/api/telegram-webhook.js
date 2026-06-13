@@ -6,6 +6,10 @@ export async function onRequestPost(context) {
 
   const cq = update.callback_query;
   const data = cq.data || "";
+
+  if (data.startsWith("member_delete:") || data.startsWith("member_restore:")) {
+    return handleMemberAction(env, cq, data);
+  }
   const [action, orderNo] = data.split(":");
   if (!orderNo) return json({ ok: true });
 
@@ -153,6 +157,97 @@ export async function onRequestPost(context) {
   }
 
   return json({ ok: true });
+}
+
+
+async function handleMemberAction(env, cq, data) {
+  const sep = data.indexOf(":");
+  const action = sep >= 0 ? data.slice(0, sep) : "";
+  const phone = normalizePhone(sep >= 0 ? data.slice(sep + 1) : "");
+  if (!phone) return stop(env, cq, "找不到會員電話");
+
+  const now = new Date().toISOString();
+
+  if (action === "member_delete") {
+    const activeRaw = await env.ORDERS.get("member:" + phone);
+    if (!activeRaw) {
+      const deletedRaw = await env.ORDERS.get("member_deleted:" + phone);
+      if (deletedRaw) {
+        const deleted = JSON.parse(deletedRaw);
+        await editTelegramMessage(env, cq.message.chat.id, cq.message.message_id, buildMemberTelegramText(deleted, true), buildMemberReplyMarkup(deleted));
+        return stop(env, cq, "此會員資料已刪除");
+      }
+      return stop(env, cq, "找不到有效會員資料");
+    }
+
+    const member = JSON.parse(activeRaw);
+    member.deletedAt = now;
+    member.deletedBy = "telegram";
+    member.updatedAt = now;
+
+    await env.ORDERS.put("member_deleted:" + phone, JSON.stringify(member));
+    await env.ORDERS.delete("member:" + phone);
+
+    await editTelegramMessage(env, cq.message.chat.id, cq.message.message_id, buildMemberTelegramText(member, true), buildMemberReplyMarkup(member));
+    return stop(env, cq, "已刪除會員 " + phone);
+  }
+
+  if (action === "member_restore") {
+    const activeRaw = await env.ORDERS.get("member:" + phone);
+    if (activeRaw) {
+      const active = JSON.parse(activeRaw);
+      await editTelegramMessage(env, cq.message.chat.id, cq.message.message_id, buildMemberTelegramText(active, false), buildMemberReplyMarkup(active));
+      return stop(env, cq, "此會員目前已是有效狀態");
+    }
+
+    const deletedRaw = await env.ORDERS.get("member_deleted:" + phone);
+    if (!deletedRaw) return stop(env, cq, "沒有可恢復的會員資料");
+
+    const member = JSON.parse(deletedRaw);
+    delete member.deletedAt;
+    delete member.deletedBy;
+    member.restoredAt = now;
+    member.updatedAt = now;
+
+    await env.ORDERS.put("member:" + phone, JSON.stringify(member));
+    await env.ORDERS.delete("member_deleted:" + phone);
+
+    await editTelegramMessage(env, cq.message.chat.id, cq.message.message_id, buildMemberTelegramText(member, false), buildMemberReplyMarkup(member));
+    return stop(env, cq, "已恢復會員 " + phone);
+  }
+
+  return json({ ok: true });
+}
+
+function buildMemberReplyMarkup(member) {
+  const phone = normalizePhone(member.phone);
+  return {
+    inline_keyboard: [[
+      { text: "🗑️ 刪除", callback_data: "member_delete:" + phone },
+      { text: "↩️ 恢復", callback_data: "member_restore:" + phone }
+    ]]
+  };
+}
+
+function buildMemberTelegramText(member, deleted = false) {
+  const lines = [];
+  lines.push("👤 SKY31 MEMBER");
+  lines.push("");
+  lines.push(deleted ? "狀態：已刪除" : "狀態：有效會員");
+  lines.push("姓名：" + (member.name || "-"));
+  lines.push("電話：" + (member.phone || "-"));
+  lines.push("生日：" + (member.birthday || "-"));
+  if (member.note) lines.push("備註：" + member.note);
+  if (member.createdAt) lines.push("註冊時間：" + formatDateTime(member.createdAt));
+  if (member.deletedAt) lines.push("刪除時間：" + formatDateTime(member.deletedAt));
+  if (member.restoredAt) lines.push("恢復時間：" + formatDateTime(member.restoredAt));
+  lines.push("");
+  lines.push("累積訂單：" + Number(member.totalOrders || 0));
+  lines.push("累積杯數：" + Number(member.totalCups || 0));
+  lines.push("累積消費：MOP " + String(Math.round(Number(member.totalSpent || 0) * 100) / 100));
+  lines.push("");
+  lines.push("提示：刪除後，客戶無法再用此會員登入；如需要可重新註冊。");
+  return lines.join("\n").trim();
 }
 
 async function stop(env, cq, text) {

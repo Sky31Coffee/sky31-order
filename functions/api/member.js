@@ -44,6 +44,7 @@ export async function onRequestPost(context) {
       note,
       createdAt: now,
       updatedAt: now,
+      historyStartAt: now,
       totalOrders: 0,
       totalCups: 0,
       totalSpent: 0,
@@ -53,6 +54,12 @@ export async function onRequestPost(context) {
     await env.ORDERS.put("member:" + phone, JSON.stringify(member));
 
     const withStats = await enrichMemberWithOrders(env, member);
+
+    const bg = sendMemberTelegram(env, withStats)
+      .catch(() => {});
+    if (context.waitUntil) context.waitUntil(bg);
+    else await bg;
+
     return json({ ok: true, member: withStats });
   } catch (e) {
     return json({ ok: false, error: e.message || "保存會員失敗" }, 500);
@@ -63,7 +70,9 @@ async function loadMember(env, phone) {
   const raw = await env.ORDERS.get("member:" + phone);
   if (!raw) return null;
   try {
-    return JSON.parse(raw);
+    const member = JSON.parse(raw);
+    if (member && member.deletedAt) return null;
+    return member;
   } catch (_) {
     return null;
   }
@@ -84,6 +93,7 @@ async function enrichMemberWithOrders(env, member) {
   let totalOrders = 0;
   let totalCups = 0;
   let totalSpent = 0;
+  const historyStartAt = member.historyStartAt ? new Date(member.historyStartAt).getTime() : 0;
 
   for (const no of orderNos) {
     const raw = await env.ORDERS.get("order:" + no);
@@ -92,6 +102,11 @@ async function enrichMemberWithOrders(env, member) {
     let order = null;
     try { order = JSON.parse(raw); } catch (_) { continue; }
     if (!order || normalizePhone(order.phone) !== phone) continue;
+
+    if (historyStartAt && order.createdAt) {
+      const orderAt = new Date(order.createdAt).getTime();
+      if (Number.isFinite(orderAt) && orderAt < historyStartAt) continue;
+    }
 
     const cups = orderCups(order);
     const amount = Number(order.totalAmount || cartTotal(order.cart) || 0);
@@ -124,12 +139,78 @@ async function enrichMemberWithOrders(env, member) {
     note: member.note || "",
     createdAt: member.createdAt || "",
     updatedAt: member.updatedAt || "",
+    historyStartAt: member.historyStartAt || "",
     lastOrderAt: member.lastOrderAt || "",
     lastOrderNo: member.lastOrderNo || "",
     totalOrders,
     totalCups,
     totalSpent: Math.round(totalSpent * 100) / 100,
     recentOrders: orders
+  };
+}
+
+async function sendMemberTelegram(env, member) {
+  const token = env.TELEGRAM_BOT_TOKEN;
+  const chatId = env.TELEGRAM_CHAT_ID;
+  if (!token || !chatId) return null;
+
+  const url = "https://api.telegram.org/bot" + token + "/sendMessage";
+  const payload = {
+    chat_id: chatId,
+    text: buildMemberTelegramText(member, false),
+    reply_markup: buildMemberReplyMarkup(member)
+  };
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(payload)
+  });
+
+  const data = await res.json().catch(() => null);
+  if (data && data.ok && data.result && data.result.message_id) {
+    try {
+      const activeRaw = await env.ORDERS.get("member:" + normalizePhone(member.phone));
+      if (activeRaw) {
+        const active = JSON.parse(activeRaw);
+        active.telegramMemberMessageId = data.result.message_id;
+        active.telegramMemberChatId = chatId;
+        await env.ORDERS.put("member:" + normalizePhone(member.phone), JSON.stringify(active));
+      }
+    } catch (_) {}
+  }
+
+  return data;
+}
+
+function buildMemberTelegramText(member, deleted = false) {
+  const lines = [];
+  lines.push("👤 SKY31 MEMBER");
+  lines.push("");
+  lines.push(deleted ? "狀態：已刪除" : "狀態：已註冊");
+  lines.push("姓名：" + (member.name || "-"));
+  lines.push("電話：" + (member.phone || "-"));
+  lines.push("生日：" + (member.birthday || "-"));
+  if (member.note) lines.push("備註：" + member.note);
+  if (member.createdAt) lines.push("註冊時間：" + formatDateTime(member.createdAt));
+  if (member.deletedAt) lines.push("刪除時間：" + formatDateTime(member.deletedAt));
+  if (member.restoredAt) lines.push("恢復時間：" + formatDateTime(member.restoredAt));
+  lines.push("");
+  lines.push("累積訂單：" + Number(member.totalOrders || 0));
+  lines.push("累積杯數：" + Number(member.totalCups || 0));
+  lines.push("累積消費：MOP " + String(Math.round(Number(member.totalSpent || 0) * 100) / 100));
+  lines.push("");
+  lines.push("提示：刪除後，客戶無法再用此會員登入；如需要可重新註冊。");
+  return lines.join("\n").trim();
+}
+
+function buildMemberReplyMarkup(member) {
+  const phone = normalizePhone(member.phone);
+  return {
+    inline_keyboard: [[
+      { text: "🗑️ 刪除", callback_data: "member_delete:" + phone },
+      { text: "↩️ 恢復", callback_data: "member_restore:" + phone }
+    ]]
   };
 }
 
@@ -172,6 +253,16 @@ function cartTotal(cart) {
     const subtotal = Number(item.subtotal || unit * qty || 0);
     return sum + subtotal;
   }, 0);
+}
+
+function pad2(n) {
+  return String(n).padStart(2, "0");
+}
+
+function formatDateTime(d) {
+  d = new Date(d);
+  if (isNaN(d.getTime())) return "-";
+  return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()) + " " + pad2(d.getHours()) + ":" + pad2(d.getMinutes());
 }
 
 function json(data, status = 200) {

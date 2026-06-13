@@ -12,6 +12,8 @@ export async function onRequestPost(context) {
       return json({ ok: false, error: "請輸入姓名和手機號碼" }, 400);
     }
 
+    await ensureActiveMember(env, phone);
+
     const rawCart = Array.isArray(body.cart) ? body.cart : [];
     const cart = normalizeCart(rawCart);
 
@@ -64,6 +66,26 @@ export async function onRequestPost(context) {
     return json({ ok: true, orderNo, status: order.status, pickupTime, totalAmount: order.totalAmount, currency: order.currency });
   } catch (e) {
     return json({ ok: false, error: e.message || "提交失敗，請稍後再試" }, 500);
+  }
+}
+
+
+async function ensureActiveMember(env, phone) {
+  const key = "member:" + normalizePhone(phone);
+  const raw = await env.ORDERS.get(key);
+  if (!raw) {
+    throw new Error("會員資料不存在或已被刪除，請重新登入或重新註冊");
+  }
+
+  try {
+    const member = JSON.parse(raw);
+    if (!member || member.deletedAt) {
+      throw new Error("會員資料不存在或已被刪除，請重新登入或重新註冊");
+    }
+    return member;
+  } catch (e) {
+    if (e && e.message && e.message.includes("會員資料不存在")) throw e;
+    throw new Error("會員資料讀取失敗，請重新登入或重新註冊");
   }
 }
 
