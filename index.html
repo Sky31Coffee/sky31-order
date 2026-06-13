@@ -4260,6 +4260,13 @@ input.input-error{
   box-shadow:inset 0 3px 10px rgba(0,0,0,.18) !important;
 }
 
+
+/* V120 birthday required */
+#memberRegBirthday:invalid,
+#checkoutRegBirthday:invalid{
+  border-color:rgba(154,45,34,.34) !important;
+}
+
 </style>
 
 <style>
@@ -6882,7 +6889,7 @@ window.addEventListener("load", function() {
               '<label>姓名 Name</label>' +
               '<input id="memberRegName" placeholder="輸入姓名">' +
               '<label>生日 Birthday，可選</label>' +
-              '<input id="memberRegBirthday" type="date">' +
+              '<input id="memberRegBirthday" type="date" required>' +
             '</div>' +
             '<div class="member-actions">' +
               '<button class="member-btn primary" type="button" onclick="memberRegisterSave()">註冊</button>' +
@@ -8078,7 +8085,7 @@ window.addEventListener("load", function() {
               '<label>姓名 Name</label>' +
               '<input id="checkoutRegName" placeholder="輸入姓名">' +
               '<label>生日日期 Birthday</label>' +
-              '<input id="checkoutRegBirthday" type="date">' +
+              '<input id="checkoutRegBirthday" type="date" required>' +
             '</div>' +
             '<div class="checkout-member-actions">' +
               '<button class="checkout-member-btn primary" type="button" onclick="checkoutMemberRegister()">確認註冊</button>' +
@@ -8530,6 +8537,83 @@ window.addEventListener("load", function() {
   document.addEventListener("click", function(){
     setTimeout(centerMemberToast, 50);
     setTimeout(centerMemberToast, 300);
+  }, true);
+})();
+</script>
+
+
+<script>
+/* V120 birthday required */
+(function(){
+  function $(id){ return document.getElementById(id); }
+
+  function setMsg(el, text){
+    if(!el) return;
+    el.textContent = text;
+    el.classList.add("error");
+    el.classList.remove("success");
+  }
+
+  function focusBirthday(id){
+    var el = $(id);
+    if(el){
+      try{ el.focus(); }catch(e){}
+      try{ el.scrollIntoView({behavior:"smooth", block:"center"}); }catch(e){}
+    }
+  }
+
+  function patchBirthdayRequired(){
+    if(window.__sky31V120BirthdayRequiredPatched) return;
+    window.__sky31V120BirthdayRequiredPatched = true;
+
+    var oldMemberRegister = window.memberRegisterSave;
+    if(typeof oldMemberRegister === "function"){
+      window.memberRegisterSave = async function(){
+        var birthday = (($("memberRegBirthday") || {}).value || "").trim();
+        if(!birthday){
+          setMsg($("memberRegMsg"), "還沒輸入生日日期。");
+          focusBirthday("memberRegBirthday");
+          return;
+        }
+        return oldMemberRegister.apply(this, arguments);
+      };
+    }
+
+    var oldCheckoutRegister = window.checkoutMemberRegister;
+    if(typeof oldCheckoutRegister === "function"){
+      window.checkoutMemberRegister = async function(){
+        var birthday = (($("checkoutRegBirthday") || {}).value || "").trim();
+        if(!birthday){
+          setMsg($("checkoutMemberMsg"), "還沒輸入生日日期。");
+          focusBirthday("checkoutRegBirthday");
+          return;
+        }
+        return oldCheckoutRegister.apply(this, arguments);
+      };
+    }
+  }
+
+  function boot(){
+    var memberBirthday = $("memberRegBirthday");
+    if(memberBirthday) memberBirthday.setAttribute("required", "required");
+
+    var checkoutBirthday = $("checkoutRegBirthday");
+    if(checkoutBirthday) checkoutBirthday.setAttribute("required", "required");
+
+    patchBirthdayRequired();
+  }
+
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", boot);
+  }else{
+    boot();
+  }
+
+  setTimeout(boot, 300);
+  setTimeout(boot, 1000);
+
+  document.addEventListener("click", function(){
+    setTimeout(boot, 60);
   }, true);
 })();
 </script>
