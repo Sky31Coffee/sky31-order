@@ -5181,6 +5181,76 @@ button[disabled],
   }
 }
 
+
+/* V142 bulb dot logout prompt fix */
+/* Fix: active notification red dot should not be clipped by the icon frame. */
+
+.sky31-header-actions > #memberNoticeBulb,
+#memberNoticeBulb.member-notice-bulb,
+#memberNoticeBulb{
+  overflow:visible !important;
+  position:relative !important;
+  isolation:visible !important;
+}
+
+.sky31-header-actions > #memberNoticeBulb::after,
+#memberNoticeBulb.member-notice-bulb.active::after,
+#memberNoticeBulb.active::after{
+  right:-4px !important;
+  top:-4px !important;
+  width:12px !important;
+  height:12px !important;
+  min-width:12px !important;
+  min-height:12px !important;
+  border:2px solid rgba(250,247,240,.98) !important;
+  background:#e23b2e !important;
+  box-shadow:
+    0 0 0 4px rgba(226,59,46,.16),
+    0 4px 10px rgba(226,59,46,.28) !important;
+  z-index:20 !important;
+  box-sizing:border-box !important;
+}
+
+/* V141 had overflow:hidden on all three top icons; keep shine but do not clip the bulb dot. */
+.sky31-header-actions > #memberNoticeBulb::before{
+  border-radius:999px !important;
+}
+
+/* Logout duplicate prompt toast */
+.sky31-logout-state-toast{
+  position:fixed;
+  left:50%;
+  top:50%;
+  z-index:10220;
+  transform:translate(-50%,-50%) scale(.96);
+  max-width:min(340px, calc(100vw - 36px));
+  padding:15px 18px;
+  border-radius:22px;
+  background:rgba(31,29,26,.92);
+  color:#fff;
+  font-size:14px;
+  line-height:1.48;
+  font-weight:850;
+  text-align:center;
+  box-shadow:0 22px 68px rgba(0,0,0,.30), inset 0 1px 0 rgba(255,255,255,.14);
+  backdrop-filter:blur(16px);
+  -webkit-backdrop-filter:blur(16px);
+  opacity:0;
+  pointer-events:none;
+  transition:opacity .18s ease, transform .18s ease;
+}
+
+.sky31-logout-state-toast.show{
+  opacity:1;
+  transform:translate(-50%,-50%) scale(1);
+}
+
+
+/* V143 idle logout modal polish */
+.member-security-text{
+  line-height:1.55 !important;
+}
+
 </style>
 
 <style>
@@ -8145,12 +8215,16 @@ window.addEventListener("load", function() {
 
 
 
+
 <script>
-/* V107 member auto logout */
+/* V143 idle 15min auto logout */
 (function(){
   var MEMBER_KEY = "sky31_member_v1";
-  var LOGIN_AT_KEY = "sky31_member_login_at_v1";
-  var AUTO_LOGOUT_MS = 60 * 60 * 1000;
+  var LAST_ACTIVITY_KEY = "sky31_member_last_activity_v143";
+  var IDLE_LOGOUT_MS = 15 * 60 * 1000;
+  var CHECK_MS = 15 * 1000;
+  var lastTouch = 0;
+  var loggedOutByIdle = false;
 
   function $(id){ return document.getElementById(id); }
 
@@ -8159,28 +8233,36 @@ window.addEventListener("load", function() {
       var raw = localStorage.getItem(MEMBER_KEY);
       if(!raw) return false;
       var obj = JSON.parse(raw);
-      return !!(obj && obj.phone);
+      return !!(obj && String(obj.phone || "").replace(/\D/g, ""));
     }catch(e){
       return false;
     }
   }
 
-  function setLoginAtIfNeeded(force){
-    try{
-      if(!hasMember()){
-        localStorage.removeItem(LOGIN_AT_KEY);
-        return;
-      }
-      if(force || !localStorage.getItem(LOGIN_AT_KEY)){
-        localStorage.setItem(LOGIN_AT_KEY, String(Date.now()));
-      }
-    }catch(e){}
+  function setLastActivity(force){
+    if(!hasMember()){
+      try{ localStorage.removeItem(LAST_ACTIVITY_KEY); }catch(e){}
+      return;
+    }
+
+    var now = Date.now();
+
+    // Avoid writing too often on scroll/mousemove.
+    if(!force && now - lastTouch < 10000) return;
+
+    lastTouch = now;
+    try{ localStorage.setItem(LAST_ACTIVITY_KEY, String(now)); }catch(e){}
+  }
+
+  function getLastActivity(){
+    try{ return Number(localStorage.getItem(LAST_ACTIVITY_KEY) || 0); }catch(e){ return 0; }
   }
 
   function clearMemberFields(){
     try{
       localStorage.removeItem(MEMBER_KEY);
-      localStorage.removeItem(LOGIN_AT_KEY);
+      localStorage.removeItem(LAST_ACTIVITY_KEY);
+      localStorage.removeItem("sky31_member_login_at_v1");
     }catch(e){}
 
     var nameEl = $("name");
@@ -8200,9 +8282,10 @@ window.addEventListener("load", function() {
       btn.setAttribute("aria-label", "會員中心");
     }
 
-    try{
-      if(typeof updateCheckoutCustomerInfo === "function") updateCheckoutCustomerInfo();
-    }catch(e){}
+    try{ if(typeof updateCheckoutCustomerInfo === "function") updateCheckoutCustomerInfo(); }catch(e){}
+    try{ if(typeof updateMemberProfileButton === "function") updateMemberProfileButton(); }catch(e){}
+    try{ if(typeof renderLoggedPanel === "function") renderLoggedPanel(null); }catch(e){}
+    try{ if(typeof renderHomeQuickCard === "function") renderHomeQuickCard(); }catch(e){}
   }
 
   function ensureSecurityModal(){
@@ -8216,11 +8299,19 @@ window.addEventListener("load", function() {
       '<div class="member-security-card">' +
         '<div class="member-security-icon">🔒</div>' +
         '<div class="member-security-title">已自動登出</div>' +
-        '<div class="member-security-text">為確保安全 已自動登出</div>' +
+        '<div class="member-security-text">為確保安全，十五分鐘後自動登出</div>' +
         '<button class="member-security-btn" type="button" onclick="closeMemberSecurityModal()">知道了</button>' +
       '</div>';
     document.body.appendChild(modal);
     return modal;
+  }
+
+  function updateSecurityModalText(){
+    var modal = ensureSecurityModal();
+    var title = modal.querySelector(".member-security-title");
+    var text = modal.querySelector(".member-security-text");
+    if(title) title.textContent = "已自動登出";
+    if(text) text.textContent = "為確保安全，十五分鐘後自動登出";
   }
 
   window.closeMemberSecurityModal = function(){
@@ -8233,7 +8324,8 @@ window.addEventListener("load", function() {
     }catch(e){}
   };
 
-  function showSecurityPrompt(){
+  function showIdleLogoutPrompt(){
+    updateSecurityModalText();
     var modal = ensureSecurityModal();
     modal.classList.add("show");
 
@@ -8243,70 +8335,86 @@ window.addEventListener("load", function() {
       document.body.style.overflow = "";
     }catch(e){}
 
-    // Keep the user on the menu page visually.
     try{
       if(location.hash) history.replaceState(null, "", location.pathname + location.search);
     }catch(e){}
   }
 
-  function autoLogoutNow(){
+  function idleLogoutNow(){
+    if(loggedOutByIdle) return;
+    loggedOutByIdle = true;
     clearMemberFields();
-    showSecurityPrompt();
+    showIdleLogoutPrompt();
   }
 
-  function checkExpiry(){
+  function checkIdleExpiry(){
     if(!hasMember()){
-      try{ localStorage.removeItem(LOGIN_AT_KEY); }catch(e){}
+      loggedOutByIdle = false;
+      try{ localStorage.removeItem(LAST_ACTIVITY_KEY); }catch(e){}
       return;
     }
 
-    var loginAt = 0;
-    try{ loginAt = Number(localStorage.getItem(LOGIN_AT_KEY) || 0); }catch(e){}
-    if(!loginAt){
-      setLoginAtIfNeeded(true);
+    var last = getLastActivity();
+    if(!last){
+      setLastActivity(true);
       return;
     }
 
-    if(Date.now() - loginAt >= AUTO_LOGOUT_MS){
-      autoLogoutNow();
+    if(Date.now() - last >= IDLE_LOGOUT_MS){
+      idleLogoutNow();
     }
   }
 
-  // Track real login/register events by observing localStorage writes.
-  var oldSetItem = localStorage.setItem;
-  localStorage.setItem = function(key, value){
-    var result = oldSetItem.apply(this, arguments);
-    if(key === MEMBER_KEY){
-      try{
-        var obj = JSON.parse(String(value || "{}"));
-        if(obj && obj.phone){
-          oldSetItem.call(localStorage, LOGIN_AT_KEY, String(Date.now()));
-        }
-      }catch(e){}
-    }
-    return result;
-  };
-
-  // If already logged in on page load, start/continue the one-hour timer.
-  function bootAutoLogout(){
-    setLoginAtIfNeeded(false);
-    checkExpiry();
-    setInterval(checkExpiry, 30 * 1000);
+  function activityHandler(){
+    if(!hasMember()) return;
+    loggedOutByIdle = false;
+    setLastActivity(false);
   }
+
+  function bootIdleLogout(){
+    if(hasMember() && !getLastActivity()){
+      setLastActivity(true);
+    }
+
+    checkIdleExpiry();
+  }
+
+  ["pointerdown","keydown","touchstart","scroll","mousemove"].forEach(function(evt){
+    window.addEventListener(evt, activityHandler, {passive:true});
+    document.addEventListener(evt, activityHandler, {passive:true});
+  });
+
+  document.addEventListener("visibilitychange", function(){
+    if(!document.hidden){
+      checkIdleExpiry();
+      setLastActivity(false);
+    }
+  });
+
+  window.addEventListener("focus", function(){
+    checkIdleExpiry();
+    setLastActivity(false);
+  });
+
+  // After login/register clicks, wait a moment for existing login code to save MEMBER_KEY.
+  document.addEventListener("click", function(){
+    setTimeout(function(){
+      if(hasMember()) setLastActivity(true);
+    }, 250);
+  }, true);
 
   if(document.readyState === "loading"){
-    document.addEventListener("DOMContentLoaded", bootAutoLogout);
+    document.addEventListener("DOMContentLoaded", bootIdleLogout);
   }else{
-    bootAutoLogout();
+    bootIdleLogout();
   }
 
-  // Also check when page becomes active again.
-  document.addEventListener("visibilitychange", function(){
-    if(!document.hidden) checkExpiry();
-  });
-  window.addEventListener("focus", checkExpiry);
+  setTimeout(bootIdleLogout, 600);
+  setTimeout(bootIdleLogout, 1600);
+  setInterval(checkIdleExpiry, CHECK_MS);
 })();
 </script>
+
 
 
 <script>
@@ -8845,7 +8953,7 @@ window.addEventListener("load", function() {
 (function(){
   function fixAutoLogoutText(){
     document.querySelectorAll(".member-security-text").forEach(function(el){
-      el.textContent = "為確保安全 已自動登出";
+      el.textContent = "為確保安全，十五分鐘後自動登出";
     });
   }
 
@@ -10212,6 +10320,124 @@ window.addEventListener("load", function() {
 
   document.addEventListener("click", function(){
     setTimeout(boot, 80);
+  }, true);
+})();
+</script>
+
+
+<script>
+/* V142 bulb dot logout prompt fix */
+(function(){
+  var MEMBER_KEY = "sky31_member_v1";
+  var lastLogoutClickAt = 0;
+
+  function getMember(){
+    try{
+      var raw = localStorage.getItem(MEMBER_KEY);
+      return raw ? JSON.parse(raw) : null;
+    }catch(e){
+      return null;
+    }
+  }
+
+  function hasLoggedMember(){
+    var m = getMember();
+    return !!(m && String(m.phone || "").replace(/\D/g,""));
+  }
+
+  function ensureLogoutToast(){
+    var toast = document.getElementById("sky31LogoutStateToast");
+    if(toast) return toast;
+
+    toast = document.createElement("div");
+    toast.id = "sky31LogoutStateToast";
+    toast.className = "sky31-logout-state-toast";
+    toast.textContent = "你已經登出，無需重複登出";
+    document.body.appendChild(toast);
+    return toast;
+  }
+
+  function showAlreadyLoggedOutToast(){
+    var toast = ensureLogoutToast();
+    toast.textContent = "你已經登出，無需重複登出";
+    toast.classList.add("show");
+
+    clearTimeout(toast.__timer);
+    toast.__timer = setTimeout(function(){
+      toast.classList.remove("show");
+    }, 1900);
+  }
+
+  function isLogoutElement(el){
+    if(!el) return false;
+
+    var txt = String(el.textContent || "").trim();
+    var title = String(el.getAttribute && (el.getAttribute("title") || el.getAttribute("aria-label") || "") || "");
+    var onclick = String(el.getAttribute && el.getAttribute("onclick") || "");
+
+    return /登出|退出|Logout|logout/i.test(txt + " " + title + " " + onclick);
+  }
+
+  function patchKnownLogoutFunctions(){
+    [
+      "logoutMember",
+      "memberLogout",
+      "logout",
+      "handleLogout",
+      "confirmLogout",
+      "doLogout",
+      "logoutCurrentMember"
+    ].forEach(function(name){
+      var fn = window[name];
+      if(typeof fn !== "function" || fn.__sky31V142Patched) return;
+
+      var wrapped = function(){
+        if(!hasLoggedMember()){
+          showAlreadyLoggedOutToast();
+          return false;
+        }
+        return fn.apply(this, arguments);
+      };
+      wrapped.__sky31V142Patched = true;
+      window[name] = wrapped;
+    });
+  }
+
+  function boot(){
+    patchKnownLogoutFunctions();
+  }
+
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", boot);
+  }else{
+    boot();
+  }
+
+  setTimeout(boot, 300);
+  setTimeout(boot, 1000);
+  setTimeout(boot, 2000);
+
+  // Capture logout clicks before original handlers when already logged out.
+  document.addEventListener("click", function(e){
+    var el = e.target && e.target.closest ? e.target.closest("button, [onclick], [role='button'], a") : null;
+    if(!el || !isLogoutElement(el)) return;
+
+    lastLogoutClickAt = Date.now();
+
+    if(!hasLoggedMember()){
+      e.preventDefault();
+      e.stopPropagation();
+      if(e.stopImmediatePropagation) e.stopImmediatePropagation();
+      showAlreadyLoggedOutToast();
+      return false;
+    }
+  }, true);
+
+  // If original logout handler clears localStorage and then still shows generic success,
+  // update any toast/modal text immediately after the click to the duplicate-state wording
+  // only when there was no logged member before the click capture.
+  document.addEventListener("click", function(){
+    setTimeout(patchKnownLogoutFunctions, 80);
   }, true);
 })();
 </script>
