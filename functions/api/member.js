@@ -208,8 +208,7 @@ function buildMemberReplyMarkup(member) {
   const phone = normalizePhone(member.phone);
   return {
     inline_keyboard: [[
-      { text: "🗑️ 刪除", callback_data: "member_delete:" + phone },
-      { text: "↩️ 恢復", callback_data: "member_restore:" + phone }
+      { text: "🗑️ 刪除", callback_data: "member_delete:" + phone }
     ]]
   };
 }
