@@ -350,6 +350,11 @@ function buildMemberTelegramText(member, deleted = false, confirmingDelete = fal
   return lines.join("\n").trim();
 }
 
+
+function normalizePhone(phone) {
+  return String(phone || "").replace(/\D/g, "");
+}
+
 async function stop(env, cq, text) {
   await answerCallback(env, cq.id, text);
   return json({ ok: true });
