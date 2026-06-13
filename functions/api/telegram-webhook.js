@@ -266,8 +266,6 @@ async function listTelegramMembers(env) {
   return members;
 }
 
-const V128_MEMBER_LIST_LIMIT = 80;
-
 async function listMembersByPrefix(env, prefix, deleted) {
   let cursor = undefined;
   const out = [];
@@ -284,7 +282,6 @@ async function listMembersByPrefix(env, prefix, deleted) {
         if (!member || !member.phone) continue;
         member._deleted = !!deleted;
         out.push(member);
-        if (out.length >= V128_MEMBER_LIST_LIMIT) return out;
       } catch (_) {}
     }
 
@@ -309,7 +306,6 @@ function buildMemberListText(members) {
     lines.push("目前未有會員資料。");
   } else {
     lines.push("請點擊下方用戶查看詳細資料。");
-    lines.push("最多顯示前 80 位，避免查詢超時。");
   }
   return lines.join("\n").trim();
 }
