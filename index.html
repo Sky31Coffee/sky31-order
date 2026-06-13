@@ -4267,6 +4267,82 @@ input.input-error{
   border-color:rgba(154,45,34,.34) !important;
 }
 
+
+/* V124 force logout deleted member */
+.sky31-admin-logout-modal{
+  position:fixed;
+  inset:0;
+  z-index:10120;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  padding:20px;
+  background:rgba(0,0,0,.34);
+  backdrop-filter:blur(14px);
+  -webkit-backdrop-filter:blur(14px);
+}
+
+.sky31-admin-logout-modal.show{
+  display:flex;
+}
+
+.sky31-admin-logout-card{
+  width:min(360px, 100%);
+  padding:24px 20px 20px;
+  border-radius:28px;
+  text-align:center;
+  background:rgba(250,247,240,.96);
+  color:#2f2a24;
+  border:1px solid rgba(255,255,255,.78);
+  box-shadow:0 26px 86px rgba(0,0,0,.30), inset 0 1px 0 rgba(255,255,255,.86);
+}
+
+.sky31-admin-logout-icon{
+  width:56px;
+  height:56px;
+  margin:0 auto 14px;
+  border-radius:50%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:rgba(120,36,24,.10);
+  color:#7a251c;
+  font-size:28px;
+}
+
+.sky31-admin-logout-title{
+  margin:0 0 8px;
+  font-size:20px;
+  font-weight:900;
+  letter-spacing:-.025em;
+}
+
+.sky31-admin-logout-text{
+  margin:0;
+  font-size:14px;
+  line-height:1.55;
+  font-weight:720;
+  color:rgba(47,42,36,.74);
+}
+
+.sky31-admin-logout-btn{
+  margin-top:18px;
+  width:100%;
+  border:0;
+  border-radius:999px;
+  padding:13px 16px;
+  background:#1f1d1a;
+  color:#fff;
+  font-weight:850;
+  cursor:pointer;
+  transition:transform .14s ease, filter .14s ease;
+}
+
+.sky31-admin-logout-btn:active{
+  transform:scale(.97);
+  filter:brightness(.94);
+}
+
 </style>
 
 <style>
@@ -8614,6 +8690,168 @@ window.addEventListener("load", function() {
 
   document.addEventListener("click", function(){
     setTimeout(boot, 60);
+  }, true);
+})();
+</script>
+
+
+<script>
+/* V124 force logout deleted member */
+(function(){
+  var MEMBER_KEY = "sky31_member_v1";
+  var CHECKING = false;
+  var FORCED = false;
+
+  function $(id){ return document.getElementById(id); }
+
+  function normalizePhone(phone){
+    return String(phone || "").replace(/\D/g, "");
+  }
+
+  function getMember(){
+    try{
+      var raw = localStorage.getItem(MEMBER_KEY);
+      return raw ? JSON.parse(raw) : null;
+    }catch(e){
+      return null;
+    }
+  }
+
+  function clearMemberState(){
+    try{ localStorage.removeItem(MEMBER_KEY); }catch(e){}
+
+    try{
+      var keys = Object.keys(localStorage);
+      keys.forEach(function(k){
+        if(/sky31.*member/i.test(k) || /member.*sky31/i.test(k)){
+          localStorage.removeItem(k);
+        }
+      });
+    }catch(e){}
+
+    try{
+      var profileButton = $("profileButton");
+      if(profileButton){
+        profileButton.classList.remove("member-logged");
+        profileButton.title = "會員中心";
+        profileButton.setAttribute("aria-label", "會員中心");
+      }
+    }catch(e){}
+
+    try{
+      if(typeof updateCheckoutCustomerInfo === "function") updateCheckoutCustomerInfo();
+    }catch(e){}
+  }
+
+  function ensureAdminLogoutModal(){
+    if($("sky31AdminLogoutModal")) return;
+
+    var div = document.createElement("div");
+    div.id = "sky31AdminLogoutModal";
+    div.className = "sky31-admin-logout-modal";
+    div.innerHTML =
+      '<div class="sky31-admin-logout-card">' +
+        '<div class="sky31-admin-logout-icon">!</div>' +
+        '<h3 class="sky31-admin-logout-title">Sky31 Admin 強制登出</h3>' +
+        '<p class="sky31-admin-logout-text">Sky31 Admin 強制登出，如有疑問請聯繫Sky31客服</p>' +
+        '<button class="sky31-admin-logout-btn" type="button" onclick="closeSky31AdminLogoutModal()">知道了</button>' +
+      '</div>';
+
+    document.body.appendChild(div);
+  }
+
+  window.closeSky31AdminLogoutModal = function(){
+    var modal = $("sky31AdminLogoutModal");
+    if(modal) modal.classList.remove("show");
+    try{ document.body.style.overflow = ""; }catch(e){}
+  };
+
+  function showForcedLogout(){
+    ensureAdminLogoutModal();
+
+    var modal = $("sky31AdminLogoutModal");
+    if(modal) modal.classList.add("show");
+
+    try{ document.body.style.overflow = "hidden"; }catch(e){}
+
+    try{
+      if(typeof closeCheckoutMemberModal === "function") closeCheckoutMemberModal();
+    }catch(e){}
+  }
+
+  function forceLogout(){
+    if(FORCED) return;
+    FORCED = true;
+    clearMemberState();
+    showForcedLogout();
+  }
+
+  async function verifyCurrentMember(){
+    if(CHECKING || FORCED) return;
+
+    var member = getMember();
+    var phone = normalizePhone(member && member.phone);
+    if(!phone) return;
+
+    CHECKING = true;
+
+    try{
+      var res = await fetch("/api/member?phone=" + encodeURIComponent(phone) + "&t=" + Date.now(), {
+        cache:"no-store",
+        headers:{"Cache-Control":"no-store"}
+      });
+
+      var data = null;
+      try{ data = await res.json(); }catch(e){}
+
+      if(res.status === 404 || (data && data.ok === false)){
+        forceLogout();
+      }
+    }catch(e){
+      // Network error should not force logout.
+    }finally{
+      CHECKING = false;
+    }
+  }
+
+  function patchSubmitCheck(){
+    if(window.__sky31V124SubmitCheckPatched) return;
+    window.__sky31V124SubmitCheckPatched = true;
+
+    var oldSubmit = window.submitOrder;
+    if(typeof oldSubmit === "function"){
+      window.submitOrder = async function(){
+        await verifyCurrentMember();
+        if(FORCED) return;
+        return oldSubmit.apply(this, arguments);
+      };
+    }
+  }
+
+  function boot(){
+    ensureAdminLogoutModal();
+    patchSubmitCheck();
+    verifyCurrentMember();
+  }
+
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", boot);
+  }else{
+    boot();
+  }
+
+  setTimeout(boot, 500);
+  setTimeout(boot, 1500);
+
+  setInterval(verifyCurrentMember, 10000);
+
+  window.addEventListener("focus", verifyCurrentMember);
+  document.addEventListener("visibilitychange", function(){
+    if(!document.hidden) verifyCurrentMember();
+  });
+
+  document.addEventListener("click", function(){
+    setTimeout(verifyCurrentMember, 100);
   }, true);
 })();
 </script>
