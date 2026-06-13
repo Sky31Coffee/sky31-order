@@ -225,9 +225,22 @@ async function handleMemberAction(env, cq, data) {
       }
 
       const member = JSON.parse(activeRaw);
+
+      const deletedOrderResult = await deleteMemberOrders(env, phone);
+
       member.deletedAt = new Date().toISOString();
       member.deletedBy = "telegram";
       member.updatedAt = member.deletedAt;
+      member.deletedOrders = deletedOrderResult.deletedOrders || 0;
+      member.deletedOrderNos = deletedOrderResult.orderNos || [];
+
+      // Since related order records are removed, reset visible order statistics.
+      member.totalOrders = 0;
+      member.totalCups = 0;
+      member.totalSpent = 0;
+      member.recentOrderNos = [];
+      member.lastOrderNo = "";
+      member.lastOrderAt = "";
 
       await env.ORDERS.put("member_deleted:" + phone, JSON.stringify(member));
       await env.ORDERS.delete("member:" + phone);
@@ -240,7 +253,7 @@ async function handleMemberAction(env, cq, data) {
         buildMemberReplyMarkup(member, true)
       );
 
-      return stop(env, cq, "已刪除會員 " + phone);
+      return stop(env, cq, "已刪除會員及相關訂單 " + phone);
     }
 
     if (action === "member_restore") {
@@ -282,6 +295,37 @@ async function handleMemberAction(env, cq, data) {
       return json({ ok: false, error: e.message || "member action failed" }, 500);
     }
   }
+}
+
+
+async function deleteMemberOrders(env, phone) {
+  phone = normalizePhone(phone);
+  const prefix = "phone:" + phone + ":";
+  let cursor = undefined;
+  let deletedOrders = 0;
+  let deletedIndexKeys = 0;
+  const orderNos = [];
+
+  do {
+    const page = await env.ORDERS.list({ prefix, cursor });
+    for (const key of (page.keys || [])) {
+      const orderNo = key.name.replace(prefix, "");
+      if (!orderNo) continue;
+      orderNos.push(orderNo);
+    }
+    cursor = page.cursor;
+    if (page.list_complete !== false) break;
+  } while (cursor);
+
+  for (const orderNo of orderNos) {
+    await env.ORDERS.delete("order:" + orderNo);
+    await env.ORDERS.delete(prefix + orderNo);
+    await env.ORDERS.delete("member_ordered:" + phone + ":" + orderNo);
+    deletedOrders += 1;
+    deletedIndexKeys += 2;
+  }
+
+  return { deletedOrders, deletedIndexKeys, orderNos };
 }
 
 async function getAnyMember(env, phone) {
@@ -332,6 +376,7 @@ function buildMemberTelegramText(member, deleted = false, confirmingDelete = fal
   if (member.note) lines.push("備註：" + member.note);
   if (member.createdAt) lines.push("註冊時間：" + formatDateTime(member.createdAt));
   if (member.deletedAt && !confirmingDelete) lines.push("刪除時間：" + formatDateTime(member.deletedAt));
+  if (deleted && !confirmingDelete) lines.push("已刪除相關訂單：" + Number(member.deletedOrders || 0));
   if (member.restoredAt && !deleted && !confirmingDelete) lines.push("恢復時間：" + formatDateTime(member.restoredAt));
   lines.push("");
   lines.push("累積訂單：" + Number(member.totalOrders || 0));
