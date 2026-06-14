@@ -5600,6 +5600,12 @@ body:has(#orderApp.hidden) #sky31PersistentCart.sky31-cart-body-level{
   cursor:pointer;
 }
 
+
+/* V161 real member logout modal */
+.member-security-modal.show{
+  display:flex !important;
+}
+
 </style>
 
 <style>
@@ -11155,34 +11161,30 @@ window.addEventListener("load", function() {
 </script>
 
 
+
 <script>
-/* V159 force idle 10min logout */
+/* V161 real member logout 10min */
 (function(){
   var MEMBER_KEY = "sky31_member_v1";
-  var LAST_ACTIVITY_KEY = "sky31_member_last_activity_v159";
+  var LAST_ACTIVITY_KEY = "sky31_member_last_activity_v161";
   var IDLE_MS = 10 * 60 * 1000;
-  var CHECK_MS = 5000;
+  var CHECK_MS = 3000;
   var PROMPT_TEXT = "為確保安全，10分鐘自動登出";
-
   var timer = null;
   var interval = null;
   var lastWrite = 0;
-  var forceLogoutRunning = false;
+  var loggingOut = false;
 
   function $(id){ return document.getElementById(id); }
-
   function now(){ return Date.now(); }
-
-  function normalizePhone(v){
-    return String(v || "").replace(/\D/g, "");
-  }
+  function digits(v){ return String(v || "").replace(/\D/g, ""); }
 
   function getMember(){
     try{
       var raw = localStorage.getItem(MEMBER_KEY);
       if(!raw) return null;
       var obj = JSON.parse(raw);
-      if(!obj || !normalizePhone(obj.phone)) return null;
+      if(!obj || !digits(obj.phone)) return null;
       return obj;
     }catch(e){
       return null;
@@ -11193,29 +11195,215 @@ window.addEventListener("load", function() {
     return !!getMember();
   }
 
-  function setStorageValue(key, value){
-    try{ localStorage.setItem(key, value); }catch(e){}
+  function stopTimer(){
+    if(timer){
+      clearTimeout(timer);
+      timer = null;
+    }
   }
 
-  function removeStorageKey(key){
+  function removeKey(key){
     try{ localStorage.removeItem(key); }catch(e){}
     try{ sessionStorage.removeItem(key); }catch(e){}
   }
 
-  function writeActivity(force){
-    if(!hasMember()){
-      removeStorageKey(LAST_ACTIVITY_KEY);
-      stopTimer();
-      return;
+  function removeMemberKeys(){
+    [
+      MEMBER_KEY,
+      LAST_ACTIVITY_KEY,
+      "sky31_member_last_activity_v143",
+      "sky31_member_last_activity_v144",
+      "sky31_member_last_activity_v159",
+      "sky31_member_last_activity_v160",
+      "sky31_member_login_at_v1",
+      "sky31_member_notice_read_v1",
+      "sky31_member_notice_seen_v1",
+      "sky31_customer_v1",
+      "sky31_customer_info",
+      "sky31_checkout_customer"
+    ].forEach(removeKey);
+  }
+
+  function clearMemberGlobals(){
+    ["currentMember","loggedMember","memberData","memberInfo","currentCustomer","customer","customerInfo","checkoutCustomer"].forEach(function(k){
+      try{ window[k] = null; }catch(e){}
+    });
+  }
+
+  function updateLogoutUI(){
+    try{
+      document.documentElement.removeAttribute("data-member-phone");
+      document.body.removeAttribute("data-member-phone");
+      document.body.classList.remove("member-logged","member-logged-in","is-member");
+      document.body.classList.add("member-logged-out");
+    }catch(e){}
+
+    var profileButton = $("profileButton");
+    if(profileButton){
+      profileButton.classList.remove("logged","member-logged","active","is-logged","selected");
+      profileButton.removeAttribute("data-phone");
+      profileButton.removeAttribute("data-member-phone");
+      profileButton.title = "會員中心";
+      profileButton.setAttribute("aria-label", "會員中心");
     }
 
-    var t = now();
+    var bulb = $("memberNoticeBulb");
+    if(bulb){
+      bulb.classList.remove("active","show","member-notice-active");
+      bulb.style.display = "none";
+    }
 
-    if(!force && t - lastWrite < 3000) return;
+    var checkoutInfo = $("checkoutCustomerInfo");
+    if(checkoutInfo){
+      checkoutInfo.innerHTML = "";
+      checkoutInfo.classList.remove("show");
+      checkoutInfo.style.display = "none";
+    }
 
-    lastWrite = t;
-    setStorageValue(LAST_ACTIVITY_KEY, String(t));
-    scheduleTimer();
+    ["memberMsg","checkoutMemberMsg","memberProfileBody","memberOrders","memberRecentOrders","memberNoticeList","memberNoticeRecords"].forEach(function(id){
+      var el = $(id);
+      if(el) el.innerHTML = "";
+    });
+
+    ["checkoutMemberPhone","checkoutMemberName","checkoutMemberBirthday"].forEach(function(id){
+      var el = $(id);
+      if(el) el.value = "";
+    });
+  }
+
+  function closeMemberPanels(){
+    ["memberModal","checkoutMemberModal","memberNoticeModal","memberProfileModal","memberRegisterModal","memberLoginModal"].forEach(function(id){
+      var el = $(id);
+      if(el){
+        el.classList.remove("show");
+        el.style.display = "";
+      }
+    });
+    try{ document.body.style.overflow = ""; }catch(e){}
+  }
+
+  function callNativeLogoutIfAny(){
+    // Use the site's own logout flow first if it exists.
+    // This makes auto logout behave like manual logout.
+    var names = [
+      "logoutMember",
+      "memberLogout",
+      "logout",
+      "handleMemberLogout",
+      "clearMemberLogin",
+      "clearMember",
+      "signOutMember"
+    ];
+
+    for(var i=0; i<names.length; i++){
+      var fn = window[names[i]];
+      if(typeof fn === "function"){
+        try{
+          fn.call(window);
+          return true;
+        }catch(e){}
+      }
+    }
+
+    return false;
+  }
+
+  function realLogout(){
+    if(loggingOut) return;
+    loggingOut = true;
+
+    stopTimer();
+
+    // First: execute native logout if site has it.
+    callNativeLogoutIfAny();
+
+    // Then: ensure keys and visible state are actually logged out.
+    removeMemberKeys();
+    clearMemberGlobals();
+    updateLogoutUI();
+    closeMemberPanels();
+
+    // Run UI renderers after clearing data, so submit logic sees no member.
+    [
+      "updateCheckoutCustomerInfo",
+      "updateMemberProfileButton",
+      "renderHomeQuickCard",
+      "renderNotice",
+      "renderMemberNotice",
+      "renderMemberCenter",
+      "renderMemberProfile",
+      "refreshMemberUI",
+      "renderProfileButton"
+    ].forEach(function(fn){
+      try{
+        if(typeof window[fn] === "function"){
+          window[fn]();
+        }
+      }catch(e){}
+    });
+
+    // Apply again in case renderer repainted old state.
+    setTimeout(function(){
+      removeMemberKeys();
+      clearMemberGlobals();
+      updateLogoutUI();
+      closeMemberPanels();
+    }, 50);
+
+    setTimeout(function(){
+      removeMemberKeys();
+      clearMemberGlobals();
+      updateLogoutUI();
+      closeMemberPanels();
+      loggingOut = false;
+    }, 300);
+  }
+
+  function ensureModal(){
+    var modal = $("memberSecurityModal");
+    if(!modal){
+      modal = document.createElement("div");
+      modal.id = "memberSecurityModal";
+      modal.className = "member-security-modal";
+      document.body.appendChild(modal);
+    }
+
+    modal.innerHTML =
+      '<div class="member-security-card">' +
+        '<div class="member-security-icon">🔒</div>' +
+        '<div class="member-security-title">已自動登出</div>' +
+        '<div class="member-security-text">' + PROMPT_TEXT + '</div>' +
+        '<button class="member-security-btn" type="button" id="memberSecurityConfirmBtn">知道了</button>' +
+      '</div>';
+
+    var btn = $("memberSecurityConfirmBtn");
+    if(btn){
+      btn.onclick = function(){
+        realLogout();
+        var m = $("memberSecurityModal");
+        if(m) m.classList.remove("show");
+        setTimeout(realLogout, 80);
+      };
+    }
+
+    return modal;
+  }
+
+  window.closeMemberSecurityModal = function(){
+    realLogout();
+    var modal = $("memberSecurityModal");
+    if(modal) modal.classList.remove("show");
+    setTimeout(realLogout, 80);
+  };
+
+  function showPrompt(){
+    var modal = ensureModal();
+    modal.classList.add("show");
+  }
+
+  function autoLogout(){
+    realLogout();
+    showPrompt();
   }
 
   function readActivity(){
@@ -11227,11 +11415,19 @@ window.addEventListener("load", function() {
     }
   }
 
-  function stopTimer(){
-    if(timer){
-      clearTimeout(timer);
-      timer = null;
+  function writeActivity(force){
+    if(!hasMember()){
+      removeKey(LAST_ACTIVITY_KEY);
+      stopTimer();
+      return;
     }
+
+    var t = now();
+    if(!force && t - lastWrite < 3000) return;
+
+    lastWrite = t;
+    try{ localStorage.setItem(LAST_ACTIVITY_KEY, String(t)); }catch(e){}
+    scheduleTimer();
   }
 
   function scheduleTimer(){
@@ -11246,260 +11442,18 @@ window.addEventListener("load", function() {
     }
 
     var remaining = IDLE_MS - (now() - last);
-
     if(remaining <= 0){
-      forceIdleLogout();
+      autoLogout();
       return;
     }
 
-    timer = setTimeout(forceIdleLogout, Math.min(remaining, 2147483647));
-  }
-
-  function ensureSecurityModal(){
-    var modal = $("memberSecurityModal");
-    if(!modal){
-      modal = document.createElement("div");
-      modal.id = "memberSecurityModal";
-      modal.className = "member-security-modal";
-      modal.innerHTML =
-        '<div class="member-security-card">' +
-          '<div class="member-security-icon">🔒</div>' +
-          '<div class="member-security-title">已自動登出</div>' +
-          '<div class="member-security-text">' + PROMPT_TEXT + '</div>' +
-          '<button class="member-security-btn" type="button" onclick="closeMemberSecurityModal()">知道了</button>' +
-        '</div>';
-      document.body.appendChild(modal);
-    }
-
-    var title = modal.querySelector(".member-security-title");
-    var text = modal.querySelector(".member-security-text");
-
-    if(title) title.textContent = "已自動登出";
-    if(text) text.textContent = PROMPT_TEXT;
-
-    return modal;
-  }
-
-  window.closeMemberSecurityModal = function(){
-    var modal = $("memberSecurityModal");
-    if(modal) modal.classList.remove("show");
-    try{
-      var memberModal = $("memberModal");
-      if(memberModal) memberModal.classList.remove("show");
-      var checkoutMemberModal = $("checkoutMemberModal");
-      if(checkoutMemberModal) checkoutMemberModal.classList.remove("show");
-      document.body.style.overflow = "";
-    }catch(e){}
-  };
-
-  function showPrompt(){
-    var modal = ensureSecurityModal();
-    modal.classList.add("show");
-
-    try{
-      var memberModal = $("memberModal");
-      if(memberModal) memberModal.classList.remove("show");
-
-      var checkoutMemberModal = $("checkoutMemberModal");
-      if(checkoutMemberModal) checkoutMemberModal.classList.remove("show");
-
-      document.body.style.overflow = "";
-    }catch(e){}
-  }
-
-  function clearInputs(){
-    [
-      "name",
-      "phone",
-      "modalName",
-      "modalPhone",
-      "checkoutMemberPhone",
-      "checkoutMemberName",
-      "checkoutMemberBirthday",
-      "memberLoginPhone",
-      "memberRegisterName",
-      "memberRegisterPhone",
-      "memberRegisterBirthday"
-    ].forEach(function(id){
-      var el = $(id);
-      if(el) el.value = "";
-    });
-
-    [
-      "memberMsg",
-      "checkoutMemberMsg",
-      "checkoutCustomerInfo",
-      "memberProfileBody",
-      "memberOrders",
-      "memberRecentOrders",
-      "memberNoticeList",
-      "memberNoticeRecords"
-    ].forEach(function(id){
-      var el = $(id);
-      if(el) el.innerHTML = "";
-    });
-  }
-
-  function clearMemberStorage(){
-    // Known keys.
-    [
-      MEMBER_KEY,
-      LAST_ACTIVITY_KEY,
-      "sky31_member_last_activity_v143",
-      "sky31_member_last_activity_v144",
-      "sky31_member_login_at_v1",
-      "sky31_member_notice_read_v1",
-      "sky31_member_notice_seen_v1",
-      "sky31_customer_v1",
-      "sky31_customer_info",
-      "sky31_checkout_customer",
-      "customer",
-      "customerInfo",
-      "member"
-    ].forEach(removeStorageKey);
-
-    // Defensive sweep for any local member/cache keys except cart/menu/order data.
-    try{
-      var toRemove = [];
-      for(var i=0; i<localStorage.length; i++){
-        var k = localStorage.key(i);
-        if(!k) continue;
-
-        var lower = k.toLowerCase();
-
-        if(
-          (lower.indexOf("member") >= 0 || lower.indexOf("customer") >= 0 || lower.indexOf("login") >= 0) &&
-          lower.indexOf("cart") < 0 &&
-          lower.indexOf("order") < 0 &&
-          lower.indexOf("menu") < 0
-        ){
-          toRemove.push(k);
-        }
-      }
-      toRemove.forEach(function(k){
-        try{ localStorage.removeItem(k); }catch(e){}
-      });
-    }catch(e){}
-
-    try{
-      var stRemove = [];
-      for(var j=0; j<sessionStorage.length; j++){
-        var sk = sessionStorage.key(j);
-        if(!sk) continue;
-
-        var sl = sk.toLowerCase();
-
-        if(
-          (sl.indexOf("member") >= 0 || sl.indexOf("customer") >= 0 || sl.indexOf("login") >= 0) &&
-          sl.indexOf("cart") < 0 &&
-          sl.indexOf("order") < 0 &&
-          sl.indexOf("menu") < 0
-        ){
-          stRemove.push(sk);
-        }
-      }
-      stRemove.forEach(function(k){
-        try{ sessionStorage.removeItem(k); }catch(e){}
-      });
-    }catch(e){}
-  }
-
-  function clearMemberGlobalState(){
-    // Clear common globals if they exist. Do not touch cart/order data.
-    try{ window.currentMember = null; }catch(e){}
-    try{ window.loggedMember = null; }catch(e){}
-    try{ window.memberData = null; }catch(e){}
-    try{ window.customer = null; }catch(e){}
-    try{ window.customerInfo = null; }catch(e){}
-
-    // Some scripts keep data in DOM dataset.
-    try{
-      document.documentElement.removeAttribute("data-member-phone");
-      document.body.removeAttribute("data-member-phone");
-      document.body.classList.remove("member-logged");
-      document.body.classList.remove("member-logged-in");
-      document.body.classList.add("member-logged-out");
-    }catch(e){}
-  }
-
-  function updateProfileButtons(){
-    var profile = $("profileButton");
-    if(profile){
-      profile.classList.remove("member-logged");
-      profile.classList.remove("logged");
-      profile.title = "會員中心";
-      profile.setAttribute("aria-label", "會員中心");
-    }
-
-    var bulb = $("memberNoticeBulb");
-    if(bulb){
-      bulb.classList.remove("active");
-      bulb.classList.remove("show");
-      bulb.classList.remove("member-notice-active");
-      bulb.style.display = "none";
-    }
-
-    var checkoutInfo = $("checkoutCustomerInfo");
-    if(checkoutInfo){
-      checkoutInfo.innerHTML = "";
-      checkoutInfo.classList.remove("show");
-    }
-  }
-
-  function refreshUIAfterLogout(){
-    updateProfileButtons();
-    clearInputs();
-
-    [
-      "updateCheckoutCustomerInfo",
-      "updateMemberProfileButton",
-      "renderHomeQuickCard",
-      "renderNotice"
-    ].forEach(function(fnName){
-      try{
-        if(typeof window[fnName] === "function"){
-          window[fnName]();
-        }
-      }catch(e){}
-    });
-
-    try{
-      if(typeof window.renderLoggedPanel === "function"){
-        window.renderLoggedPanel(null);
-      }
-    }catch(e){}
-  }
-
-  function forceIdleLogout(){
-    if(forceLogoutRunning) return;
-    if(!hasMember()) return;
-
-    forceLogoutRunning = true;
-
-    stopTimer();
-    clearMemberStorage();
-    clearMemberGlobalState();
-    refreshUIAfterLogout();
-
-    // Run twice because some old UI patchers may repaint from stale state.
-    setTimeout(function(){
-      clearMemberStorage();
-      clearMemberGlobalState();
-      refreshUIAfterLogout();
-      showPrompt();
-    }, 30);
-
-    showPrompt();
-
-    setTimeout(function(){
-      forceLogoutRunning = false;
-    }, 1000);
+    timer = setTimeout(autoLogout, Math.min(remaining, 2147483647));
   }
 
   function checkExpiry(){
     if(!hasMember()){
+      removeKey(LAST_ACTIVITY_KEY);
       stopTimer();
-      removeStorageKey(LAST_ACTIVITY_KEY);
       return;
     }
 
@@ -11510,7 +11464,7 @@ window.addEventListener("load", function() {
     }
 
     if(now() - last >= IDLE_MS){
-      forceIdleLogout();
+      autoLogout();
     }else{
       scheduleTimer();
     }
@@ -11533,14 +11487,13 @@ window.addEventListener("load", function() {
     }
   }
 
-  // Patch localStorage setItem so login/register immediately starts the 10-min timer.
+  // New login/register writes member key -> restart timer.
   try{
-    if(!localStorage.__sky31V159SetItemPatched){
-      var originalSetItem = localStorage.setItem;
-      localStorage.setItem = function(key, value){
+    if(!window.__sky31V161RealLogoutStoragePatched){
+      var originalSetItem = Storage.prototype.setItem;
+      Storage.prototype.setItem = function(key, value){
         var result = originalSetItem.apply(this, arguments);
-
-        if(key === MEMBER_KEY){
+        if(this === localStorage && key === MEMBER_KEY){
           setTimeout(function(){
             if(hasMember()){
               writeActivity(true);
@@ -11548,10 +11501,9 @@ window.addEventListener("load", function() {
             }
           }, 30);
         }
-
         return result;
       };
-      localStorage.__sky31V159SetItemPatched = true;
+      window.__sky31V161RealLogoutStoragePatched = true;
     }
   }catch(e){}
 
@@ -11562,34 +11514,14 @@ window.addEventListener("load", function() {
 
   document.addEventListener("visibilitychange", function(){
     if(document.hidden) return;
-
-    // First check if expired while hidden.
     checkExpiry();
-
-    // Only if still logged in, returning counts as activity.
-    if(hasMember()){
-      writeActivity(true);
-    }
+    if(hasMember()) writeActivity(true);
   });
 
   window.addEventListener("focus", function(){
     checkExpiry();
-    if(hasMember()){
-      writeActivity(true);
-    }
+    if(hasMember()) writeActivity(true);
   });
-
-  document.addEventListener("click", function(){
-    setTimeout(boot, 100);
-    setTimeout(boot, 500);
-  }, true);
-
-  document.addEventListener("keydown", function(e){
-    if(e.key === "Enter"){
-      setTimeout(boot, 120);
-      setTimeout(boot, 500);
-    }
-  }, true);
 
   if(document.readyState === "loading"){
     document.addEventListener("DOMContentLoaded", boot);
@@ -11602,15 +11534,18 @@ window.addEventListener("load", function() {
   setTimeout(boot, 3000);
 
   window.sky31IdleLogoutDebug = {
-    check: checkExpiry,
-    logoutNow: forceIdleLogout,
-    reset: function(){ writeActivity(true); },
-    last: function(){ return readActivity(); },
-    remainingMs: function(){
+    logoutNow:function(){
+      autoLogout();
+    },
+    realLogout:realLogout,
+    isLoggedIn:hasMember,
+    remainingMs:function(){
       if(!hasMember()) return 0;
       return Math.max(0, IDLE_MS - (now() - readActivity()));
     },
-    isLoggedIn: hasMember
+    reset:function(){
+      writeActivity(true);
+    }
   };
 })();
 </script>
