@@ -11551,18 +11551,22 @@ window.addEventListener("load", function() {
 </script>
 
 
+
 <script>
-/* V162 order lookup sort */
+/* V163 history order sort */
 (function(){
   function toTime(value){
     if(value === null || value === undefined || value === "") return 0;
     if(typeof value === "number") return isFinite(value) ? value : 0;
+
     var s = String(value).trim();
+
     if(/^\d+$/.test(s)){
       var n = Number(s);
       if(s.length === 10) n = n * 1000;
       return isFinite(n) ? n : 0;
     }
+
     var t = Date.parse(s);
     return isFinite(t) ? t : 0;
   }
@@ -11570,48 +11574,71 @@ window.addEventListener("load", function() {
   function getTimeFromKeys(obj, keys){
     if(!obj || typeof obj !== "object") return 0;
     var best = 0;
+
     keys.forEach(function(key){
       if(Object.prototype.hasOwnProperty.call(obj, key)){
         best = Math.max(best, toTime(obj[key]));
       }
     });
+
     return best;
   }
 
   function orderNoTime(order){
-    var no = String((order && (order.orderNo || order.id || order.orderId)) || "");
+    var no = String((order && (order.orderNo || order.id || order.orderId || order.no)) || "");
     var m = no.match(/(\d{10,})/);
     if(!m) return 0;
+
     var n = Number(m[1]);
     if(!isFinite(n)) return 0;
+
     if(String(m[1]).length === 10) n = n * 1000;
     return n;
   }
 
+  var TIME_KEYS = [
+    "updatedAt",
+    "modifiedAt",
+    "changedAt",
+    "lastModified",
+    "lastModifiedAt",
+    "lastActionAt",
+    "actionAt",
+    "statusUpdatedAt",
+    "statusChangedAt",
+    "completedAt",
+    "pickedUpAt",
+    "cancelledAt",
+    "canceledAt",
+    "createdAt",
+    "created",
+    "orderTime",
+    "time",
+    "timestamp"
+  ];
+
   function latestActionTime(order){
     if(!order || typeof order !== "object") return 0;
-    var keys = [
-      "updatedAt","modifiedAt","changedAt","lastModified","lastModifiedAt",
-      "lastActionAt","actionAt","statusUpdatedAt","statusChangedAt",
-      "completedAt","pickedUpAt","cancelledAt","canceledAt",
-      "createdAt","created","time","timestamp"
-    ];
-    var best = Math.max(getTimeFromKeys(order, keys), orderNoTime(order));
 
-    ["items","cart","products","drinks"].forEach(function(listKey){
+    var best = Math.max(
+      getTimeFromKeys(order, TIME_KEYS),
+      orderNoTime(order)
+    );
+
+    ["items","cart","products","drinks","orderItems","details"].forEach(function(listKey){
       var list = order[listKey];
       if(Array.isArray(list)){
         list.forEach(function(item){
-          best = Math.max(best, getTimeFromKeys(item, keys));
+          best = Math.max(best, getTimeFromKeys(item, TIME_KEYS));
         });
       }
     });
 
-    ["history","logs","events","actions"].forEach(function(listKey){
+    ["history","logs","events","actions","statusHistory","timeline"].forEach(function(listKey){
       var list = order[listKey];
       if(Array.isArray(list)){
         list.forEach(function(item){
-          best = Math.max(best, getTimeFromKeys(item, keys));
+          best = Math.max(best, getTimeFromKeys(item, TIME_KEYS));
         });
       }
     });
@@ -11621,10 +11648,18 @@ window.addEventListener("load", function() {
 
   function isCancelled(order){
     if(!order || typeof order !== "object") return false;
+
     var status = String(order.status || order.state || order.orderStatus || "").toLowerCase();
     var label = [
-      order.statusText, order.statusLabel, order.label, order.note, order.remark
-    ].map(function(v){ return String(v || "").toLowerCase(); }).join(" ");
+      order.statusText,
+      order.statusLabel,
+      order.label,
+      order.note,
+      order.remark,
+      order.cancelReason
+    ].map(function(v){
+      return String(v || "").toLowerCase();
+    }).join(" ");
 
     return (
       order.cancelled === true ||
@@ -11642,49 +11677,100 @@ window.addEventListener("load", function() {
     );
   }
 
+  function looksLikeOrder(obj){
+    if(!obj || typeof obj !== "object") return false;
+
+    return !!(
+      obj.orderNo ||
+      obj.orderId ||
+      obj.orderNumber ||
+      obj.status ||
+      obj.orderStatus ||
+      obj.items ||
+      obj.cart ||
+      obj.products ||
+      obj.drinks ||
+      obj.total ||
+      obj.createdAt ||
+      obj.updatedAt ||
+      obj.timestamp
+    );
+  }
+
   function sortOrders(list){
     if(!Array.isArray(list)) return list;
+
     return list.slice().sort(function(a, b){
       var ac = isCancelled(a) ? 1 : 0;
       var bc = isCancelled(b) ? 1 : 0;
+
+      // Active / completed / picked-up orders stay above cancelled ones.
       if(ac !== bc) return ac - bc;
 
       var at = latestActionTime(a);
       var bt = latestActionTime(b);
+
       if(bt !== at) return bt - at;
 
-      var ao = String((a && (a.orderNo || a.id || a.orderId)) || "");
-      var bo = String((b && (b.orderNo || b.id || b.orderId)) || "");
+      var ao = String((a && (a.orderNo || a.orderId || a.id || a.no)) || "");
+      var bo = String((b && (b.orderNo || b.orderId || b.id || b.no)) || "");
+
       return bo.localeCompare(ao);
     });
   }
 
-  function sortResponse(data){
-    if(Array.isArray(data)) return sortOrders(data);
-    if(!data || typeof data !== "object") return data;
+  function shouldSortArray(arr, keyName){
+    if(!Array.isArray(arr) || arr.length < 2) return false;
 
-    ["orders","items","records","results","list","data"].forEach(function(key){
-      if(Array.isArray(data[key])){
-        data[key] = sortOrders(data[key]);
+    var key = String(keyName || "").toLowerCase();
+
+    if(
+      key.indexOf("order") >= 0 ||
+      key.indexOf("history") >= 0 ||
+      key.indexOf("record") >= 0 ||
+      key.indexOf("recent") >= 0 ||
+      key.indexOf("status") >= 0
+    ){
+      return arr.some(looksLikeOrder);
+    }
+
+    return arr.some(looksLikeOrder) && arr.filter(looksLikeOrder).length >= Math.max(1, Math.floor(arr.length / 2));
+  }
+
+  function sortResponseDeep(data, keyName, depth){
+    if(depth > 8) return data;
+
+    if(Array.isArray(data)){
+      var arr = data.map(function(item){
+        return sortResponseDeep(item, keyName, depth + 1);
+      });
+
+      if(shouldSortArray(arr, keyName)){
+        return sortOrders(arr);
       }
-    });
 
-    if(data.data && typeof data.data === "object"){
-      ["orders","items","records","results","list"].forEach(function(key){
-        if(Array.isArray(data.data[key])){
-          data.data[key] = sortOrders(data.data[key]);
-        }
+      return arr;
+    }
+
+    if(data && typeof data === "object"){
+      Object.keys(data).forEach(function(key){
+        data[key] = sortResponseDeep(data[key], key, depth + 1);
       });
     }
 
     return data;
   }
 
+  function sortResponse(data){
+    return sortResponseDeep(data, "", 0);
+  }
+
   function patchFetch(){
-    if(window.__sky31V162OrderLookupSortFetchPatched) return;
+    if(window.__sky31V163HistoryOrderSortFetchPatched) return;
     if(typeof window.fetch !== "function") return;
 
     var originalFetch = window.fetch;
+
     window.fetch = function(input, init){
       return originalFetch.apply(this, arguments).then(function(response){
         try{
@@ -11695,11 +11781,16 @@ window.addEventListener("load", function() {
           if(upperMethod !== "GET") return response;
 
           var target = String(url || "");
+
+          // Include member API because historical/member orders often come from member endpoint.
           var shouldSort =
             target.indexOf("/api/status") >= 0 ||
             target.indexOf("/api/order") >= 0 ||
+            target.indexOf("/api/member") >= 0 ||
             target.indexOf("lookup") >= 0 ||
-            target.indexOf("status") >= 0;
+            target.indexOf("status") >= 0 ||
+            target.indexOf("member") >= 0 ||
+            target.indexOf("history") >= 0;
 
           if(!shouldSort) return response;
 
@@ -11707,6 +11798,7 @@ window.addEventListener("load", function() {
             try{
               var data = JSON.parse(text);
               data = sortResponse(data);
+
               return new Response(JSON.stringify(data), {
                 status: response.status,
                 statusText: response.statusText,
@@ -11724,7 +11816,7 @@ window.addEventListener("load", function() {
       });
     };
 
-    window.__sky31V162OrderLookupSortFetchPatched = true;
+    window.__sky31V163HistoryOrderSortFetchPatched = true;
   }
 
   function patchRenderFunctions(){
@@ -11734,50 +11826,140 @@ window.addEventListener("load", function() {
       "renderStatusResults",
       "renderOrders",
       "renderMemberOrders",
+      "renderMemberRecentOrders",
+      "renderOrderHistory",
+      "renderHistoryOrders",
+      "renderMemberHistory",
+      "renderNoticeRecords",
+      "renderOrderRecords",
       "showOrderResults",
-      "showStatusResults"
+      "showStatusResults",
+      "showMemberOrders"
     ].forEach(function(fnName){
       var fn = window[fnName];
-      if(typeof fn !== "function" || fn.__sky31V162Sorted) return;
+
+      if(typeof fn !== "function" || fn.__sky31V163Sorted) return;
 
       var wrapped = function(data){
         var args = Array.prototype.slice.call(arguments);
-        args[0] = sortResponse(data);
+
+        if(args.length){
+          args[0] = sortResponse(args[0]);
+        }
+
         return fn.apply(this, args);
       };
 
-      wrapped.__sky31V162Sorted = true;
-      try{ window[fnName] = wrapped; }catch(e){}
+      wrapped.__sky31V163Sorted = true;
+
+      try{
+        window[fnName] = wrapped;
+      }catch(e){}
     });
   }
 
+  function domTime(el){
+    if(!el) return 0;
+
+    var attrs = [
+      "data-updated",
+      "data-modified",
+      "data-action-time",
+      "data-last-action",
+      "data-time",
+      "data-created",
+      "data-timestamp"
+    ];
+
+    var best = 0;
+
+    attrs.forEach(function(attr){
+      best = Math.max(best, toTime(el.getAttribute(attr)));
+    });
+
+    var text = String(el.textContent || "");
+
+    // Try ISO/date-like snippets.
+    var dateMatches = text.match(/\d{4}[-\/]\d{1,2}[-\/]\d{1,2}[ T]\d{1,2}:\d{2}(?::\d{2})?/g) || [];
+    dateMatches.forEach(function(v){
+      best = Math.max(best, toTime(v));
+    });
+
+    // Try order numbers with timestamps.
+    var numMatches = text.match(/\d{10,}/g) || [];
+    numMatches.forEach(function(v){
+      best = Math.max(best, toTime(v));
+    });
+
+    return best;
+  }
+
+  function domCancelled(el){
+    var txt = String((el && el.textContent) || "").toLowerCase();
+
+    return (
+      txt.indexOf("取消") >= 0 ||
+      txt.indexOf("cancel") >= 0 ||
+      txt.indexOf("已刪除") >= 0 ||
+      txt.indexOf("deleted") >= 0
+    );
+  }
+
   function sortExistingDom(){
-    ["orderLookupResults","statusResults","orderStatusResults","memberOrders","memberRecentOrders"].forEach(function(id){
+    var containers = [
+      "orderLookupResults",
+      "statusResults",
+      "orderStatusResults",
+      "memberOrders",
+      "memberRecentOrders",
+      "memberNoticeRecords",
+      "memberHistory",
+      "orderHistory",
+      "historyOrders",
+      "orderRecords",
+      "orderRecordList",
+      "memberOrderHistory",
+      "simpleOrderRecords"
+    ];
+
+    containers.forEach(function(id){
       var box = document.getElementById(id);
+
       if(!box) return;
 
       var cards = Array.prototype.slice.call(box.children).filter(function(el){
-        return el && el.textContent && (el.textContent.indexOf("訂單") >= 0 || el.textContent.indexOf("订单") >= 0 || el.textContent.indexOf("#") >= 0);
+        if(!el || !el.textContent) return false;
+
+        var txt = el.textContent;
+
+        return (
+          txt.indexOf("訂單") >= 0 ||
+          txt.indexOf("订单") >= 0 ||
+          txt.indexOf("#") >= 0 ||
+          txt.indexOf("Order") >= 0 ||
+          txt.indexOf("order") >= 0
+        );
       });
 
       if(cards.length < 2) return;
 
       cards.sort(function(a, b){
-        var atxt = String(a.textContent || "").toLowerCase();
-        var btxt = String(b.textContent || "").toLowerCase();
+        var ac = domCancelled(a) ? 1 : 0;
+        var bc = domCancelled(b) ? 1 : 0;
 
-        var ac = (atxt.indexOf("取消") >= 0 || atxt.indexOf("cancel") >= 0) ? 1 : 0;
-        var bc = (btxt.indexOf("取消") >= 0 || btxt.indexOf("cancel") >= 0) ? 1 : 0;
         if(ac !== bc) return ac - bc;
 
-        var at = toTime(a.getAttribute("data-updated") || a.getAttribute("data-time") || a.getAttribute("data-created") || "");
-        var bt = toTime(b.getAttribute("data-updated") || b.getAttribute("data-time") || b.getAttribute("data-created") || "");
+        var at = domTime(a);
+        var bt = domTime(b);
+
         if(bt !== at) return bt - at;
 
         return 0;
       });
 
-      cards.forEach(function(card){ box.appendChild(card); });
+      cards.forEach(function(card){
+        box.appendChild(card);
+      });
     });
   }
 
@@ -11786,20 +11968,25 @@ window.addEventListener("load", function() {
     patchRenderFunctions();
     setTimeout(sortExistingDom, 250);
     setTimeout(sortExistingDom, 800);
+    setTimeout(sortExistingDom, 1500);
   }
 
   boot();
 
   document.addEventListener("DOMContentLoaded", boot);
+
   document.addEventListener("click", function(){
-    setTimeout(boot, 250);
-    setTimeout(boot, 800);
+    patchRenderFunctions();
+    setTimeout(sortExistingDom, 250);
+    setTimeout(sortExistingDom, 800);
+    setTimeout(sortExistingDom, 1500);
   }, true);
 
   window.sky31OrderLookupSort = {
     sortOrders: sortOrders,
     latestActionTime: latestActionTime,
     isCancelled: isCancelled,
+    sortResponse: sortResponse,
     sortExistingDom: sortExistingDom
   };
 })();
