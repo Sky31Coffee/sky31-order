@@ -11550,5 +11550,260 @@ window.addEventListener("load", function() {
 })();
 </script>
 
+
+<script>
+/* V162 order lookup sort */
+(function(){
+  function toTime(value){
+    if(value === null || value === undefined || value === "") return 0;
+    if(typeof value === "number") return isFinite(value) ? value : 0;
+    var s = String(value).trim();
+    if(/^\d+$/.test(s)){
+      var n = Number(s);
+      if(s.length === 10) n = n * 1000;
+      return isFinite(n) ? n : 0;
+    }
+    var t = Date.parse(s);
+    return isFinite(t) ? t : 0;
+  }
+
+  function getTimeFromKeys(obj, keys){
+    if(!obj || typeof obj !== "object") return 0;
+    var best = 0;
+    keys.forEach(function(key){
+      if(Object.prototype.hasOwnProperty.call(obj, key)){
+        best = Math.max(best, toTime(obj[key]));
+      }
+    });
+    return best;
+  }
+
+  function orderNoTime(order){
+    var no = String((order && (order.orderNo || order.id || order.orderId)) || "");
+    var m = no.match(/(\d{10,})/);
+    if(!m) return 0;
+    var n = Number(m[1]);
+    if(!isFinite(n)) return 0;
+    if(String(m[1]).length === 10) n = n * 1000;
+    return n;
+  }
+
+  function latestActionTime(order){
+    if(!order || typeof order !== "object") return 0;
+    var keys = [
+      "updatedAt","modifiedAt","changedAt","lastModified","lastModifiedAt",
+      "lastActionAt","actionAt","statusUpdatedAt","statusChangedAt",
+      "completedAt","pickedUpAt","cancelledAt","canceledAt",
+      "createdAt","created","time","timestamp"
+    ];
+    var best = Math.max(getTimeFromKeys(order, keys), orderNoTime(order));
+
+    ["items","cart","products","drinks"].forEach(function(listKey){
+      var list = order[listKey];
+      if(Array.isArray(list)){
+        list.forEach(function(item){
+          best = Math.max(best, getTimeFromKeys(item, keys));
+        });
+      }
+    });
+
+    ["history","logs","events","actions"].forEach(function(listKey){
+      var list = order[listKey];
+      if(Array.isArray(list)){
+        list.forEach(function(item){
+          best = Math.max(best, getTimeFromKeys(item, keys));
+        });
+      }
+    });
+
+    return best;
+  }
+
+  function isCancelled(order){
+    if(!order || typeof order !== "object") return false;
+    var status = String(order.status || order.state || order.orderStatus || "").toLowerCase();
+    var label = [
+      order.statusText, order.statusLabel, order.label, order.note, order.remark
+    ].map(function(v){ return String(v || "").toLowerCase(); }).join(" ");
+
+    return (
+      order.cancelled === true ||
+      order.canceled === true ||
+      order.isCancelled === true ||
+      order.isCanceled === true ||
+      status === "cancelled" ||
+      status === "canceled" ||
+      status === "cancel" ||
+      status === "void" ||
+      status === "deleted" ||
+      status.indexOf("cancel") >= 0 ||
+      label.indexOf("取消") >= 0 ||
+      label.indexOf("cancel") >= 0
+    );
+  }
+
+  function sortOrders(list){
+    if(!Array.isArray(list)) return list;
+    return list.slice().sort(function(a, b){
+      var ac = isCancelled(a) ? 1 : 0;
+      var bc = isCancelled(b) ? 1 : 0;
+      if(ac !== bc) return ac - bc;
+
+      var at = latestActionTime(a);
+      var bt = latestActionTime(b);
+      if(bt !== at) return bt - at;
+
+      var ao = String((a && (a.orderNo || a.id || a.orderId)) || "");
+      var bo = String((b && (b.orderNo || b.id || b.orderId)) || "");
+      return bo.localeCompare(ao);
+    });
+  }
+
+  function sortResponse(data){
+    if(Array.isArray(data)) return sortOrders(data);
+    if(!data || typeof data !== "object") return data;
+
+    ["orders","items","records","results","list","data"].forEach(function(key){
+      if(Array.isArray(data[key])){
+        data[key] = sortOrders(data[key]);
+      }
+    });
+
+    if(data.data && typeof data.data === "object"){
+      ["orders","items","records","results","list"].forEach(function(key){
+        if(Array.isArray(data.data[key])){
+          data.data[key] = sortOrders(data.data[key]);
+        }
+      });
+    }
+
+    return data;
+  }
+
+  function patchFetch(){
+    if(window.__sky31V162OrderLookupSortFetchPatched) return;
+    if(typeof window.fetch !== "function") return;
+
+    var originalFetch = window.fetch;
+    window.fetch = function(input, init){
+      return originalFetch.apply(this, arguments).then(function(response){
+        try{
+          var url = typeof input === "string" ? input : (input && input.url) || "";
+          var method = (init && init.method) || (input && input.method) || "GET";
+          var upperMethod = String(method || "GET").toUpperCase();
+
+          if(upperMethod !== "GET") return response;
+
+          var target = String(url || "");
+          var shouldSort =
+            target.indexOf("/api/status") >= 0 ||
+            target.indexOf("/api/order") >= 0 ||
+            target.indexOf("lookup") >= 0 ||
+            target.indexOf("status") >= 0;
+
+          if(!shouldSort) return response;
+
+          return response.clone().text().then(function(text){
+            try{
+              var data = JSON.parse(text);
+              data = sortResponse(data);
+              return new Response(JSON.stringify(data), {
+                status: response.status,
+                statusText: response.statusText,
+                headers: response.headers
+              });
+            }catch(e){
+              return response;
+            }
+          }).catch(function(){
+            return response;
+          });
+        }catch(e){
+          return response;
+        }
+      });
+    };
+
+    window.__sky31V162OrderLookupSortFetchPatched = true;
+  }
+
+  function patchRenderFunctions(){
+    [
+      "renderOrderLookup",
+      "renderOrderResults",
+      "renderStatusResults",
+      "renderOrders",
+      "renderMemberOrders",
+      "showOrderResults",
+      "showStatusResults"
+    ].forEach(function(fnName){
+      var fn = window[fnName];
+      if(typeof fn !== "function" || fn.__sky31V162Sorted) return;
+
+      var wrapped = function(data){
+        var args = Array.prototype.slice.call(arguments);
+        args[0] = sortResponse(data);
+        return fn.apply(this, args);
+      };
+
+      wrapped.__sky31V162Sorted = true;
+      try{ window[fnName] = wrapped; }catch(e){}
+    });
+  }
+
+  function sortExistingDom(){
+    ["orderLookupResults","statusResults","orderStatusResults","memberOrders","memberRecentOrders"].forEach(function(id){
+      var box = document.getElementById(id);
+      if(!box) return;
+
+      var cards = Array.prototype.slice.call(box.children).filter(function(el){
+        return el && el.textContent && (el.textContent.indexOf("訂單") >= 0 || el.textContent.indexOf("订单") >= 0 || el.textContent.indexOf("#") >= 0);
+      });
+
+      if(cards.length < 2) return;
+
+      cards.sort(function(a, b){
+        var atxt = String(a.textContent || "").toLowerCase();
+        var btxt = String(b.textContent || "").toLowerCase();
+
+        var ac = (atxt.indexOf("取消") >= 0 || atxt.indexOf("cancel") >= 0) ? 1 : 0;
+        var bc = (btxt.indexOf("取消") >= 0 || btxt.indexOf("cancel") >= 0) ? 1 : 0;
+        if(ac !== bc) return ac - bc;
+
+        var at = toTime(a.getAttribute("data-updated") || a.getAttribute("data-time") || a.getAttribute("data-created") || "");
+        var bt = toTime(b.getAttribute("data-updated") || b.getAttribute("data-time") || b.getAttribute("data-created") || "");
+        if(bt !== at) return bt - at;
+
+        return 0;
+      });
+
+      cards.forEach(function(card){ box.appendChild(card); });
+    });
+  }
+
+  function boot(){
+    patchFetch();
+    patchRenderFunctions();
+    setTimeout(sortExistingDom, 250);
+    setTimeout(sortExistingDom, 800);
+  }
+
+  boot();
+
+  document.addEventListener("DOMContentLoaded", boot);
+  document.addEventListener("click", function(){
+    setTimeout(boot, 250);
+    setTimeout(boot, 800);
+  }, true);
+
+  window.sky31OrderLookupSort = {
+    sortOrders: sortOrders,
+    latestActionTime: latestActionTime,
+    isCancelled: isCancelled,
+    sortExistingDom: sortExistingDom
+  };
+})();
+</script>
+
 </body>
 </html>
