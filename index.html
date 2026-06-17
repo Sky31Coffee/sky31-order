@@ -11992,5 +11992,94 @@ window.addEventListener("load", function() {
 })();
 </script>
 
+
+<script>
+/* V164 submit with current member */
+(function(){
+  var MEMBER_KEY = "sky31_member_v1";
+
+  function $(id){ return document.getElementById(id); }
+
+  function getMember(){
+    try{
+      var raw = localStorage.getItem(MEMBER_KEY);
+      return raw ? JSON.parse(raw) : null;
+    }catch(e){
+      return null;
+    }
+  }
+
+  function setInput(id, value){
+    var el = $(id);
+    if(el) el.value = value || "";
+  }
+
+  function applyMemberToOrderForm(member){
+    if(!member || !member.phone) return false;
+
+    setInput("name", member.name || "");
+    setInput("phone", member.phone || "");
+    setInput("modalName", member.name || "");
+    setInput("modalPhone", member.phone || "");
+
+    try{
+      if(typeof window.updateCheckoutCustomerInfo === "function"){
+        window.updateCheckoutCustomerInfo();
+      }
+    }catch(e){}
+
+    return true;
+  }
+
+  function showNeedLogin(){
+    var err = $("errorMsg");
+    if(err){
+      err.textContent = "尚未登入會員，請先登入會員後再發送訂單。";
+      err.style.display = "block";
+    }
+
+    try{
+      if(typeof window.openCheckoutMemberModal === "function"){
+        window.openCheckoutMemberModal();
+        return;
+      }
+    }catch(e){}
+
+    alert("尚未登入會員，請先登入會員後再發送訂單。");
+  }
+
+  function patchSubmit(){
+    if(window.__sky31V164SubmitMemberPatched) return;
+    if(typeof window.submitOrder !== "function") return;
+
+    var original = window.submitOrder;
+
+    window.submitOrder = async function(){
+      var member = getMember();
+
+      if(!member || !member.phone){
+        showNeedLogin();
+        return;
+      }
+
+      applyMemberToOrderForm(member);
+
+      return original.apply(this, arguments);
+    };
+
+    window.__sky31V164SubmitMemberPatched = true;
+  }
+
+  patchSubmit();
+  setTimeout(patchSubmit, 300);
+  setTimeout(patchSubmit, 1000);
+  setTimeout(patchSubmit, 2500);
+
+  document.addEventListener("click", function(){
+    setTimeout(patchSubmit, 80);
+  }, true);
+})();
+</script>
+
 </body>
 </html>
