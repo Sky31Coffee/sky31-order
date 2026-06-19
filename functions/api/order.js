@@ -5,14 +5,16 @@ export async function onRequestPost(context) {
   try {
     const body = await request.json();
 
-    const customerName = String(body.customerName || body.name || "").trim();
-    const phone = String(body.phone || "").trim();
+    const submittedCustomerName = String(body.customerName || body.name || "").trim();
+    const submittedPhone = String(body.phone || "").trim();
 
-    if (!customerName || !phone) {
+    if (!submittedCustomerName || !submittedPhone) {
       return json({ ok: false, error: "請輸入姓名和手機號碼" }, 400);
     }
 
-    await ensureActiveMember(env, phone);
+    const activeMember = await ensureActiveMember(env, submittedPhone);
+    const phone = normalizePhone(activeMember.phone || submittedPhone);
+    const customerName = String(activeMember.name || submittedCustomerName).trim() || submittedCustomerName;
 
     const rawCart = Array.isArray(body.cart) ? body.cart : [];
     const cart = normalizeCart(rawCart);
@@ -31,6 +33,9 @@ export async function onRequestPost(context) {
       status: "pending",
       customerName,
       phone,
+      memberPhone: phone,
+      memberName: activeMember.name || customerName,
+      submittedPhone: normalizePhone(submittedPhone),
       pickup,
       pickupTime,
       totalAmount: cartTotal(cart),
@@ -38,6 +43,8 @@ export async function onRequestPost(context) {
       cart,
       orderText: "",
       createdAt: createdAt.toISOString(),
+      updatedAt: createdAt.toISOString(),
+      statusUpdatedAt: createdAt.toISOString(),
       completedAt: null,
       pickedUpAt: null,
       telegramMessageId: null
@@ -47,7 +54,7 @@ export async function onRequestPost(context) {
 
     const ttl = 60 * 60 * 24 * 14;
     await env.ORDERS.put("order:" + orderNo, JSON.stringify(order), { expirationTtl: ttl });
-    await env.ORDERS.put("phone:" + normalizePhone(phone) + ":" + orderNo, orderNo, { expirationTtl: ttl });
+    await saveOrderMemberIndexes(env, order, ttl);
     try { await updateMemberAfterOrder(env, order, ttl); } catch (_) {}
 
     const bg = sendTelegram(env, order.orderText, orderNo)
@@ -71,22 +78,63 @@ export async function onRequestPost(context) {
 
 
 async function ensureActiveMember(env, phone) {
-  const key = "member:" + normalizePhone(phone);
-  const raw = await env.ORDERS.get(key);
-  if (!raw) {
-    throw new Error("會員資料不存在或已被刪除，請重新登入或重新註冊");
+  phone = normalizePhone(phone);
+  if (!phone) throw new Error("會員資料不存在或已被刪除，請重新登入或重新註冊");
+
+  const candidates = memberPhoneCandidates(phone);
+
+  for (const candidate of candidates) {
+    const raw = await env.ORDERS.get("member:" + candidate);
+    if (!raw) continue;
+
+    try {
+      const member = JSON.parse(raw);
+      if (member && !member.deletedAt) {
+        member.phone = normalizePhone(member.phone || candidate);
+        return member;
+      }
+    } catch (_) {}
   }
 
-  try {
-    const member = JSON.parse(raw);
-    if (!member || member.deletedAt) {
-      throw new Error("會員資料不存在或已被刪除，請重新登入或重新註冊");
+  // Fallback: older member data may be saved with 853 / non-853 phone key.
+  let cursor = undefined;
+  let checked = 0;
+
+  do {
+    const page = await env.ORDERS.list({ prefix: "member:", cursor });
+
+    for (const key of (page.keys || [])) {
+      checked += 1;
+      if (checked > 500) break;
+
+      const keyPhone = normalizePhone(key.name.replace("member:", ""));
+      const raw = await env.ORDERS.get(key.name);
+      if (!raw) continue;
+
+      try {
+        const member = JSON.parse(raw);
+        if (!member || member.deletedAt) continue;
+
+        const storedPhone = normalizePhone(member.phone || keyPhone);
+
+        if (samePhoneForMemberLookup(storedPhone, phone) || samePhoneForMemberLookup(keyPhone, phone)) {
+          member.phone = storedPhone || keyPhone || phone;
+
+          const normalizedKey = "member:" + phone;
+          if (key.name !== normalizedKey) {
+            try { await env.ORDERS.put(normalizedKey, JSON.stringify(member)); } catch (_) {}
+          }
+
+          return member;
+        }
+      } catch (_) {}
     }
-    return member;
-  } catch (e) {
-    if (e && e.message && e.message.includes("會員資料不存在")) throw e;
-    throw new Error("會員資料讀取失敗，請重新登入或重新註冊");
-  }
+
+    cursor = page.cursor;
+    if (page.list_complete !== false) break;
+  } while (cursor);
+
+  throw new Error("會員資料不存在或已被刪除，請重新登入或重新註冊");
 }
 
 async function nextOrderNo(env) {
@@ -262,6 +310,29 @@ function normalizePhone(phone) {
   return String(phone || "").replace(/\D/g, "");
 }
 
+function phoneWithoutMacauCode(phone) {
+  phone = normalizePhone(phone);
+  if (phone.length === 11 && phone.startsWith("853")) return phone.slice(3);
+  return phone;
+}
+
+function samePhoneForMemberLookup(a, b) {
+  a = normalizePhone(a);
+  b = normalizePhone(b);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  return phoneWithoutMacauCode(a) === phoneWithoutMacauCode(b);
+}
+
+function memberPhoneCandidates(phone) {
+  phone = normalizePhone(phone);
+  const out = [];
+  if (phone) out.push(phone);
+  if (phone.length === 8) out.push("853" + phone);
+  if (phone.length === 11 && phone.startsWith("853")) out.push(phone.slice(3));
+  return Array.from(new Set(out.filter(Boolean)));
+}
+
 
 function beanIcon(bean) {
   bean = String(bean || "");
@@ -289,13 +360,32 @@ function formatDateTime(d) {
 }
 
 
-async function updateMemberAfterOrder(env, order, ttl) {
-  const phone = normalizePhone(order.phone);
-  if (!phone) return;
+async function saveOrderMemberIndexes(env, order, ttl) {
+  const phones = []
+    .concat(memberPhoneCandidates(order.phone))
+    .concat(memberPhoneCandidates(order.memberPhone))
+    .concat(memberPhoneCandidates(order.submittedPhone));
 
-  const markerKey = "member_ordered:" + phone + ":" + order.orderNo;
-  const already = await env.ORDERS.get(markerKey);
-  if (already) return;
+  const uniquePhones = Array.from(new Set(phones.map(normalizePhone).filter(Boolean)));
+
+  for (const phone of uniquePhones) {
+    await env.ORDERS.put("phone:" + phone + ":" + order.orderNo, order.orderNo, { expirationTtl: ttl });
+    await env.ORDERS.put("member_ordered:" + phone + ":" + order.orderNo, order.orderNo, { expirationTtl: ttl || 60 * 60 * 24 * 30 });
+  }
+}
+
+async function updateMemberAfterOrder(env, order, ttl) {
+  const phone = normalizePhone(order.memberPhone || order.phone);
+  if (!phone || !order.orderNo) return;
+
+  // Important:
+  // member_ordered:<phone>:<orderNo> is only an index for history lookup.
+  // Do NOT use it as the "already counted" marker, because saveOrderMemberIndexes()
+  // creates it before stats are updated. Using the same marker caused totalCups /
+  // totalOrders / totalSpent to stop accumulating.
+  const countedKey = "member_stats_counted:" + phone + ":" + order.orderNo;
+  const alreadyCounted = await env.ORDERS.get(countedKey);
+  if (alreadyCounted) return;
 
   const now = new Date().toISOString();
   const key = "member:" + phone;
@@ -311,7 +401,7 @@ async function updateMemberAfterOrder(env, order, ttl) {
   if (!member || typeof member !== "object") {
     member = {
       phone,
-      name: order.customerName || "",
+      name: order.memberName || order.customerName || "",
       birthday: "",
       note: "",
       createdAt: now,
@@ -322,26 +412,44 @@ async function updateMemberAfterOrder(env, order, ttl) {
     };
   }
 
-  const cups = Array.isArray(order.cart)
-    ? order.cart.reduce((sum, item) => sum + Number(item.qty || item.quantity || 1), 0)
-    : 0;
-
+  const cups = orderCups(order);
   const total = Number(order.totalAmount || cartTotal(order.cart) || 0);
 
-  member.phone = phone;
-  if (order.customerName) member.name = member.name || order.customerName;
+  member.phone = normalizePhone(member.phone || phone);
+  if (order.memberName || order.customerName) {
+    member.name = member.name || order.memberName || order.customerName;
+  }
+
   member.updatedAt = now;
-  member.lastOrderAt = order.createdAt || now;
+  member.lastOrderAt = order.updatedAt || order.statusUpdatedAt || order.createdAt || now;
   member.lastOrderNo = order.orderNo;
-  member.totalOrders = Number(member.totalOrders || 0) + 1;
-  member.totalCups = Number(member.totalCups || 0) + cups;
-  member.totalSpent = Math.round((Number(member.totalSpent || 0) + total) * 100) / 100;
+
+  const cancelled = isCancelledOrder(order);
+
+  if (!cancelled) {
+    member.totalOrders = Number(member.totalOrders || 0) + 1;
+    member.totalCups = Number(member.totalCups || 0) + cups;
+    member.totalSpent = Math.round((Number(member.totalSpent || 0) + total) * 100) / 100;
+  }
 
   const recent = Array.isArray(member.recentOrderNos) ? member.recentOrderNos : [];
-  member.recentOrderNos = [order.orderNo].concat(recent.filter(no => no !== order.orderNo)).slice(0, 20);
+  member.recentOrderNos = [order.orderNo].concat(recent.filter(no => no !== order.orderNo)).slice(0, 80);
 
   await env.ORDERS.put(key, JSON.stringify(member));
-  await env.ORDERS.put(markerKey, "1", { expirationTtl: ttl || 60 * 60 * 24 * 30 });
+  await env.ORDERS.put(countedKey, "1", { expirationTtl: ttl || 60 * 60 * 24 * 90 });
+}
+
+function orderCups(order) {
+  const cart = Array.isArray(order && order.cart) ? order.cart : [];
+  return cart.reduce((sum, item) => {
+    const qty = Number(item.qty || item.quantity || 1);
+    return sum + (Number.isFinite(qty) && qty > 0 ? qty : 1);
+  }, 0);
+}
+
+function isCancelledOrder(order) {
+  const s = String(order && order.status || "").toLowerCase();
+  return s === "cancelled" || s === "canceled" || s.indexOf("cancel") >= 0;
 }
 
 function json(data, status = 200) {

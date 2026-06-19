@@ -136,16 +136,9 @@ async function loadMember(env, phone) {
 
 async function enrichMemberWithOrders(env, member) {
   const phone = normalizePhone(member.phone);
-  const prefix = "phone:" + phone + ":";
-  const listed = await env.ORDERS.list({ prefix });
+  const orderNos = await collectMemberOrderNos(env, phone, member);
 
-  const orderNos = (listed.keys || [])
-    .map(k => k.name.replace(prefix, ""))
-    .filter(Boolean)
-    .sort()
-    .reverse();
-
-  const orders = [];
+  const allOrders = [];
   let totalOrders = 0;
   let totalCups = 0;
   let totalSpent = 0;
@@ -157,7 +150,17 @@ async function enrichMemberWithOrders(env, member) {
 
     let order = null;
     try { order = JSON.parse(raw); } catch (_) { continue; }
-    if (!order || normalizePhone(order.phone) !== phone) continue;
+
+    if (!order) continue;
+
+    const orderPhones = [
+      normalizePhone(order.phone),
+      normalizePhone(order.memberPhone),
+      normalizePhone(order.submittedPhone)
+    ].filter(Boolean);
+
+    const belongs = orderPhones.some(p => samePhoneForMemberLookup(p, phone));
+    if (!belongs) continue;
 
     if (historyStartAt && order.createdAt) {
       const orderAt = new Date(order.createdAt).getTime();
@@ -166,7 +169,7 @@ async function enrichMemberWithOrders(env, member) {
 
     const cups = orderCups(order);
     const amount = Number(order.totalAmount || cartTotal(order.cart) || 0);
-    const cancelled = order.status === "cancelled";
+    const cancelled = isCancelledOrder(order);
 
     if (!cancelled) {
       totalOrders += 1;
@@ -174,35 +177,169 @@ async function enrichMemberWithOrders(env, member) {
       totalSpent += amount;
     }
 
-    if (orders.length < 10) {
-      orders.push({
-        orderNo: order.orderNo || no,
-        status: order.status || "pending",
-        createdAt: order.createdAt || "",
-        pickupTime: order.pickupTime || order.pickup || "",
-        totalCups: cups,
-        totalAmount: Math.round(amount * 100) / 100,
-        currency: order.currency || "MOP",
-        cart: normalizeCart(order.cart, order.currency || "MOP")
-      });
-    }
+    allOrders.push({
+      orderNo: order.orderNo || no,
+      status: order.status || "pending",
+      createdAt: order.createdAt || "",
+      updatedAt: order.updatedAt || order.statusUpdatedAt || order.createdAt || "",
+      statusUpdatedAt: order.statusUpdatedAt || order.updatedAt || "",
+      confirmedAt: order.confirmedAt || null,
+      makingAt: order.makingAt || null,
+      completedAt: order.completedAt || null,
+      pickedUpAt: order.pickedUpAt || null,
+      cancelledAt: order.cancelledAt || order.canceledAt || null,
+      pickupTime: order.pickupTime || order.pickup || "",
+      totalCups: cups,
+      totalAmount: Math.round(amount * 100) / 100,
+      currency: order.currency || "MOP",
+      cart: normalizeCart(order.cart, order.currency || "MOP")
+    });
   }
+
+  const sortedOrders = sortOrdersForMember(allOrders);
+
+  // Lifetime totals should not go backwards.
+  // Some older versions only stored a limited recent list or failed to increment
+  // totalCups after member_ordered existed. Use the larger value between the
+  // persisted member totals and the totals recomputed from all available orders.
+  const finalTotalOrders = Math.max(Number(member.totalOrders || 0), totalOrders);
+  const finalTotalCups = Math.max(Number(member.totalCups || 0), totalCups);
+  const finalTotalSpent = Math.max(Number(member.totalSpent || 0), Math.round(totalSpent * 100) / 100);
+
+  const fixedMember = {
+    ...member,
+    phone,
+    updatedAt: member.updatedAt || "",
+    lastOrderAt: sortedOrders[0] ? (sortedOrders[0].updatedAt || sortedOrders[0].createdAt || "") : (member.lastOrderAt || ""),
+    lastOrderNo: sortedOrders[0] ? sortedOrders[0].orderNo : (member.lastOrderNo || ""),
+    totalOrders: finalTotalOrders,
+    totalCups: finalTotalCups,
+    totalSpent: Math.round(finalTotalSpent * 100) / 100,
+    recentOrderNos: sortedOrders.map(o => o.orderNo).filter(Boolean).slice(0, 80)
+  };
+
+  // Repair stuck counters in KV when possible, so the account no longer stays
+  // capped at the previous value such as 6 cups.
+  try {
+    if (
+      Number(member.totalOrders || 0) !== fixedMember.totalOrders ||
+      Number(member.totalCups || 0) !== fixedMember.totalCups ||
+      Number(member.totalSpent || 0) !== fixedMember.totalSpent ||
+      JSON.stringify(member.recentOrderNos || []) !== JSON.stringify(fixedMember.recentOrderNos || [])
+    ) {
+      await env.ORDERS.put("member:" + phone, JSON.stringify(fixedMember));
+    }
+  } catch (_) {}
 
   return {
     phone,
-    name: member.name || "",
-    birthday: member.birthday || "",
-    note: member.note || "",
-    createdAt: member.createdAt || "",
-    updatedAt: member.updatedAt || "",
-    historyStartAt: member.historyStartAt || "",
-    lastOrderAt: member.lastOrderAt || "",
-    lastOrderNo: member.lastOrderNo || "",
-    totalOrders,
-    totalCups,
-    totalSpent: Math.round(totalSpent * 100) / 100,
-    recentOrders: orders
+    name: fixedMember.name || "",
+    birthday: fixedMember.birthday || "",
+    note: fixedMember.note || "",
+    createdAt: fixedMember.createdAt || "",
+    updatedAt: fixedMember.updatedAt || "",
+    historyStartAt: fixedMember.historyStartAt || "",
+    lastOrderAt: fixedMember.lastOrderAt || "",
+    lastOrderNo: fixedMember.lastOrderNo || "",
+    totalOrders: fixedMember.totalOrders,
+    totalCups: fixedMember.totalCups,
+    totalSpent: fixedMember.totalSpent,
+    recentOrders: sortedOrders.slice(0, 50)
   };
+}
+
+async function collectMemberOrderNos(env, phone, member) {
+  const found = new Set();
+
+  function add(no) {
+    no = String(no || "").trim();
+    if (no) found.add(no);
+  }
+
+  const candidates = memberPhoneCandidates(phone);
+
+  for (const candidate of candidates) {
+    const phonePrefix = "phone:" + candidate + ":";
+    await listKeys(env, phonePrefix, 2000, key => add(key.name.replace(phonePrefix, "")));
+
+    const markerPrefix = "member_ordered:" + candidate + ":";
+    await listKeys(env, markerPrefix, 2000, key => add(key.name.replace(markerPrefix, "")));
+  }
+
+  if (Array.isArray(member.recentOrderNos)) {
+    member.recentOrderNos.forEach(add);
+  }
+
+  if (member.lastOrderNo) add(member.lastOrderNo);
+
+  // Fallback for old records where phone/member indexes were missing.
+  await listKeys(env, "order:", 2000, async key => {
+    const raw = await env.ORDERS.get(key.name);
+    if (!raw) return;
+
+    try {
+      const order = JSON.parse(raw);
+      const orderPhones = [
+        normalizePhone(order.phone),
+        normalizePhone(order.memberPhone),
+        normalizePhone(order.submittedPhone)
+      ].filter(Boolean);
+
+      if (orderPhones.some(p => samePhoneForMemberLookup(p, phone))) {
+        add(order.orderNo || key.name.replace("order:", ""));
+      }
+    } catch (_) {}
+  });
+
+  return Array.from(found);
+}
+
+async function listKeys(env, prefix, limit, callback) {
+  let cursor = undefined;
+  let count = 0;
+
+  do {
+    const page = await env.ORDERS.list({ prefix, cursor });
+
+    for (const key of (page.keys || [])) {
+      count += 1;
+      await callback(key);
+      if (count >= limit) return;
+    }
+
+    cursor = page.cursor;
+    if (page.list_complete !== false) break;
+  } while (cursor);
+}
+
+function latestOrderTime(order) {
+  return Math.max(
+    new Date(order.statusUpdatedAt || 0).getTime() || 0,
+    new Date(order.updatedAt || 0).getTime() || 0,
+    new Date(order.cancelledAt || 0).getTime() || 0,
+    new Date(order.pickedUpAt || 0).getTime() || 0,
+    new Date(order.completedAt || 0).getTime() || 0,
+    new Date(order.createdAt || 0).getTime() || 0
+  );
+}
+
+function isCancelledOrder(order) {
+  const s = String(order.status || "").toLowerCase();
+  return s === "cancelled" || s === "canceled" || s.indexOf("cancel") >= 0;
+}
+
+function sortOrdersForMember(orders) {
+  return (Array.isArray(orders) ? orders : []).slice().sort((a, b) => {
+    const ac = isCancelledOrder(a) ? 1 : 0;
+    const bc = isCancelledOrder(b) ? 1 : 0;
+    if (ac !== bc) return ac - bc;
+
+    const at = latestOrderTime(a);
+    const bt = latestOrderTime(b);
+    if (bt !== at) return bt - at;
+
+    return String(b.orderNo || "").localeCompare(String(a.orderNo || ""));
+  });
 }
 
 async function sendMemberTelegram(env, member) {
