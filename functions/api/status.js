@@ -22,33 +22,185 @@ export async function onRequestGet(context) {
     return json(formatOrder(order));
   }
 
-  const prefix = "phone:" + phone + ":";
-  const listed = await env.ORDERS.list({ prefix });
-
-  if (!listed.keys || !listed.keys.length) {
-    return json({ ok: false, error: "查詢不到目前可顯示的訂單" }, 404);
-  }
-
-  const orderNos = listed.keys
-    .map(k => k.name.replace(prefix, ""))
-    .filter(Boolean)
-    .sort()
-    .reverse();
-
+  const orderNos = await collectOrderNosForPhone(env, phone);
   const orders = [];
 
   for (const no of orderNos) {
-    if (orders.length >= 3) break;
     const raw = await env.ORDERS.get("order:" + no);
     if (!raw) continue;
-    orders.push(formatOrder(JSON.parse(raw)));
+
+    let order = null;
+    try { order = JSON.parse(raw); } catch (_) { continue; }
+
+    const orderPhones = [
+      normalizePhone(order.phone),
+      normalizePhone(order.memberPhone),
+      normalizePhone(order.submittedPhone)
+    ].filter(Boolean);
+
+    if (!orderPhones.some(p => samePhone(p, phone))) continue;
+
+    orders.push(formatOrder(order));
   }
 
-  if (!orders.length) {
+  const sorted = sortFormattedOrders(orders).slice(0, 30);
+
+  if (!sorted.length) {
     return json({ ok: false, error: "查詢不到目前可顯示的訂單" }, 404);
   }
 
-  return json({ ok: true, orders });
+  return json({ ok: true, orders: sorted });
+}
+
+
+async function collectOrderNosForPhone(env, phone) {
+  const found = new Set();
+  function add(no) {
+    no = String(no || "").trim();
+    if (no) found.add(no);
+  }
+
+  for (const candidate of phoneCandidates(phone)) {
+    const p1 = "phone:" + candidate + ":";
+    await listKeys(env, p1, 5000, key => add(key.name.replace(p1, "")));
+
+    const p2 = "member_ordered:" + candidate + ":";
+    await listKeys(env, p2, 5000, key => add(key.name.replace(p2, "")));
+  }
+
+  // Fallback for old records without phone index.
+  await listKeys(env, "order:", 5000, async key => {
+    const raw = await env.ORDERS.get(key.name);
+    if (!raw) return;
+
+    try {
+      const order = JSON.parse(raw);
+      const phones = [
+        normalizePhone(order.phone),
+        normalizePhone(order.memberPhone),
+        normalizePhone(order.submittedPhone)
+      ].filter(Boolean);
+
+      if (phones.some(p => samePhone(p, phone))) {
+        add(order.orderNo || key.name.replace("order:", ""));
+      }
+    } catch (_) {}
+  });
+
+  return Array.from(found);
+}
+
+async function listKeys(env, prefix, limit, callback) {
+  let cursor = undefined;
+  let count = 0;
+
+  do {
+    const page = await env.ORDERS.list({ prefix, cursor });
+
+    for (const key of (page.keys || [])) {
+      count += 1;
+      await callback(key);
+      if (count >= limit) return;
+    }
+
+    cursor = page.cursor;
+    if (page.list_complete !== false) break;
+  } while (cursor);
+}
+
+function phoneCandidates(phone) {
+  phone = normalizePhone(phone);
+  const out = [];
+  if (phone) out.push(phone);
+  if (phone.length === 8) out.push("853" + phone);
+  if (phone.length === 11 && phone.startsWith("853")) out.push(phone.slice(3));
+  return Array.from(new Set(out.filter(Boolean)));
+}
+
+function phoneWithoutMacauCode(phone) {
+  phone = normalizePhone(phone);
+  if (phone.length === 11 && phone.startsWith("853")) return phone.slice(3);
+  return phone;
+}
+
+function samePhone(a, b) {
+  a = normalizePhone(a);
+  b = normalizePhone(b);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  return phoneWithoutMacauCode(a) === phoneWithoutMacauCode(b);
+}
+
+function latestFormattedOrderTime(order) {
+  return Math.max(
+    new Date(order.statusUpdatedAt || 0).getTime() || 0,
+    new Date(order.updatedAt || 0).getTime() || 0,
+    new Date(order.cancelledAt || 0).getTime() || 0,
+    new Date(order.pickedUpAt || 0).getTime() || 0,
+    new Date(order.completedAt || 0).getTime() || 0,
+    new Date(order.createdAt || 0).getTime() || 0
+  );
+}
+
+function isFormattedCancelled(order) {
+  const s = String(order.status || "").toLowerCase();
+  return s === "cancelled" || s === "canceled" || s.indexOf("cancel") >= 0;
+}
+
+function sortFormattedOrders(orders) {
+  return (Array.isArray(orders) ? orders : []).slice().sort((a, b) => {
+    const ac = isFormattedCancelled(a) ? 1 : 0;
+    const bc = isFormattedCancelled(b) ? 1 : 0;
+    if (ac !== bc) return ac - bc;
+
+    const at = latestFormattedOrderTime(a);
+    const bt = latestFormattedOrderTime(b);
+    if (bt !== at) return bt - at;
+
+    return String(b.orderNo || "").localeCompare(String(a.orderNo || ""));
+  });
+}
+
+const SKY31_PRICE_TABLE = {
+  americano: { hot: 28, iced: 35 },
+  latte: { hot: 40, iced: 45 },
+  cappuccino: { hot: 40, iced: 45 },
+  mocha: { hot: 38, iced: 43 },
+  chocolate: { hot: 30, iced: 35 },
+  dirty: { fixed: 38 }
+};
+
+function priceKeyByName(name, cn) {
+  const n = String(name || "").toLowerCase().replace(/\s+/g, "") + " " + String(cn || "").toLowerCase().replace(/\s+/g, "");
+  if (n.includes("dirty") || n.includes("髒") || n.includes("脏")) return "dirty";
+  if (n.includes("americano") || n.includes("美式")) return "americano";
+  if (n.includes("latte") || n.includes("拿鐵") || n.includes("拿铁")) return "latte";
+  if (n.includes("cappuccino") || n.includes("卡布")) return "cappuccino";
+  if (n.includes("mocha") || n.includes("摩卡")) return "mocha";
+  if (n.includes("chocolate") || n.includes("可可")) return "chocolate";
+  return "";
+}
+
+function calcUnitPrice(item) {
+  const key = priceKeyByName(item.name || item.title, item.cn || item.zh);
+  const table = SKY31_PRICE_TABLE[key];
+  if (!table) return Number(item.unitPrice || item.price || 0);
+  if (table.fixed) return table.fixed;
+  const temp = String(item.temp || item.temperature || "");
+  const iced = temp.includes("Iced") || temp.includes("凍") || temp.includes("冻");
+  return iced ? table.iced : table.hot;
+}
+
+function money(n) {
+  return "MOP " + String(Math.round(Number(n || 0) * 100) / 100);
+}
+
+function cartTotal(cart) {
+  return (Array.isArray(cart) ? cart : []).reduce((sum, item) => {
+    const qty = Number(item.qty || item.quantity || 1);
+    const unit = Number(item.unitPrice || item.price || calcUnitPrice(item) || 0);
+    return sum + unit * qty;
+  }, 0);
 }
 
 function formatOrder(order) {
@@ -60,7 +212,11 @@ function formatOrder(order) {
     status: order.status || "pending",
     displayStatus: order.status || "pending",
     pickupTime: order.pickupTime || order.pickup || "",
+    totalAmount: Number(order.totalAmount || cartTotal(cart) || 0),
+    currency: order.currency || "MOP",
     createdAt: order.createdAt || "",
+    updatedAt: order.updatedAt || order.statusUpdatedAt || order.createdAt || "",
+    statusUpdatedAt: order.statusUpdatedAt || order.updatedAt || "",
     confirmedAt: order.confirmedAt || null,
     makingAt: order.makingAt || null,
     completedAt: order.completedAt || null,
@@ -72,19 +228,27 @@ function formatOrder(order) {
     phone: order.phone || "",
     pickup: order.pickup || "",
     orderText: order.orderText || "",
-    cart: cart.map(item => ({
-      name: item.name || item.title || "",
-      cn: item.cn || item.zh || "",
-      qty: Number(item.qty || item.quantity || 1),
-      image: item.image || "",
-      bean: item.bean || "",
-      flavor: item.flavor || "",
-      temp: item.temp || item.temperature || "",
-      ice: item.ice || "",
-      milk: item.milk || "",
-      pickup: item.pickup || "",
-      note: item.note || ""
-    }))
+    cart: cart.map(item => {
+      const base = {
+        name: item.name || item.title || "",
+        cn: item.cn || item.zh || "",
+        qty: Number(item.qty || item.quantity || 1),
+        image: item.image || "",
+        bean: item.bean || "",
+        flavor: item.flavor || "",
+        temp: item.temp || item.temperature || "",
+        ice: item.ice || "",
+        milk: item.milk || "",
+        pickup: item.pickup || "",
+        note: item.note || ""
+      };
+      const unit = Number(item.unitPrice || item.price || calcUnitPrice(base) || 0);
+      base.unitPrice = unit;
+      base.price = unit;
+      base.subtotal = Number(item.subtotal || unit * base.qty || 0);
+      base.currency = item.currency || order.currency || "MOP";
+      return base;
+    })
   };
 }
 

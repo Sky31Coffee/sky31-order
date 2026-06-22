@@ -52,7 +52,7 @@ export async function onRequestPost(context) {
 
     order.orderText = buildTelegramText(order);
 
-    const ttl = 60 * 60 * 24 * 14;
+    const ttl = 60 * 60 * 24 * 3650; // V166: long-term order/member history
     await env.ORDERS.put("order:" + orderNo, JSON.stringify(order), { expirationTtl: ttl });
     await saveOrderMemberIndexes(env, order, ttl);
     try { await updateMemberAfterOrder(env, order, ttl); } catch (_) {}
@@ -142,7 +142,7 @@ async function nextOrderNo(env) {
   const key = "counter:" + d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate());
   const current = parseInt(await env.ORDERS.get(key) || "0", 10);
   const next = current + 1;
-  await env.ORDERS.put(key, String(next), { expirationTtl: 60 * 60 * 24 * 30 });
+  await env.ORDERS.put(key, String(next), { expirationTtl: 60 * 60 * 24 * 3650 });
   return "A" + String(next).padStart(3, "0");
 }
 
@@ -370,7 +370,7 @@ async function saveOrderMemberIndexes(env, order, ttl) {
 
   for (const phone of uniquePhones) {
     await env.ORDERS.put("phone:" + phone + ":" + order.orderNo, order.orderNo, { expirationTtl: ttl });
-    await env.ORDERS.put("member_ordered:" + phone + ":" + order.orderNo, order.orderNo, { expirationTtl: ttl || 60 * 60 * 24 * 30 });
+    await env.ORDERS.put("member_ordered:" + phone + ":" + order.orderNo, order.orderNo, { expirationTtl: ttl || 60 * 60 * 24 * 3650 });
   }
 }
 
@@ -433,10 +433,10 @@ async function updateMemberAfterOrder(env, order, ttl) {
   }
 
   const recent = Array.isArray(member.recentOrderNos) ? member.recentOrderNos : [];
-  member.recentOrderNos = [order.orderNo].concat(recent.filter(no => no !== order.orderNo)).slice(0, 80);
+  member.recentOrderNos = [order.orderNo].concat(recent.filter(no => no !== order.orderNo)).slice(0, 2000);
 
   await env.ORDERS.put(key, JSON.stringify(member));
-  await env.ORDERS.put(countedKey, "1", { expirationTtl: ttl || 60 * 60 * 24 * 90 });
+  await env.ORDERS.put(countedKey, "1", { expirationTtl: ttl || 60 * 60 * 24 * 3650 });
 }
 
 function orderCups(order) {

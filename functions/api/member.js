@@ -96,7 +96,7 @@ async function loadMember(env, phone) {
 
     for (const key of (page.keys || [])) {
       checked += 1;
-      if (checked > 500) return null;
+      if (checked > 3000) return null;
 
       const keyPhone = normalizePhone(key.name.replace("member:", ""));
       if (!samePhoneForMemberLookup(keyPhone, phone)) {
@@ -215,7 +215,7 @@ async function enrichMemberWithOrders(env, member) {
     totalOrders: finalTotalOrders,
     totalCups: finalTotalCups,
     totalSpent: Math.round(finalTotalSpent * 100) / 100,
-    recentOrderNos: sortedOrders.map(o => o.orderNo).filter(Boolean).slice(0, 80)
+    recentOrderNos: sortedOrders.map(o => o.orderNo).filter(Boolean).slice(0, 2000)
   };
 
   // Repair stuck counters in KV when possible, so the account no longer stays
@@ -244,7 +244,9 @@ async function enrichMemberWithOrders(env, member) {
     totalOrders: fixedMember.totalOrders,
     totalCups: fixedMember.totalCups,
     totalSpent: fixedMember.totalSpent,
-    recentOrders: sortedOrders.slice(0, 50)
+    recentOrders: sortedOrders,
+    historyOrders: sortedOrders,
+    orders: sortedOrders
   };
 }
 
@@ -260,10 +262,10 @@ async function collectMemberOrderNos(env, phone, member) {
 
   for (const candidate of candidates) {
     const phonePrefix = "phone:" + candidate + ":";
-    await listKeys(env, phonePrefix, 2000, key => add(key.name.replace(phonePrefix, "")));
+    await listKeys(env, phonePrefix, 5000, key => add(key.name.replace(phonePrefix, "")));
 
     const markerPrefix = "member_ordered:" + candidate + ":";
-    await listKeys(env, markerPrefix, 2000, key => add(key.name.replace(markerPrefix, "")));
+    await listKeys(env, markerPrefix, 5000, key => add(key.name.replace(markerPrefix, "")));
   }
 
   if (Array.isArray(member.recentOrderNos)) {
@@ -273,7 +275,7 @@ async function collectMemberOrderNos(env, phone, member) {
   if (member.lastOrderNo) add(member.lastOrderNo);
 
   // Fallback for old records where phone/member indexes were missing.
-  await listKeys(env, "order:", 2000, async key => {
+  await listKeys(env, "order:", 5000, async key => {
     const raw = await env.ORDERS.get(key.name);
     if (!raw) return;
 
