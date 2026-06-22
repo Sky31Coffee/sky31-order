@@ -12081,5 +12081,127 @@ window.addEventListener("load", function() {
 })();
 </script>
 
+
+<script>
+/* V166 lifetime member stats display */
+(function(){
+  function getMemberFromResponse(data){
+    if(!data || typeof data !== "object") return null;
+    if(data.member && typeof data.member === "object") return data.member;
+    if(data.data && data.data.member && typeof data.data.member === "object") return data.data.member;
+    return null;
+  }
+
+  function ensureHistoryAliases(member){
+    if(!member || typeof member !== "object") return member;
+
+    var history =
+      (Array.isArray(member.historyOrders) && member.historyOrders) ||
+      (Array.isArray(member.orders) && member.orders) ||
+      (Array.isArray(member.recentOrders) && member.recentOrders) ||
+      [];
+
+    member.historyOrders = history;
+    member.orders = history;
+    member.recentOrders = history;
+
+    member.totalOrders = Number(member.totalOrders || 0);
+    member.totalCups = Number(member.totalCups || 0);
+    member.totalSpent = Number(member.totalSpent || 0);
+
+    return member;
+  }
+
+  function patchFetch(){
+    if(window.__sky31V166LifetimeStatsFetchPatched) return;
+    if(typeof window.fetch !== "function") return;
+
+    var originalFetch = window.fetch;
+    window.fetch = function(input, init){
+      return originalFetch.apply(this, arguments).then(function(response){
+        try{
+          var url = typeof input === "string" ? input : (input && input.url) || "";
+          var method = (init && init.method) || (input && input.method) || "GET";
+
+          if(String(method || "GET").toUpperCase() !== "GET") return response;
+
+          var target = String(url || "");
+          if(target.indexOf("/api/member") < 0 && target.indexOf("/api/status") < 0) return response;
+
+          return response.clone().text().then(function(text){
+            try{
+              var data = JSON.parse(text);
+              var member = getMemberFromResponse(data);
+              if(member) ensureHistoryAliases(member);
+
+              return new Response(JSON.stringify(data), {
+                status: response.status,
+                statusText: response.statusText,
+                headers: response.headers
+              });
+            }catch(e){
+              return response;
+            }
+          }).catch(function(){
+            return response;
+          });
+        }catch(e){
+          return response;
+        }
+      });
+    };
+
+    window.__sky31V166LifetimeStatsFetchPatched = true;
+  }
+
+  function patchRenderers(){
+    [
+      "renderMemberCenter",
+      "renderMemberProfile",
+      "renderMemberOrders",
+      "renderMemberRecentOrders",
+      "renderOrderHistory",
+      "renderHistoryOrders",
+      "renderMemberHistory"
+    ].forEach(function(name){
+      var fn = window[name];
+
+      if(typeof fn !== "function" || fn.__sky31V166LifetimePatched) return;
+
+      var wrapped = function(data){
+        var args = Array.prototype.slice.call(arguments);
+
+        if(args.length){
+          if(args[0] && args[0].member) ensureHistoryAliases(args[0].member);
+          else ensureHistoryAliases(args[0]);
+        }
+
+        return fn.apply(this, args);
+      };
+
+      wrapped.__sky31V166LifetimePatched = true;
+      try{ window[name] = wrapped; }catch(e){}
+    });
+  }
+
+  function boot(){
+    patchFetch();
+    patchRenderers();
+  }
+
+  boot();
+  document.addEventListener("DOMContentLoaded", boot);
+  document.addEventListener("click", function(){
+    setTimeout(boot, 120);
+    setTimeout(boot, 600);
+  }, true);
+
+  window.sky31LifetimeStatsFix = {
+    ensureHistoryAliases: ensureHistoryAliases,
+    boot: boot
+  };
+})();
+</script>
+
 </body>
 </html>
