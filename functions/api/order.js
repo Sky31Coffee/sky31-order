@@ -30,6 +30,7 @@ export async function onRequestPost(context) {
 
     const order = {
       orderNo,
+      orderId: orderNo,
       status: "pending",
       customerName,
       phone,
@@ -138,12 +139,26 @@ async function ensureActiveMember(env, phone) {
 }
 
 async function nextOrderNo(env) {
-  const d = new Date();
-  const key = "counter:" + d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate());
-  const current = parseInt(await env.ORDERS.get(key) || "0", 10);
-  const next = current + 1;
-  await env.ORDERS.put(key, String(next), { expirationTtl: 60 * 60 * 24 * 3650 });
-  return "A" + String(next).padStart(3, "0");
+  // V167: permanent unique order number.
+  // Old daily A001/A002 reset caused duplicate order keys after midnight.
+  // Since orderNo is used for KV order:<orderNo> and Telegram callbacks,
+  // it must never repeat.
+  const counter = await env.ORDERS.get("global_order_counter");
+  const next = Number(counter || 0) + 1;
+
+  if (!Number.isFinite(next) || next <= 0) {
+    throw new Error("訂單編號產生失敗");
+  }
+
+  await env.ORDERS.put("global_order_counter", String(next));
+
+  const now = new Date();
+  const yy = String(now.getFullYear()).slice(-2);
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  const serial = String(next).padStart(6, "0");
+
+  return "S" + yy + mm + dd + serial;
 }
 
 
