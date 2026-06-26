@@ -5606,6 +5606,77 @@ body:has(#orderApp.hidden) #sky31PersistentCart.sky31-cart-body-level{
   display:flex !important;
 }
 
+
+/* V168 order number display fit */
+.status-order-no,
+.bb-no{
+  max-width:100% !important;
+  box-sizing:border-box !important;
+  overflow-wrap:anywhere !important;
+  word-break:break-word !important;
+  white-space:normal !important;
+  line-height:1.08 !important;
+  letter-spacing:.06em !important;
+  font-size:clamp(28px, 9.2vw, 42px) !important;
+}
+
+.bb-full-no,
+.status-full-no{
+  max-width:100% !important;
+  box-sizing:border-box !important;
+  overflow-wrap:anywhere !important;
+  word-break:break-word !important;
+  white-space:normal !important;
+  font-size:12px !important;
+  line-height:1.45 !important;
+  font-weight:760 !important;
+  letter-spacing:.03em !important;
+  color:rgba(47,47,47,.52) !important;
+  margin:-8px 0 18px !important;
+}
+
+.status-full-no{
+  margin:-8px 0 16px !important;
+}
+
+@media(max-width:520px){
+  .status-order-no,
+  .bb-no{
+    font-size:clamp(26px, 8.4vw, 34px) !important;
+    letter-spacing:.045em !important;
+  }
+
+  .bb-full-no,
+  .status-full-no{
+    font-size:11px !important;
+    letter-spacing:.02em !important;
+    margin-top:-6px !important;
+  }
+}
+
+
+/* V169 pickup no english label */
+.bb-title,
+.status-pickup-label{
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Inter",system-ui,sans-serif !important;
+  font-size:12px !important;
+  line-height:1.2 !important;
+  font-weight:850 !important;
+  letter-spacing:.18em !important;
+  text-transform:uppercase !important;
+  color:rgba(47,47,47,.48) !important;
+}
+
+.bb-title .zh,
+.status-pickup-label .zh{
+  display:block !important;
+  margin-top:4px !important;
+  font-size:10px !important;
+  letter-spacing:.12em !important;
+  font-weight:760 !important;
+  color:rgba(47,47,47,.36) !important;
+}
+
 </style>
 
 <style>
@@ -6117,7 +6188,8 @@ function sky31OrderStatusCard(o){
   return '<div class="status-card">' +
     '<div class="status-top-brand">☕</div>' +
     '<div class="status-order-label">取餐號</div>' +
-    '<div class="status-order-no">' + (o.orderNo || "").replace(/^#/,"") + '</div>' +
+    '<div class="status-order-no">' + (window.sky31PickupNo ? window.sky31PickupNo(o.orderNo) : String(o.orderNo || "").replace(/^#/,"")) + '</div>' +
+    (window.sky31OrderFullLine ? window.sky31OrderFullLine(o.orderNo, "status-full-no") : "") +
     '<div class="status-desc">' + desc + '</div>' +
     sky31NativeProgressHtml(o) +
     '<div class="status-time-box">' +
@@ -6142,7 +6214,10 @@ function sky31ShowSuccessToast(orderNo){
 
     const div = document.createElement("div");
     div.className = "sky31-success-toast";
-    div.innerHTML = "✅ 訂單已提交　#" + String(orderNo || "").replace(/^#/,"") +
+    var shortNo = window.sky31PickupNo ? window.sky31PickupNo(orderNo) : String(orderNo || "").replace(/^#/,"");
+    var fullNo = window.sky31FullOrderNo ? window.sky31FullOrderNo(orderNo) : String(orderNo || "").replace(/^#/,"");
+    div.innerHTML = "✅ Pickup No.　#" + shortNo +
+      (fullNo && fullNo !== shortNo ? "<small>完整單號：" + fullNo + "</small>" : "") +
       "<small>可用手機號碼查詢訂單狀態</small>";
     document.body.appendChild(div);
 
@@ -7102,6 +7177,8 @@ function bbOrderCard(o){
   const picked = status === "picked_up";
   const done = status === "completed" || status === "picked_up" || cancelled;
   const no = String(o.orderNo || "").replace(/^#/,"");
+  const pickupNo = window.sky31PickupNo ? window.sky31PickupNo(no) : no;
+  const fullNoLine = window.sky31OrderFullLine ? window.sky31OrderFullLine(no, "bb-full-no") : "";
   const desc = cancelled ? "訂單已取消，如有疑問請聯絡 Sky31" :
                picked ? "已領取，感謝支持 ☕" :
                status === "completed" ? "咖啡已完成，歡迎取餐" :
@@ -7130,12 +7207,13 @@ function bbOrderCard(o){
     itemHtml = '<div class="bb-meta">此訂單沒有保存飲品明細資料</div>';
   }
   return '<div class="bb-status-card">' +
-    '<div class="bb-title">取餐號</div>' +
-    '<div class="bb-no">' + no + '</div>' +
+    '<div class="bb-title">Pickup No.<span class="zh">取餐號</span></div>' +
+    '<div class="bb-no">' + pickupNo + '</div>' +
+    fullNoLine +
     '<div class="bb-desc">' + desc + '</div>' +
     sky31NativeProgressHtml(o) +
-    '<button type="button" class="bb-detail-toggle" data-bb-toggle="bbDetail_' + no + '">查看訂單詳情 ▼</button>' +
-    '<div id="bbDetail_' + no + '" class="bb-detail-panel">' +
+    '<button type="button" class="bb-detail-toggle" data-bb-toggle="bbDetail_' + no.replace(/[^A-Za-z0-9_-]/g,"_") + '">查看訂單詳情 ▼</button>' +
+    '<div id="bbDetail_' + no.replace(/[^A-Za-z0-9_-]/g,"_") + '" class="bb-detail-panel">' +
       '<div class="bb-times">' +
         '<div class="bb-time-row"><span>取餐時間</span><b>' + (o.pickupTime || "-") + '</b></div>' +
         (o.createdAt ? '<div class="bb-time-row"><span>下單時間</span><b>' + bbDateTime(o.createdAt) + '</b></div>' : '') +
@@ -8036,7 +8114,7 @@ window.addEventListener("load", function() {
         itemHtml = '<div class="bb-meta">此訂單沒有保存飲品明細資料</div>';
       }
       return '<div class="bb-status-card">' +
-        '<div class="bb-title">取餐號</div>' +
+        '<div class="bb-title">Pickup No.<span class="zh">取餐號</span></div>' +
         '<div class="bb-no">' + no + '</div>' +
         '<div class="bb-desc">' + desc + '</div>' +
         (typeof sky31NativeProgressHtml === "function" ? sky31NativeProgressHtml(o) : "") +
@@ -12200,6 +12278,43 @@ window.addEventListener("load", function() {
     ensureHistoryAliases: ensureHistoryAliases,
     boot: boot
   };
+})();
+</script>
+
+
+<script>
+/* V168 order no display helpers */
+(function(){
+  function fullOrderNo(value){
+    return String(value || "").replace(/^#/, "").trim();
+  }
+
+  function pickupNo(value){
+    var s = fullOrderNo(value);
+
+    // V167 unique format: SYYMMDDNNNNNN
+    // Customer-facing pickup number uses the last 6 digits, short enough to fit.
+    var m = s.match(/^S\d{6}(\d{6})$/i);
+    if(m) return m[1];
+
+    // Fallback: if an older/newer long id exists, use the last 6 characters.
+    if(s.length > 8) return s.slice(-6);
+
+    return s;
+  }
+
+  function fullLine(value, className){
+    var full = fullOrderNo(value);
+    var shortNo = pickupNo(value);
+
+    if(!full || full === shortNo) return "";
+
+    return '<div class="' + className + '">完整單號：' + full + '</div>';
+  }
+
+  window.sky31FullOrderNo = fullOrderNo;
+  window.sky31PickupNo = pickupNo;
+  window.sky31OrderFullLine = fullLine;
 })();
 </script>
 
