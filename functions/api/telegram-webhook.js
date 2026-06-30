@@ -1,3 +1,12 @@
+export async function onRequestGet(context) {
+  return json({
+    ok: true,
+    endpoint: "telegram-webhook",
+    version: "V171",
+    message: "Webhook endpoint reachable. Telegram buttons require POST callback_query."
+  });
+}
+
 export async function onRequestPost(context) {
   const { request, env } = context;
   const update = await request.json();
@@ -13,12 +22,10 @@ export async function onRequestPost(context) {
   const cq = update.callback_query;
   const data = cq.data || "";
 
-  // V170: immediately acknowledge Telegram callback so the button does not keep loading.
-  // The real order update continues below. Telegram allows a callback query to be answered quickly.
-  try {
-    const ack = answerCallback(env, cq.id, "處理中…");
-    if (context.waitUntil) context.waitUntil(ack);
-  } catch (_) {}
+  // V171: immediately and synchronously acknowledge Telegram callback.
+  // If this is not awaited, the runtime may return before the request finishes,
+  // causing Telegram to keep showing Loading...
+  await answerCallback(env, cq.id, "處理中…");
 
   if (
     data.startsWith("member_list:") ||
