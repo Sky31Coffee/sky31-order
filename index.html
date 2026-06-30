@@ -6379,8 +6379,10 @@ function enterOrderPage() {
   window.scrollTo({top:0, behavior:"smooth"});
 }
 
-const BOT_TOKEN = "8051201735:AAExqZF2ASPqJ4iAFdvaYslAXH54ziTPw7A";
-const CHAT_ID = "8623066441";
+// V173: Telegram credentials are intentionally not stored in frontend code.
+// Use Cloudflare Pages environment variables TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID only.
+const BOT_TOKEN = "";
+const CHAT_ID = "";
 const products = [
   {name:"Americano",cn:"美式咖啡",desc:"經典意式濃縮咖啡加水調製，口感清爽。",milk:false,image:"./americano-new.jpg"},
   {name:"Latte",cn:"拿鐵",desc:"濃縮咖啡配牛奶，口感順滑。",milk:true,image:"./latte-new.jpg"},
