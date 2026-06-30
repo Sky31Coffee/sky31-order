@@ -13,6 +13,13 @@ export async function onRequestPost(context) {
   const cq = update.callback_query;
   const data = cq.data || "";
 
+  // V170: immediately acknowledge Telegram callback so the button does not keep loading.
+  // The real order update continues below. Telegram allows a callback query to be answered quickly.
+  try {
+    const ack = answerCallback(env, cq.id, "處理中…");
+    if (context.waitUntil) context.waitUntil(ack);
+  } catch (_) {}
+
   if (
     data.startsWith("member_list:") ||
     data.startsWith("member_view_active:") ||
@@ -30,7 +37,7 @@ export async function onRequestPost(context) {
     return handleMemberAction(env, cq, data);
   }
   const [action, orderNo] = data.split(":");
-  if (!orderNo) return json({ ok: true });
+  if (!orderNo) return stop(env, cq, "操作資料無效");
 
   const order = await getOrder(env, orderNo, cq);
   if (!order) return json({ ok: true });
@@ -855,11 +862,23 @@ async function getOrder(env, orderNo, cq) {
     await answerCallback(env, cq.id, "找不到訂單");
     return null;
   }
-  return JSON.parse(raw);
+
+  try {
+    return JSON.parse(raw);
+  } catch (_) {
+    await answerCallback(env, cq.id, "訂單資料異常");
+    return null;
+  }
 }
 
 async function saveAndRefresh(env, cq, order) {
-  await env.ORDERS.put("order:" + order.orderNo, JSON.stringify(order), { expirationTtl: 60 * 60 * 24 * 14 });
+  const now = new Date().toISOString();
+  order.updatedAt = now;
+  order.statusUpdatedAt = now;
+
+  // V170: keep edited orders long-term. Do not revert to old 14-day TTL when Telegram buttons are pressed.
+  await env.ORDERS.put("order:" + order.orderNo, JSON.stringify(order), { expirationTtl: 60 * 60 * 24 * 3650 });
+
   await editTelegramMessage(env, cq.message.chat.id, cq.message.message_id, buildTelegramText(order), buildReplyMarkup(order));
 }
 
@@ -1005,21 +1024,33 @@ function cleanBeanName(bean) {
 }
 
 async function answerCallback(env, callbackQueryId, text) {
-  await fetch("https://api.telegram.org/bot" + env.TELEGRAM_BOT_TOKEN + "/answerCallbackQuery", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({ callback_query_id: callbackQueryId, text })
-  });
+  try {
+    if (!env.TELEGRAM_BOT_TOKEN || !callbackQueryId) return;
+    await fetch("https://api.telegram.org/bot" + env.TELEGRAM_BOT_TOKEN + "/answerCallbackQuery", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ callback_query_id: callbackQueryId, text: text || "已收到操作" })
+    });
+  } catch (_) {}
 }
 
 async function editTelegramMessage(env, chatId, messageId, text, replyMarkup) {
-  const body = { chat_id: chatId, message_id: messageId, text };
-  if (replyMarkup) body.reply_markup = replyMarkup;
-  await fetch("https://api.telegram.org/bot" + env.TELEGRAM_BOT_TOKEN + "/editMessageText", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify(body)
-  });
+  try {
+    if (!env.TELEGRAM_BOT_TOKEN || !chatId || !messageId) return null;
+
+    const body = { chat_id: chatId, message_id: messageId, text };
+    if (replyMarkup) body.reply_markup = replyMarkup;
+
+    const res = await fetch("https://api.telegram.org/bot" + env.TELEGRAM_BOT_TOKEN + "/editMessageText", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(body)
+    });
+
+    try { return await res.json(); } catch (_) { return null; }
+  } catch (_) {
+    return null;
+  }
 }
 
 function pad2(n) { return String(n).padStart(2, "0"); }
