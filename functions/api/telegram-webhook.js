@@ -1,13 +1,26 @@
-export async function onRequestGet(context) {
-  return json({
-    ok: true,
-    endpoint: "telegram-webhook",
-    version: "V171",
-    message: "Webhook endpoint reachable. Telegram buttons require POST callback_query."
-  });
+export async function onRequest(context) {
+  const method = (context.request && context.request.method) || "GET";
+
+  // V172: universal handler prevents Cloudflare Pages returning
+  // "405 Method Not Allowed" for Telegram POST webhook callbacks.
+  if (method === "GET" || method === "HEAD") {
+    return json({
+      ok: true,
+      endpoint: "telegram-webhook",
+      version: "V172",
+      method,
+      message: "Webhook endpoint reachable. Telegram sends POST updates here."
+    });
+  }
+
+  if (method === "POST") {
+    return handleTelegramPost(context);
+  }
+
+  return json({ ok: false, error: "Method not allowed", method }, 405);
 }
 
-export async function onRequestPost(context) {
+async function handleTelegramPost(context) {
   const { request, env } = context;
   const update = await request.json();
 
