@@ -8,6 +8,23 @@ const DEFAULT_LIMITED_MENU = {
   limitedItems: []
 };
 
+
+function publicLimitedItemsV184(config) {
+  const all = sanitizePublicItems(config && config.limitedItems ? config.limitedItems : []);
+  const active = all.filter(item => item.active !== false);
+  if (!active.length) return [];
+
+  const currentId = safeId(config.currentLimitedBeanId || config.currentBeanId || "");
+  const current = currentId ? active.find(item => safeId(item.id) === currentId) : null;
+
+  // Only one Limited Bean is exposed to the website at a time.
+  return [current || active[0]];
+}
+
+function publicAllLimitedItemsV184(config) {
+  return sanitizePublicItems(config && config.limitedItems ? config.limitedItems : []);
+}
+
 export async function onRequest(context) {
   const method = context.request.method;
   if (method !== "GET" && method !== "HEAD") {
@@ -18,7 +35,7 @@ export async function onRequest(context) {
     const config = await getLimitedMenuConfig(context.env);
     return json({
       ok: true,
-      version: "V182",
+      version: "V184",
       limitedItems: sanitizePublicItems(config.limitedItems || []),
       updatedAt: config.updatedAt || "",
       updatedBy: config.updatedBy || ""
