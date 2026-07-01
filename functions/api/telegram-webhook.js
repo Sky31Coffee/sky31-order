@@ -7,7 +7,7 @@ export async function onRequest(context) {
     return json({
       ok: true,
       endpoint: "telegram-webhook",
-      version: "V186",
+      version: "V187",
       method,
       message: "Webhook endpoint reachable. Telegram sends POST updates here."
     });
@@ -2996,3 +2996,349 @@ buildCommandMenuMarkupV183 = function() {
     ]
   };
 }
+
+
+/* V187: Limited Bean display fix + detail delete/restore + back buttons.
+   Telegram can save multiple beans, but website only receives one current visible bean. */
+
+function visibleLimitedItemsV187(config) {
+  const items = Array.isArray(config && config.limitedItems) ? config.limitedItems : [];
+  return items.filter(item => item && item.deleted !== true && item.active !== false);
+}
+
+currentLimitedBeanV184 = function(config) {
+  const active = visibleLimitedItemsV187(config);
+  if (!active.length) return null;
+  const currentId = cleanLimitedId((config && (config.currentLimitedBeanId || config.currentBeanId)) || "");
+  if (currentId) {
+    const current = active.find(item => cleanLimitedId(item.id) === currentId);
+    if (current) return current;
+  }
+  return active[0];
+};
+
+normalizeLimitedCurrentV184 = async function(env, config) {
+  config = config || { limitedItems: [] };
+  config.limitedItems = Array.isArray(config.limitedItems) ? config.limitedItems : [];
+  const current = currentLimitedBeanV184(config);
+  config.currentLimitedBeanId = current ? cleanLimitedId(current.id) : "";
+  config.cleared = config.limitedItems.length === 0;
+  config.updatedAt = new Date().toISOString();
+  await saveLimitedMenuConfig(env, config);
+  return config;
+};
+
+saveLimitedDraftToMenuV183 = async function(env, chatId, draft) {
+  const data = (draft && draft.data) || {};
+  const name = String(data.name || "").trim();
+  const item = {
+    id: draft.mode === "edit" && draft.targetId ? cleanLimitedId(draft.targetId) : slugLimitedId(name),
+    type: "bean",
+    active: true,
+    deleted: false,
+    name,
+    cn: String(data.cn || name).trim(),
+    bean: name,
+    flavor: String(data.flavor || "").trim(),
+    desc: String(data.desc || "").trim(),
+    note: String(data.note || "").trim(),
+    surcharge: 5,
+    limitedSurcharge: 5,
+    updatedAt: new Date().toISOString()
+  };
+
+  const config = await getLimitedMenuConfig(env);
+  const targetId = cleanLimitedId(draft.targetId || item.id);
+  let updated = false;
+  config.limitedItems = (Array.isArray(config.limitedItems) ? config.limitedItems : []).map(old => {
+    if ((draft.mode === "edit" && cleanLimitedId(old.id) === targetId) || cleanLimitedId(old.id) === cleanLimitedId(item.id)) {
+      updated = true;
+      return { ...old, ...item, id: old.id || item.id, active: true, deleted: false };
+    }
+    return old;
+  });
+  if (!updated) config.limitedItems.unshift(item);
+
+  config.currentLimitedBeanId = cleanLimitedId(item.id);
+  config.cleared = false;
+  config.updatedAt = new Date().toISOString();
+  config.updatedBy = "telegram-wizard";
+  await saveLimitedMenuConfig(env, config);
+  return item;
+};
+
+function limitedBeanDetailTextV187(item, isCurrent) {
+  if (!item) return "找不到限定豆子。";
+  const deleted = item.deleted === true;
+  const status = deleted ? "已刪除" : (item.active === false ? "已停用" : "上架中");
+  return [
+    "✨ 限定豆子資料",
+    "",
+    "名稱：" + (item.bean || item.name || "-"),
+    "中文：" + (item.cn || "-"),
+    "風味：" + (item.flavor || "-"),
+    item.desc ? "描述：" + item.desc : "",
+    item.note ? "備註：" + item.note : "",
+    "編號：" + cleanLimitedId(item.id),
+    "狀態：" + status + (isCurrent ? "｜目前顯示" : ""),
+    "價格：客人選擇時自動 +MOP 5"
+  ].filter(Boolean).join("\n");
+}
+
+function limitedBeanDetailMarkupV187(item, isCurrent) {
+  const id = cleanLimitedId(item && item.id);
+  const rows = [];
+  if (!item) {
+    rows.push([{ text: "返回豆子列表", callback_data: "limited_list:all" }]);
+    rows.push([{ text: "返回功能列表", callback_data: "limited_cmd_menu:x" }]);
+    return { inline_keyboard: rows };
+  }
+
+  if (item.deleted === true) {
+    rows.push([{ text: "↩️ 恢復豆子", callback_data: "limited_restore:" + id }]);
+  } else {
+    if (!isCurrent && item.active !== false) rows.push([{ text: "✅ 設為目前顯示", callback_data: "limited_set_current:" + id }]);
+    rows.push([{ text: "✏️ 編輯豆子", callback_data: "limited_wizard_edit:" + id }]);
+    rows.push([{ text: "🗑️ 刪除豆子", callback_data: "limited_delete:" + id }]);
+  }
+
+  rows.push([{ text: "返回豆子列表", callback_data: "limited_list:all" }]);
+  rows.push([{ text: "返回功能列表", callback_data: "limited_cmd_menu:x" }]);
+  return { inline_keyboard: rows };
+}
+
+buildLimitedListText = function(config) {
+  const items = Array.isArray(config && config.limitedItems) ? config.limitedItems : [];
+  const activeSaved = items.filter(item => item && item.deleted !== true);
+  const deletedCount = items.filter(item => item && item.deleted === true).length;
+  const current = currentLimitedBeanV184(config);
+  const lines = [];
+  lines.push("✨ Sky31 限定豆子");
+  lines.push("");
+  lines.push("保存豆子：" + activeSaved.length);
+  if (deletedCount) lines.push("已刪除可恢復：" + deletedCount);
+  lines.push("目前顯示：" + (current ? (current.bean || current.name || "-") : "暫無"));
+  lines.push("");
+  if (!items.length) {
+    lines.push("目前沒有保存限定豆子。");
+    lines.push("下一支驚喜豆單正在準備中，敬請期待。");
+  } else {
+    items.forEach(item => lines.push(limitedItemLineWithCurrentV184(item, current ? cleanLimitedId(current.id) : "")));
+  }
+  lines.push("");
+  lines.push("點擊豆子名稱進入後，才會看到刪除 / 恢復選項。");
+  lines.push("網站只會顯示「目前顯示」那一款限定豆子。");
+  return lines.join("\n").trim();
+};
+
+limitedItemLineWithCurrentV184 = function(item, currentId) {
+  const status = item.deleted === true ? "已刪除" : (item.active === false ? "停用" : "啟用");
+  const current = cleanLimitedId(item.id) === currentId && item.deleted !== true ? "｜目前顯示" : "";
+  const surcharge = Number(item.surcharge || item.limitedSurcharge || 5) || 5;
+  return [
+    "• [" + status + "] " + (item.bean || item.name || "-") + current,
+    "  編號：" + cleanLimitedId(item.id) + "｜選用 +MOP " + surcharge,
+    "  風味：" + (item.flavor || "-")
+  ].filter(Boolean).join("\n");
+};
+
+buildLimitedListMarkup = function(config) {
+  const rows = [];
+  const items = Array.isArray(config && config.limitedItems) ? config.limitedItems : [];
+  const current = currentLimitedBeanV184(config);
+  const currentId = current ? cleanLimitedId(current.id) : "";
+
+  rows.push([{ text: "➕ 新增限定豆子", callback_data: "limited_wizard_add:x" }]);
+
+  items.slice(0, 12).forEach(item => {
+    const id = cleanLimitedId(item.id);
+    const prefix = item.deleted === true ? "🗑️ " : (id === currentId ? "✅ " : "☕ ");
+    rows.push([{ text: (prefix + (item.name || item.bean || id)).slice(0, 60), callback_data: "limited_detail:" + id }]);
+  });
+
+  rows.push([{ text: "返回功能列表", callback_data: "limited_cmd_menu:x" }]);
+  return { inline_keyboard: rows };
+};
+
+handleLimitedMenuAction = async function(env, cq, data) {
+  const chatId = cq.message && cq.message.chat ? cq.message.chat.id : env.TELEGRAM_CHAT_ID;
+  const messageId = cq.message ? cq.message.message_id : null;
+
+  if (!isAuthorizedTelegramChat(env, chatId)) return stop(env, cq, "沒有權限");
+
+  const parts = String(data || "").split(":");
+  const action = parts[0];
+  const id = cleanLimitedId(parts.slice(1).join(":"));
+  let config = await getLimitedMenuConfig(env);
+  config = await normalizeLimitedCurrentV184(env, config);
+
+  if (action === "limited_cmd_menu") {
+    await editOrSendV183(env, chatId, messageId, buildCommandMenuTextV183(), buildCommandMenuMarkupV183());
+    return stop(env, cq, "已返回功能列表");
+  }
+
+  if (action === "limited_list") {
+    await editOrSendV183(env, chatId, messageId, buildLimitedListText(config), buildLimitedListMarkup(config));
+    return stop(env, cq, "已返回豆子列表");
+  }
+
+  if (action === "limited_detail") {
+    const item = findLimitedItemV183(config, id);
+    if (!item) return stop(env, cq, "找不到豆子");
+    const current = currentLimitedBeanV184(config);
+    const isCurrent = current && cleanLimitedId(current.id) === cleanLimitedId(item.id) && item.deleted !== true;
+    await editOrSendV183(env, chatId, messageId, limitedBeanDetailTextV187(item, isCurrent), limitedBeanDetailMarkupV187(item, isCurrent));
+    return stop(env, cq, "已開啟豆子資料");
+  }
+
+  if (action === "limited_wizard_add") {
+    await startLimitedWizardV183(env, chatId, "add", null);
+    return stop(env, cq, "開始新增限定豆子");
+  }
+
+  if (action === "limited_wizard_edit") {
+    const item = findLimitedItemV183(config, id);
+    if (!item || item.deleted === true) return stop(env, cq, "找不到可編輯豆子");
+    await startLimitedWizardV183(env, chatId, "edit", item);
+    return stop(env, cq, "開始編輯限定豆子");
+  }
+
+  if (action === "limited_set_current") {
+    let found = false;
+    config.limitedItems.forEach(item => {
+      if (cleanLimitedId(item.id) === id && item.deleted !== true) {
+        item.active = true;
+        config.currentLimitedBeanId = cleanLimitedId(item.id);
+        item.updatedAt = new Date().toISOString();
+        found = true;
+      }
+    });
+    config = await normalizeLimitedCurrentV184(env, config);
+    const item = findLimitedItemV183(config, id);
+    await editOrSendV183(env, chatId, messageId, limitedBeanDetailTextV187(item, true), limitedBeanDetailMarkupV187(item, true));
+    return stop(env, cq, found ? "已設為目前顯示" : "找不到豆子");
+  }
+
+  if (action === "limited_restore") {
+    let restored = null;
+    config.limitedItems.forEach(item => {
+      if (cleanLimitedId(item.id) === id) {
+        item.deleted = false;
+        item.active = true;
+        item.updatedAt = new Date().toISOString();
+        config.currentLimitedBeanId = cleanLimitedId(item.id);
+        restored = item;
+      }
+    });
+    config = await normalizeLimitedCurrentV184(env, config);
+    await editOrSendV183(env, chatId, messageId, buildLimitedListText(config), buildLimitedListMarkup(config));
+    return stop(env, cq, restored ? "已恢復並設為目前顯示" : "找不到豆子");
+  }
+
+  if (action === "limited_delete") {
+    const item = findLimitedItemV183(config, id);
+    if (!item || item.deleted === true) return stop(env, cq, "找不到豆子");
+    await editOrSendV183(env, chatId, messageId, "確定刪除此限定豆子？\n\n" + limitedBeanDetailTextV187(item, false), {
+      inline_keyboard: [
+        [{ text: "✅ 確認刪除", callback_data: "limited_delete_yes:" + id }],
+        [{ text: "取消，返回豆子資料", callback_data: "limited_detail:" + id }],
+        [{ text: "返回豆子列表", callback_data: "limited_list:all" }]
+      ]
+    });
+    return stop(env, cq, "請確認刪除");
+  }
+
+  if (action === "limited_delete_yes") {
+    let deleted = null;
+    config.limitedItems.forEach(item => {
+      if (cleanLimitedId(item.id) === id) {
+        item.deleted = true;
+        item.active = false;
+        item.updatedAt = new Date().toISOString();
+        deleted = item;
+      }
+    });
+    if (config.currentLimitedBeanId === id) config.currentLimitedBeanId = "";
+    config = await normalizeLimitedCurrentV184(env, config);
+    await editOrSendV183(env, chatId, messageId, buildLimitedListText(config), buildLimitedListMarkup(config));
+    return stop(env, cq, deleted ? "已刪除，可在列表中恢復" : "找不到豆子");
+  }
+
+  if (action === "limited_toggle") {
+    let found = false;
+    config.limitedItems.forEach(item => {
+      if (cleanLimitedId(item.id) === id && item.deleted !== true) {
+        item.active = item.active === false ? true : false;
+        if (item.active) config.currentLimitedBeanId = cleanLimitedId(item.id);
+        if (!item.active && config.currentLimitedBeanId === cleanLimitedId(item.id)) config.currentLimitedBeanId = "";
+        found = true;
+      }
+    });
+    config = await normalizeLimitedCurrentV184(env, config);
+    await editOrSendV183(env, chatId, messageId, buildLimitedListText(config), buildLimitedListMarkup(config));
+    return stop(env, cq, found ? "已切換狀態" : "找不到豆子");
+  }
+
+  if (action === "limited_wizard_back") {
+    const draft = await getLimitedDraftV183(env, chatId);
+    if (!draft) return stop(env, cq, "沒有正在編輯的豆子");
+    draft.step = Math.max(0, Number(draft.step || 0) - 1);
+    await saveLimitedDraftV183(env, chatId, draft);
+    await sendLimitedWizardPromptV183(env, chatId, draft);
+    return stop(env, cq, "已返回上一步");
+  }
+
+  if (action === "limited_wizard_skip") {
+    const draft = await getLimitedDraftV183(env, chatId);
+    if (!draft) return stop(env, cq, "沒有正在編輯的豆子");
+    const step = LIMITED_BEAN_STEPS_V183[Number(draft.step || 0)];
+    if (!step || step.required) return stop(env, cq, "此欄必填");
+    draft.data[step.key] = "";
+    draft.step = Number(draft.step || 0) + 1;
+    await saveLimitedDraftV183(env, chatId, draft);
+    await sendLimitedWizardPromptV183(env, chatId, draft);
+    return stop(env, cq, "已略過");
+  }
+
+  if (action === "limited_wizard_cancel") {
+    await clearLimitedDraftV183(env, chatId);
+    await sendTelegramMessage(env, chatId, "已取消限定豆子編輯。", buildCommandMenuMarkupV183());
+    return stop(env, cq, "已取消");
+  }
+
+  if (action === "limited_wizard_confirm") {
+    const draft = await getLimitedDraftV183(env, chatId);
+    if (!draft) return stop(env, cq, "沒有正在編輯的豆子");
+    const saved = await saveLimitedDraftToMenuV183(env, chatId, draft);
+    await clearLimitedDraftV183(env, chatId);
+    config = await normalizeLimitedCurrentV184(env, await getLimitedMenuConfig(env));
+    await sendTelegramMessage(env, chatId, "✅ 已上傳限定豆子：\n\n" + limitedBeanDetailTextV187(saved, true) + "\n\n已自動設為目前顯示。", buildLimitedListMarkup(config));
+    return stop(env, cq, "已上傳");
+  }
+
+  return stop(env, cq, "未知限定操作");
+};
+
+buildMemberListMarkup = function(members) {
+  const rows = [];
+  members.slice(0, 80).forEach(member => {
+    const phone = normalizePhone(member.phone);
+    const name = member.name || "未命名";
+    const deleted = !!member._deleted;
+    const label = (deleted ? "🗑️ " : "👤 ") + name + "｜" + phone + (deleted ? "｜已刪除" : "");
+    rows.push([{ text: label.slice(0, 60), callback_data: (deleted ? "member_view_deleted:" : "member_view_active:") + phone }]);
+  });
+  if (members.length > 80) rows.push([{ text: "只顯示前 80 位", callback_data: "member_list:all" }]);
+  rows.push([{ text: "返回功能列表", callback_data: "limited_cmd_menu:x" }]);
+  return { inline_keyboard: rows };
+};
+
+buildMemberDetailReplyMarkup = function(member, deleted = false) {
+  const phone = normalizePhone(member.phone);
+  const rows = [];
+  if (deleted) rows.push([{ text: "↩️ 恢復賬號", callback_data: "member_restore:" + phone }]);
+  else rows.push([{ text: "🗑️ 刪除賬號", callback_data: "member_delete:" + phone }]);
+  rows.push([{ text: "📋 返回用戶列表", callback_data: "member_list:all" }]);
+  rows.push([{ text: "返回功能列表", callback_data: "limited_cmd_menu:x" }]);
+  return { inline_keyboard: rows };
+};

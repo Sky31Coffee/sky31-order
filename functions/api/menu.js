@@ -9,21 +9,6 @@ const DEFAULT_LIMITED_MENU = {
 };
 
 
-function publicLimitedItemsV184(config) {
-  const all = sanitizePublicItems(config && config.limitedItems ? config.limitedItems : []);
-  const active = all.filter(item => item.active !== false);
-  if (!active.length) return [];
-
-  const currentId = safeId(config.currentLimitedBeanId || config.currentBeanId || "");
-  const current = currentId ? active.find(item => safeId(item.id) === currentId) : null;
-
-  // Only one Limited Bean is exposed to the website at a time.
-  return [current || active[0]];
-}
-
-function publicAllLimitedItemsV184(config) {
-  return sanitizePublicItems(config && config.limitedItems ? config.limitedItems : []);
-}
 
 export async function onRequest(context) {
   const method = context.request.method;
@@ -33,16 +18,32 @@ export async function onRequest(context) {
 
   try {
     const config = await getLimitedMenuConfig(context.env);
+    const visible = publicLimitedItemsV187(config);
     return json({
       ok: true,
-      version: "V186",
-      limitedItems: sanitizePublicItems(config.limitedItems || []),
+      version: "V187",
+      limitedItems: visible,
+      currentLimitedBeanId: visible[0] ? visible[0].id : "",
+      allLimitedItems: publicAllLimitedItemsV187(config),
       updatedAt: config.updatedAt || "",
       updatedBy: config.updatedBy || ""
     });
   } catch (e) {
     return json({ ok: false, error: e.message || "menu load failed" }, 500);
   }
+}
+
+function publicLimitedItemsV187(config) {
+  const all = sanitizePublicItems(config && config.limitedItems ? config.limitedItems : []);
+  const active = all.filter(item => item.active !== false && item.deleted !== true);
+  if (!active.length) return [];
+  const currentId = safeId(config.currentLimitedBeanId || config.currentBeanId || "");
+  const current = currentId ? active.find(item => safeId(item.id) === currentId) : null;
+  return [current || active[0]];
+}
+
+function publicAllLimitedItemsV187(config) {
+  return sanitizePublicItems(config && config.limitedItems ? config.limitedItems : []);
 }
 
 async function getLimitedMenuConfig(env) {
@@ -64,6 +65,7 @@ function sanitizePublicItems(items) {
     id: safeId(item.id),
     type: "bean",
     active: item.active !== false,
+    deleted: item.deleted === true,
     name: String(item.name || item.bean || item.title || "期間限定豆子").trim(),
     cn: String(item.cn || item.zh || item.chinese || item.name || item.bean || "期間限定豆子").trim(),
     desc: String(item.desc || item.description || "").trim(),
