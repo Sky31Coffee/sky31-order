@@ -492,3 +492,43 @@ function json(data, status = 200) {
     }
   });
 }
+
+
+/* V192: membership reward helpers */
+function sky31RewardTierV192(totalCups) {
+  totalCups = Number(totalCups || 0);
+  if (totalCups >= 100) return { key: "vip", name: "黑金會員", icon: "👑", next: null };
+  if (totalCups >= 50) return { key: "diamond", name: "鑽石會員", icon: "💎", next: 100 };
+  if (totalCups >= 25) return { key: "gold", name: "金卡會員", icon: "🥇", next: 50 };
+  if (totalCups >= 10) return { key: "silver", name: "銀卡會員", icon: "🥈", next: 25 };
+  return { key: "bronze", name: "青銅會員", icon: "☕", next: 10 };
+}
+
+function sky31RewardsFromMemberV192(member) {
+  member = member || {};
+  const totalCups = Number(member.totalCups || member.cups || member.totalItems || member.orderCups || 0);
+  const redeemed = Number(member.rewardRedeemed || member.rewardsRedeemed || 0);
+  const earned = Math.floor(totalCups / 10);
+  const available = Math.max(0, earned - redeemed);
+  const tier = sky31RewardTierV192(totalCups);
+  return {
+    totalCups,
+    earnedRewards: earned,
+    redeemedRewards: redeemed,
+    availableRewards: available,
+    cupsToNextReward: Math.max(0, 10 - (totalCups % 10 || 10)),
+    rule: "每累計 10 杯，可免費兌換任何 1 杯飲品",
+    tier
+  };
+}
+
+function sky31DecorateMemberV192(member) {
+  if (!member || typeof member !== "object") return member;
+  const rewards = sky31RewardsFromMemberV192(member);
+  member.rewards = rewards;
+  member.availableRewards = rewards.availableRewards;
+  member.memberTier = rewards.tier.name;
+  member.memberTierIcon = rewards.tier.icon;
+  member.memberTierKey = rewards.tier.key;
+  return member;
+}

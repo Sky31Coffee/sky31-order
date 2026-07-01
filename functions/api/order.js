@@ -19,7 +19,12 @@ export async function onRequestPost(context) {
     const rawCart = Array.isArray(body.cart) ? body.cart : [];
     const cart = normalizeCart(rawCart);
 
-    if (!cart.length && !String(body.orderText || "").trim()) {
+    
+    const sky31MemberForRewardV192 = await sky31LoadMemberForRewardV192(context.env || env, body.phone || body.customerPhone || (body.member && body.member.phone));
+    const sky31RewardInfoV192 = sky31RewardsFromMemberV192(sky31MemberForRewardV192 || {});
+    const sky31RewardCalcV192 = sky31RewardDiscountForItemsV192(cart, sky31RewardInfoV192.availableRewards);
+    const sky31RewardAppliedV192 = sky31RewardCalcV192.useRewards > 0;
+if (!cart.length && !String(body.orderText || "").trim()) {
       return json({ ok: false, error: "請先選擇飲品" }, 400);
     }
 
@@ -503,4 +508,89 @@ function json(data, status = 200) {
       "Cache-Control": "no-store"
     }
   });
+}
+
+
+/* V192: rewards redemption helpers */
+function sky31RewardTierV192(totalCups) {
+  totalCups = Number(totalCups || 0);
+  if (totalCups >= 100) return { key: "vip", name: "黑金會員", icon: "👑", next: null };
+  if (totalCups >= 50) return { key: "diamond", name: "鑽石會員", icon: "💎", next: 100 };
+  if (totalCups >= 25) return { key: "gold", name: "金卡會員", icon: "🥇", next: 50 };
+  if (totalCups >= 10) return { key: "silver", name: "銀卡會員", icon: "🥈", next: 25 };
+  return { key: "bronze", name: "青銅會員", icon: "☕", next: 10 };
+}
+
+function sky31RewardsFromMemberV192(member) {
+  member = member || {};
+  const totalCups = Number(member.totalCups || member.cups || member.totalItems || member.orderCups || 0);
+  const redeemed = Number(member.rewardRedeemed || member.rewardsRedeemed || 0);
+  const earned = Math.floor(totalCups / 10);
+  const available = Math.max(0, earned - redeemed);
+  return {
+    totalCups,
+    earnedRewards: earned,
+    redeemedRewards: redeemed,
+    availableRewards: available,
+    tier: sky31RewardTierV192(totalCups)
+  };
+}
+
+function sky31OrderDrinkCupCountV192(items) {
+  return (Array.isArray(items) ? items : []).reduce((sum, item) => {
+    return sum + Math.max(0, Number(item.qty || 1));
+  }, 0);
+}
+
+function sky31RewardDiscountForItemsV192(items, availableRewards) {
+  const rewards = Math.max(0, Number(availableRewards || 0));
+  const expanded = [];
+  (Array.isArray(items) ? items : []).forEach(item => {
+    const qty = Math.max(0, Number(item.qty || 1));
+    const unit = Number(item.unitPrice || item.price || 0);
+    for (let i = 0; i < qty; i++) expanded.push({ title: item.title || item.name || "飲品", unit });
+  });
+  expanded.sort((a, b) => b.unit - a.unit);
+  const use = Math.min(rewards, expanded.length);
+  const selected = expanded.slice(0, use);
+  const discount = selected.reduce((sum, x) => sum + Number(x.unit || 0), 0);
+  return {
+    useRewards: use,
+    rewardDiscount: discount,
+    freeItems: selected
+  };
+}
+
+async function sky31LoadMemberForRewardV192(env, phone) {
+  const p = String(phone || "").replace(/\D/g, "");
+  if (!p || !env || !env.ORDERS) return null;
+  try {
+    const raw = await env.ORDERS.get("member:" + p);
+    return raw ? JSON.parse(raw) : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function sky31SaveMemberAfterRewardV192(env, member, phone, cupAdd, redeemUse) {
+  if (!member || !env || !env.ORDERS) return null;
+  const p = String(phone || member.phone || "").replace(/\D/g, "");
+  if (!p) return null;
+  member.totalCups = Number(member.totalCups || member.cups || member.totalItems || 0) + Number(cupAdd || 0);
+  member.rewardRedeemed = Number(member.rewardRedeemed || member.rewardsRedeemed || 0) + Number(redeemUse || 0);
+  member.updatedAt = new Date().toISOString();
+  member.rewards = sky31RewardsFromMemberV192(member);
+  member.memberTier = member.rewards.tier.name;
+  member.memberTierIcon = member.rewards.tier.icon;
+  member.memberTierKey = member.rewards.tier.key;
+  try { await env.ORDERS.put("member:" + p, JSON.stringify(member)); } catch (_) {}
+  return member;
+}
+
+
+function sky31RewardTelegramLineV192(order) {
+  const use = Number(order && order.rewardUse || 0);
+  const discount = Number(order && order.rewardDiscount || 0);
+  if (!use || !discount) return "";
+  return "🎁 會員獎賞兌換 ×" + use + "｜-" + money(discount);
 }
