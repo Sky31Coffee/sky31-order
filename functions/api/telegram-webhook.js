@@ -7,7 +7,7 @@ export async function onRequest(context) {
     return json({
       ok: true,
       endpoint: "telegram-webhook",
-      version: "V222",
+      version: "V223",
       method,
       message: "Webhook endpoint reachable. Telegram sends POST updates here."
     });
@@ -3833,8 +3833,205 @@ async function recalcMemberFromOrdersV199(env, changedOrder) {
 }
 
 
-/* V211: Telegram member birthday edit + manual tier override. */
-const MEMBER_EDIT_DRAFT_TTL_V211 = 600;
+/* V223: Clean Member Admin Fix.
+   Single source of truth for Telegram member query, birthday edit, tier edit,
+   duplicate merge cleanup, and maintenance mode. No stacked member admin overrides below. */
+
+const MEMBER_EDIT_DRAFT_TTL_V223 = 60 * 10;
+const MEMBER_EDIT_DRAFT_PREFIX_V223 = "member_edit_draft:v223:";
+const MAINTENANCE_KEY_V223 = "sky31:maintenance:v1";
+
+function phoneLast8V223(phone) {
+  const p = normalizePhone(phone || "");
+  return p.length >= 8 ? p.slice(-8) : p;
+}
+
+function canonicalPhoneV223(phone) {
+  const last8 = phoneLast8V223(phone);
+  return last8 ? "853" + last8 : normalizePhone(phone || "");
+}
+
+function memberKeyV223(phone) {
+  return "member:" + canonicalPhoneV223(phone);
+}
+
+function memberTimeV223(member) {
+  return Math.max(
+    new Date((member && member.manualTierUpdatedAt) || 0).getTime() || 0,
+    new Date((member && member.birthdayUpdatedAt) || 0).getTime() || 0,
+    new Date((member && member.updatedAt) || 0).getTime() || 0,
+    new Date((member && member.createdAt) || 0).getTime() || 0
+  );
+}
+
+function memberScoreV223(member) {
+  member = member || {};
+  let score = memberTimeV223(member) / 10000000000000;
+  if (member.name) score += 10;
+  if (member.birthday) score += 8;
+  if (member.manualTierKey || member.memberTierOverrideKey || member.memberTierManualKey) score += 8;
+  score += Math.min(50, Number(member.totalCups || 0));
+  score += Math.min(30, Number(member.totalOrders || 0));
+  score += Math.min(40, Number(member.totalSpent || 0) / 20);
+  return score;
+}
+
+function mergeMemberPayloadsV223(records, phoneHint) {
+  records = Array.isArray(records) ? records.filter(x => x && x.member) : [];
+  records.sort((a, b) => memberScoreV223(b.member) - memberScoreV223(a.member));
+
+  const base = records[0] ? { ...records[0].member } : {};
+  const last8 = phoneLast8V223(base.phone || phoneHint || (records[0] && records[0].key) || "");
+  base.phone = canonicalPhoneV223(last8);
+
+  const orderNos = new Set(Array.isArray(base.recentOrderNos) ? base.recentOrderNos : []);
+
+  for (const rec of records) {
+    const m = rec.member || {};
+    if (!base.name && m.name) base.name = m.name;
+    if (!base.note && m.note) base.note = m.note;
+    if (!base.createdAt || (m.createdAt && String(m.createdAt) < String(base.createdAt))) base.createdAt = m.createdAt;
+
+    if (m.birthday && (!base.birthday || new Date(m.birthdayUpdatedAt || m.updatedAt || 0) >= new Date(base.birthdayUpdatedAt || base.updatedAt || 0))) {
+      base.birthday = m.birthday;
+      base.birthdayUpdatedAt = m.birthdayUpdatedAt || m.updatedAt || base.birthdayUpdatedAt || "";
+      base.birthdayUpdatedBy = m.birthdayUpdatedBy || base.birthdayUpdatedBy || "";
+    }
+
+    const tierKey = m.manualTierKey || m.memberTierOverrideKey || m.memberTierManualKey || "";
+    if (tierKey && (!base.manualTierKey || new Date(m.manualTierUpdatedAt || m.updatedAt || 0) >= new Date(base.manualTierUpdatedAt || base.updatedAt || 0))) {
+      base.manualTierKey = tierKey;
+      base.manualTierName = m.manualTierName || m.memberTierOverrideName || base.manualTierName || "";
+      base.manualTierIcon = m.manualTierIcon || m.memberTierOverrideIcon || base.manualTierIcon || "";
+      base.memberTierOverrideKey = tierKey;
+      base.memberTierOverrideName = base.manualTierName;
+      base.memberTierOverrideIcon = base.manualTierIcon;
+      base.manualTierBaseCups = Number(m.manualTierBaseCups || base.manualTierBaseCups || 0);
+      base.manualTierStartCups = Number(m.manualTierStartCups || m.manualTierSetAtCups || m.manualTierOriginalCups || base.manualTierStartCups || m.totalCups || 0);
+      base.manualTierSetAtCups = base.manualTierStartCups;
+      base.manualTierOriginalCups = base.manualTierStartCups;
+      base.manualTierUpdatedAt = m.manualTierUpdatedAt || m.updatedAt || base.manualTierUpdatedAt || "";
+      base.manualTierUpdatedBy = m.manualTierUpdatedBy || base.manualTierUpdatedBy || "";
+    }
+
+    base.totalOrders = Math.max(Number(base.totalOrders || 0), Number(m.totalOrders || 0));
+    base.totalCups = Math.max(Number(base.totalCups || 0), Number(m.totalCups || 0));
+    base.totalSpent = Math.max(Number(base.totalSpent || 0), Number(m.totalSpent || 0));
+    base.rewardRedeemed = Math.max(Number(base.rewardRedeemed || base.rewardsRedeemed || 0), Number(m.rewardRedeemed || m.rewardsRedeemed || 0));
+    base.rewardsRedeemed = base.rewardRedeemed;
+    (Array.isArray(m.recentOrderNos) ? m.recentOrderNos : []).forEach(no => { if (no) orderNos.add(String(no)); });
+  }
+
+  base.recentOrderNos = Array.from(orderNos).slice(0, 2000);
+  base.updatedAt = base.updatedAt || new Date().toISOString();
+  return base;
+}
+
+async function findActiveMemberV223(env, phone) {
+  const last8 = phoneLast8V223(phone);
+  if (!last8) return { key: "", member: null, records: [] };
+
+  const records = [];
+  const seen = new Set();
+  async function tryKey(key) {
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    const raw = await env.ORDERS.get(key);
+    if (!raw) return;
+    try {
+      const member = JSON.parse(raw);
+      if (!member || member.deletedAt) return;
+      const p = normalizePhone(member.phone || key.replace("member:", ""));
+      if (p.slice(-8) === last8 || normalizePhone(key).slice(-8) === last8) {
+        member.phone = p || canonicalPhoneV223(last8);
+        member._kvKey = key;
+        records.push({ key, member });
+      }
+    } catch (_) {}
+  }
+
+  await tryKey("member:" + last8);
+  await tryKey("member:853" + last8);
+  await tryKey("member:" + normalizePhone(phone));
+
+  let cursor = undefined;
+  let checked = 0;
+  do {
+    const page = await env.ORDERS.list({ prefix: "member:", cursor });
+    for (const key of (page.keys || [])) {
+      checked += 1;
+      if (checked > 8000) break;
+      await tryKey(key.name);
+    }
+    cursor = page.cursor;
+    if (page.list_complete !== false) break;
+  } while (cursor && checked <= 8000);
+
+  if (!records.length) return { key: "", member: null, records: [] };
+
+  const member = mergeMemberPayloadsV223(records, last8);
+  const key = memberKeyV223(member.phone);
+  member._kvKey = key;
+  return { key, member, records };
+}
+
+async function saveActiveMemberV223(env, loaded) {
+  if (!loaded || !loaded.member) return null;
+  const member = { ...loaded.member };
+  const last8 = phoneLast8V223(member.phone);
+  member.phone = canonicalPhoneV223(last8);
+  member.updatedAt = new Date().toISOString();
+
+  const canonicalKey = memberKeyV223(member.phone);
+  await env.ORDERS.put(canonicalKey, JSON.stringify(member), { expirationTtl: 60 * 60 * 24 * 3650 });
+
+  const keysToDelete = new Set();
+  (Array.isArray(loaded.records) ? loaded.records : []).forEach(rec => {
+    if (rec && rec.key && rec.key !== canonicalKey) keysToDelete.add(rec.key);
+  });
+
+  let cursor = undefined;
+  do {
+    const page = await env.ORDERS.list({ prefix: "member:", cursor });
+    for (const key of (page.keys || [])) {
+      if (key.name === canonicalKey) continue;
+      const kp = normalizePhone(key.name.replace("member:", ""));
+      if (kp.slice(-8) === last8) keysToDelete.add(key.name);
+    }
+    cursor = page.cursor;
+    if (page.list_complete !== false) break;
+  } while (cursor);
+
+  for (const key of keysToDelete) {
+    await env.ORDERS.delete(key);
+  }
+
+  return { key: canonicalKey, member, deletedAliasCount: keysToDelete.size };
+}
+
+function normalizeBirthdayInputV223(input) {
+  let s = String(input || "").trim();
+  if (!s) return "";
+  s = s.replace(/[．。]/g, ".")
+       .replace(/[\/\.]/g, "-")
+       .replace(/年/g, "-")
+       .replace(/月/g, "-")
+       .replace(/日/g, "")
+       .replace(/\s+/g, "");
+  const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (!m) return "";
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  if (y < 1900 || y > 2100 || mo < 1 || mo > 12 || d < 1 || d > 31) return "";
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() + 1 !== mo || dt.getUTCDate() !== d) return "";
+  return String(y).padStart(4, "0") + "-" + String(mo).padStart(2, "0") + "-" + String(d).padStart(2, "0");
+}
+
+function birthdayValidV211(value) {
+  return !!normalizeBirthdayInputV223(value);
+}
 
 function memberTierListV211() {
   return [
@@ -3863,266 +4060,191 @@ function memberDisplayTierV211(member) {
   member = member || {};
   const totalCups = Number(member.totalCups || member.cups || member.totalItems || 0);
   const manualBase = memberTierByKeyV211(member.manualTierKey || member.memberTierOverrideKey || member.memberTierManualKey || "");
-  if (!manualBase) {
-    const tier = memberTierByCupsV211(totalCups);
-    return { ...tier, manual: false, effectiveCups: totalCups, cupsToNext: 0 };
-  }
+  if (!manualBase) return { ...memberTierByCupsV211(totalCups), manual: false };
 
-  const startCups = Number(member.manualTierStartCups || member.manualTierSetAtCups || member.manualTierOriginalCups || totalCups || 0);
-  const baseCups = Number(member.manualTierBaseCups || manualBase.cups || 0);
-  const gained = Math.max(0, totalCups - startCups);
-  const effectiveCups = baseCups + gained;
-  const tier = memberTierByCupsV211(effectiveCups);
-  const next = memberTierListV211().find(t => t.cups > effectiveCups) || null;
-  return { ...tier, manual: true, manualBase, manualBaseCups: baseCups, manualStartCups: startCups, gainedSinceManualTier: gained, effectiveCups, cupsToNext: next ? Math.max(0, next.cups - effectiveCups) : 0, nextTier: next };
+  const start = Number(member.manualTierStartCups || member.manualTierSetAtCups || member.manualTierOriginalCups || totalCups || 0);
+  const base = Number(member.manualTierBaseCups || manualBase.cups || 0);
+  const effective = base + Math.max(0, totalCups - start);
+  const tier = memberTierByCupsV211(effective);
+  const next = memberTierListV211().find(t => t.cups > effective) || null;
+  return { ...tier, manual: true, manualBase, effectiveCups: effective, gainedSinceManualTier: Math.max(0, totalCups - start), nextTier: next, cupsToNext: next ? Math.max(0, next.cups - effective) : 0 };
 }
 
-function birthdayValidV211(value) {
-  const s = String(value || "").trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
-  const d = new Date(s + "T00:00:00Z");
-  if (Number.isNaN(d.getTime())) return false;
-  const y = String(d.getUTCFullYear()).padStart(4, "0");
-  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(d.getUTCDate()).padStart(2, "0");
-  return y + "-" + m + "-" + day === s;
+function memberDraftKeyV223(chatId) {
+  return MEMBER_EDIT_DRAFT_PREFIX_V223 + String(chatId || "");
 }
 
-function memberEditDraftKeyV211(chatId) {
-  return "member_edit_draft:" + String(chatId || "");
+async function saveMemberEditDraftV211(env, chatId, draft) {
+  await env.ORDERS.put(memberDraftKeyV223(chatId), JSON.stringify(draft || {}), { expirationTtl: MEMBER_EDIT_DRAFT_TTL_V223 });
 }
 
 async function getMemberEditDraftV211(env, chatId) {
-  if (!env || !env.ORDERS || !chatId) return null;
-  const raw = await env.ORDERS.get(memberEditDraftKeyV211(chatId));
+  const raw = await env.ORDERS.get(memberDraftKeyV223(chatId));
   if (!raw) return null;
   try { return JSON.parse(raw); } catch (_) { return null; }
 }
 
-async function saveMemberEditDraftV211(env, chatId, draft) {
-  await env.ORDERS.put(memberEditDraftKeyV211(chatId), JSON.stringify(draft), { expirationTtl: MEMBER_EDIT_DRAFT_TTL_V211 });
-}
-
 async function clearMemberEditDraftV211(env, chatId) {
-  await env.ORDERS.delete(memberEditDraftKeyV211(chatId));
+  await env.ORDERS.delete(memberDraftKeyV223(chatId));
 }
 
 async function loadActiveMemberForEditV211(env, phone) {
-  phone = normalizePhone(phone);
-  const candidates = [phone];
-  if (phone.length === 8) candidates.push("853" + phone);
-  if (phone.length === 11 && phone.startsWith("853")) candidates.push(phone.slice(3));
-
-  for (const p of Array.from(new Set(candidates))) {
-    const raw = await env.ORDERS.get("member:" + p);
-    if (!raw) continue;
-    try {
-      const member = JSON.parse(raw);
-      if (member && !member.deletedAt) {
-        member.phone = normalizePhone(member.phone || p);
-        return { key: "member:" + p, member };
-      }
-    } catch (_) {}
-  }
-  return { key: "", member: null };
+  return findActiveMemberV223(env, phone);
 }
 
 async function saveActiveMemberForEditV211(env, loaded) {
-  const member = loaded.member;
-  const phone = normalizePhone(member.phone);
-  const keysToSave = new Set();
+  return saveActiveMemberV223(env, loaded);
+}
 
-  if (loaded.key) keysToSave.add(loaded.key);
-  memberPhoneCandidates(phone).forEach(p => keysToSave.add("member:" + p));
-  keysToSave.add("member:" + phone);
-
+listMembersByPrefix = async function(env, prefix, deleted) {
   let cursor = undefined;
-  let checked = 0;
+  const out = [];
   do {
-    const page = await env.ORDERS.list({ prefix: "member:", cursor });
+    const page = await env.ORDERS.list({ prefix, cursor });
     for (const key of (page.keys || [])) {
-      checked += 1;
-      if (checked > 5000) break;
+      const raw = await env.ORDERS.get(key.name);
+      if (!raw) continue;
       try {
-        const raw = await env.ORDERS.get(key.name);
-        if (!raw) continue;
-        const m = JSON.parse(raw);
-        const keyPhone = normalizePhone(key.name.replace("member:", ""));
-        const storedPhone = normalizePhone((m && m.phone) || keyPhone);
-        if (samePhoneForMemberLookup(storedPhone, phone) || samePhoneForMemberLookup(keyPhone, phone)) {
-          keysToSave.add(key.name);
-        }
+        const member = JSON.parse(raw);
+        if (!member || !member.phone) continue;
+        member._deleted = !!deleted;
+        member._kvKey = key.name;
+        out.push(member);
       } catch (_) {}
     }
     cursor = page.cursor;
     if (page.list_complete !== false) break;
-  } while (cursor && checked <= 5000);
+  } while (cursor);
+  return out;
+};
 
-  const merged = { ...member, phone, updatedAt: member.updatedAt || new Date().toISOString() };
-  for (const key of keysToSave) {
-    await env.ORDERS.put(key, JSON.stringify(merged), { expirationTtl: 60 * 60 * 24 * 3650 });
-  }
+function dedupeMembersV223(members) {
+  const groups = new Map();
+  (Array.isArray(members) ? members : []).forEach(member => {
+    const key = phoneLast8V223(member.phone || member._kvKey || "");
+    if (!key) return;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push({ key: member._kvKey || "", member });
+  });
+  const out = [];
+  groups.forEach(records => {
+    const activeRecords = records.filter(r => !r.member._deleted);
+    const chosenRecords = activeRecords.length ? activeRecords : records;
+    const merged = mergeMemberPayloadsV223(chosenRecords, records[0] && records[0].member && records[0].member.phone);
+    merged._deleted = !activeRecords.length;
+    merged._duplicateCount = records.length;
+    out.push(merged);
+  });
+  return out;
 }
 
-async function handleMemberAdminEditActionV211(env, cq, data) {
+listTelegramMembers = async function(env) {
+  let members = (await listMembersByPrefix(env, "member:", false)).concat(await listMembersByPrefix(env, "member_deleted:", true));
+  members = dedupeMembersV223(members);
+  members.sort((a, b) => {
+    if (a._deleted !== b._deleted) return a._deleted ? 1 : -1;
+    return memberTimeV223(b) - memberTimeV223(a);
+  });
+  return members;
+};
+
+buildMemberListText = function(members) {
+  const activeCount = members.filter(m => !m._deleted).length;
+  const deletedCount = members.filter(m => m._deleted).length;
+  const hidden = members.reduce((s, m) => s + Math.max(0, Number(m._duplicateCount || 1) - 1), 0);
+  const lines = [];
+  lines.push("👥 SKY31 用戶查詢");
+  lines.push("");
+  lines.push("有效會員：" + activeCount);
+  lines.push("已刪除會員：" + deletedCount);
+  if (hidden > 0) lines.push("已合併顯示重複會員 alias：" + hidden);
+  lines.push("");
+  lines.push(members.length ? "請點擊下方用戶查看詳細資料。" : "目前未有會員資料。");
+  return lines.join("\n").trim();
+};
+
+buildMemberListMarkup = function(members) {
+  const rows = [];
+  members.slice(0, 80).forEach(member => {
+    const phone = phoneLast8V223(member.phone);
+    const displayPhone = canonicalPhoneV223(phone);
+    const name = member.name || "未命名";
+    const deleted = !!member._deleted;
+    rows.push([{ text: ((deleted ? "🗑️ " : "👤 ") + name + "｜" + displayPhone + (deleted ? "｜已刪除" : "")).slice(0, 60), callback_data: (deleted ? "member_view_deleted:" : "member_view_active:") + phone }]);
+  });
+  rows.push([{ text: "返回功能列表", callback_data: "limited_cmd_menu:x" }]);
+  return { inline_keyboard: rows };
+};
+
+getMemberForTelegramView = async function(env, phone, deleted) {
+  if (deleted) {
+    const last8 = phoneLast8V223(phone);
+    let cursor = undefined;
+    do {
+      const page = await env.ORDERS.list({ prefix: "member_deleted:", cursor });
+      for (const key of (page.keys || [])) {
+        const raw = await env.ORDERS.get(key.name);
+        if (!raw) continue;
+        try {
+          const member = JSON.parse(raw);
+          const p = normalizePhone(member.phone || key.name.replace("member_deleted:", ""));
+          if (p.slice(-8) === last8) {
+            member._deleted = true;
+            member._kvKey = key.name;
+            return member;
+          }
+        } catch (_) {}
+      }
+      cursor = page.cursor;
+      if (page.list_complete !== false) break;
+    } while (cursor);
+    return null;
+  }
+  const loaded = await findActiveMemberV223(env, phone);
+  return loaded.member;
+};
+
+handleMemberQueryAction = async function(env, cq, data) {
+  const sep = data.indexOf(":");
+  const action = sep >= 0 ? data.slice(0, sep) : "";
+  const arg = sep >= 0 ? data.slice(sep + 1) : "";
   const chatId = cq.message && cq.message.chat ? cq.message.chat.id : env.TELEGRAM_CHAT_ID;
   const messageId = cq.message ? cq.message.message_id : null;
-  if (!isAuthorizedTelegramChat(env, chatId)) return stop(env, cq, "沒有權限");
 
-  const parts = String(data || "").split(":");
-  const action = parts[0];
-  const phone = normalizePhone(parts[1] || "");
-
-  if (!phone) return stop(env, cq, "找不到會員電話");
-
-
-  if (action === "member_refresh") {
-    const loaded = await loadActiveMemberForEditV211(env, phone);
-    if (!loaded.member) return stop(env, cq, "找不到會員資料");
-    const enriched = await enrichMemberStatsForTelegram(env, loaded.member);
-    await editTelegramMessage(env, chatId, messageId, buildMemberDetailText(enriched, false), buildMemberDetailReplyMarkup(enriched, false));
-    return stop(env, cq, "已重新讀取會員資料");
+  if (action === "member_list") {
+    const members = await listTelegramMembers(env);
+    await editTelegramMessage(env, chatId, messageId, buildMemberListText(members), buildMemberListMarkup(members));
+    return stop(env, cq, "已返回用戶列表");
   }
 
-  if (action === "member_edit_cancel") {
-    await clearMemberEditDraftV211(env, chatId);
-    const loaded = await loadActiveMemberForEditV211(env, phone);
-    if (!loaded.member) return stop(env, cq, "找不到會員資料");
-    const enriched = await enrichMemberStatsForTelegram(env, loaded.member);
-    await editTelegramMessage(env, chatId, messageId, buildMemberDetailText(enriched, false), buildMemberDetailReplyMarkup(enriched, false));
-    return stop(env, cq, "已取消");
-  }
-
-  if (action === "member_edit_birthday") {
-    await saveMemberEditDraftV211(env, chatId, { type: "birthday", phone, createdAt: new Date().toISOString() });
-    await editTelegramMessage(
-      env,
-      chatId,
-      messageId,
-      "🎂 更改會員生日\n\n請直接傳送生日日期。\n可接受格式：\n1990-08-18\n1990/08/18\n1990.08.18\n1990年8月18日\n\n此操作只限店方在 Telegram 後台修改。",
-      { inline_keyboard: [[{ text: "取消", callback_data: "member_edit_cancel:" + phone }]] }
-    );
-    return stop(env, cq, "請輸入生日日期");
-  }
-
-  if (action === "member_tier_menu") {
-    const rows = memberTierListV211().map(t => ([{
-      text: t.icon + " " + t.name + "｜" + (t.cups === 0 ? "加入即成為會員" : "累計 " + t.cups + " 杯起"),
-      callback_data: "member_tier_set:" + phone + ":" + t.key
-    }]));
-    rows.push([{ text: "取消", callback_data: "member_edit_cancel:" + phone }]);
-    await editTelegramMessage(
-      env,
-      chatId,
-      messageId,
-      "🏅 更改會員等級\n\n此功能會無視杯量門檻，直接設定會員顯示等級。\n累計杯數、消費、免單次數不會被改動。",
-      { inline_keyboard: rows }
-    );
-    return stop(env, cq, "請選擇會員等級");
-  }
-
-  if (action === "member_tier_set") {
-    const tierKey = String(parts[2] || "");
-    const tier = memberTierByKeyV211(tierKey);
-    if (!tier) return stop(env, cq, "會員等級無效");
-
-    const loaded = await loadActiveMemberForEditV211(env, phone);
-    if (!loaded.member) return stop(env, cq, "找不到會員資料");
-
-    const member = loaded.member;
-    const memberStatsForTierV216 = await enrichMemberStatsForTelegram(env, member).catch(() => member);
-    const currentTotalCupsV216 = Number(memberStatsForTierV216.totalCups || member.totalCups || member.cups || 0);
-    member.totalCups = Math.max(Number(member.totalCups || 0), currentTotalCupsV216);
-    member.manualTierKey = tier.key;
-    member.manualTierName = tier.name;
-    member.manualTierIcon = tier.icon;
-    member.manualTierBaseCups = Number(tier.cups || 0);
-    member.manualTierStartCups = currentTotalCupsV216;
-    member.manualTierSetAtCups = currentTotalCupsV216;
-    member.manualTierOriginalCups = currentTotalCupsV216;
-    member.memberTierOverrideKey = tier.key;
-    member.memberTierOverrideName = tier.name;
-    member.memberTierOverrideIcon = tier.icon;
-    member.manualTierUpdatedAt = new Date().toISOString();
-    member.manualTierUpdatedBy = "telegram";
-    member.updatedAt = member.manualTierUpdatedAt;
-
-    await saveActiveMemberForEditV211(env, loaded);
-
-    const enriched = await enrichMemberStatsForTelegram(env, member);
-    await editTelegramMessage(env, chatId, messageId, buildMemberDetailText(enriched, false), buildMemberDetailReplyMarkup(enriched, false));
-    return stop(env, cq, "已更改會員等級：" + tier.name);
-  }
-
-  return stop(env, cq, "未知會員編輯操作");
-}
-
-async function handleMemberEditDraftTextV211(env, message, text, draft) {
-  const chatId = message.chat && message.chat.id ? message.chat.id : env.TELEGRAM_CHAT_ID;
-  if (!isAuthorizedTelegramChat(env, chatId)) {
-    await clearMemberEditDraftV211(env, chatId);
-    return json({ ok: true });
-  }
-
-  if (String(text || "").trim() === "取消") {
-    await clearMemberEditDraftV211(env, chatId);
-    await sendTelegramMessage(env, chatId, "已取消會員資料修改。", buildCommandMenuMarkupV183 ? buildCommandMenuMarkupV183() : null);
-    return json({ ok: true });
-  }
-
-  if (draft.type === "birthday") {
-    const birthday = String(text || "").trim();
-    if (!birthdayValidV211(birthday)) {
-      await sendTelegramMessage(env, chatId, "生日格式不正確，請輸入 YYYY-MM-DD，例如：1990-08-18。\n輸入「取消」可取消操作。", null);
-      return json({ ok: true });
+  if (action === "member_view_active" || action === "member_view_deleted") {
+    const deleted = action === "member_view_deleted";
+    let member = await getMemberForTelegramView(env, arg, deleted);
+    if (!member && !deleted) member = await getMemberForTelegramView(env, arg, true);
+    if (!member) {
+      const members = await listTelegramMembers(env);
+      await editTelegramMessage(env, chatId, messageId, buildMemberListText(members), buildMemberListMarkup(members));
+      return stop(env, cq, "找不到會員資料，已重新整理列表");
     }
-
-    const loaded = await loadActiveMemberForEditV211(env, draft.phone);
-    if (!loaded.member) {
-      await clearMemberEditDraftV211(env, chatId);
-      await sendTelegramMessage(env, chatId, "找不到會員資料，已取消。", null);
-      return json({ ok: true });
-    }
-
-    const member = loaded.member;
-    member.birthday = birthday;
-    member.birthdayUpdatedAt = new Date().toISOString();
-    member.birthdayUpdatedBy = "telegram";
-    member.updatedAt = member.birthdayUpdatedAt;
-
-    await saveActiveMemberForEditV211(env, loaded);
-    await clearMemberEditDraftV211(env, chatId);
-
-    const enriched = await enrichMemberStatsForTelegram(env, member);
-    const birthdayMonthNowV217 = birthdayValidV211(birthday) && Number(String(birthday).split("-")[1]) === (new Date().getUTCMonth() + 1);
-    await sendTelegramMessage(env, chatId, "✅ 已更新會員生日" + (birthdayMonthNowV217 ? "\n🎂 生日月優惠已觸發，客人在會員中心會看到生日祝福和生日月飲品券。" : "") + "\n\n" + buildMemberDetailText(enriched, false), buildMemberDetailReplyMarkup(enriched, false));
-    return json({ ok: true });
+    if (!member._deleted) member = await enrichMemberStatsForTelegram(env, member).catch(() => member);
+    await editTelegramMessage(env, chatId, messageId, buildMemberDetailText(member, !!member._deleted), buildMemberDetailReplyMarkup(member, !!member._deleted));
+    return stop(env, cq, "已載入會員資料");
   }
 
-  await clearMemberEditDraftV211(env, chatId);
-  return json({ ok: true });
-}
+  return stop(env, cq, "未知會員查詢操作");
+};
 
 buildMemberDetailText = function(member, deleted = false) {
   const tier = memberDisplayTierV211(member);
   const lines = [];
   lines.push("👤 SKY31 會員詳細資料");
   lines.push("");
-  if (deleted) {
-    lines.push("狀態：已刪除");
-  } else {
-    lines.push("狀態：有效會員｜等級：" + tier.name + " " + tier.icon + (tier.manual ? "（店方設定起點）" : ""));
-    if (tier.manual && tier.manualBase) {
-      lines.push("店方設定起點：" + tier.manualBase.name + " " + tier.manualBase.icon + "｜之後已累計：" + Number(tier.gainedSinceManualTier || 0) + " 杯" + (tier.nextTier ? "｜距離 " + tier.nextTier.name + " 還差 " + Number(tier.cupsToNext || 0) + " 杯" : "｜已達最高等級"));
-    }
-  }
+  lines.push(deleted ? "狀態：已刪除" : "狀態：有效會員｜等級：" + tier.name + " " + tier.icon);
   lines.push("姓名：" + (member.name || "-"));
   lines.push("電話：" + (member.phone || "-"));
   lines.push("生日：" + (member.birthday || "-"));
   if (member.note) lines.push("備註：" + member.note);
   if (member.createdAt) lines.push("註冊時間：" + formatDateTime(member.createdAt));
-  if (member.deletedAt) lines.push("刪除時間：" + formatDateTime(member.deletedAt));
-  if (member.restoredAt && !deleted) lines.push("恢復時間：" + formatDateTime(member.restoredAt));
   if (member.manualTierUpdatedAt && !deleted) lines.push("等級修改時間：" + formatDateTime(member.manualTierUpdatedAt));
   if (member.birthdayUpdatedAt && !deleted) lines.push("生日修改時間：" + formatDateTime(member.birthdayUpdatedAt));
   lines.push("");
@@ -4130,28 +4252,20 @@ buildMemberDetailText = function(member, deleted = false) {
   lines.push("累積杯數：" + Number(member.totalCups || 0));
   lines.push("累積消費：MOP " + String(Math.round(Number(member.totalSpent || 0) * 100) / 100));
 
-  if (deleted && member.deletedOrders != null) {
-    lines.push("已刪除相關訂單：" + Number(member.deletedOrders || 0));
-  }
-
   const recent = Array.isArray(member.recentOrders) ? member.recentOrders : [];
   if (recent.length) {
     lines.push("");
     lines.push("最近訂單：");
-    recent.forEach(order => {
-      lines.push("#" + order.orderNo + "｜" + statusLabel(order.status) + "｜" + Number(order.cups || 0) + "杯｜MOP " + String(Math.round(Number(order.totalAmount || 0) * 100) / 100));
-    });
+    recent.forEach(order => lines.push("#" + order.orderNo + "｜" + statusLabel(order.status) + "｜" + Number(order.cups || 0) + "杯｜MOP " + String(Math.round(Number(order.totalAmount || 0) * 100) / 100)));
   }
 
   lines.push("");
-  if (deleted) lines.push("此會員已刪除。可按「恢復賬號」恢復會員。");
-  else lines.push("可在下方修改生日 / 會員等級，或刪除會員。");
-
+  lines.push(deleted ? "此會員已刪除。" : "可在下方修改生日 / 會員等級。");
   return lines.join("\n").trim();
 };
 
 buildMemberDetailReplyMarkup = function(member, deleted = false) {
-  const phone = normalizePhone(member.phone);
+  const phone = phoneLast8V223(member.phone);
   const rows = [];
   if (deleted) {
     rows.push([{ text: "↩️ 恢復賬號", callback_data: "member_restore:" + phone }]);
@@ -4166,158 +4280,74 @@ buildMemberDetailReplyMarkup = function(member, deleted = false) {
   return { inline_keyboard: rows };
 };
 
-buildMemberTelegramText = function(member, deleted = false, confirmingDelete = false) {
-  const tier = memberDisplayTierV211(member);
-  const lines = [];
-  lines.push("👤 SKY31 MEMBER");
-  lines.push("");
+async function handleMemberAdminEditActionV211(env, cq, data) {
+  const chatId = cq.message && cq.message.chat ? cq.message.chat.id : env.TELEGRAM_CHAT_ID;
+  const messageId = cq.message ? cq.message.message_id : null;
+  if (!isAuthorizedTelegramChat(env, chatId)) return stop(env, cq, "沒有權限");
 
-  if (confirmingDelete) {
-    lines.push("狀態：等待確認刪除");
-  } else if (deleted) {
-    lines.push("狀態：已刪除");
-  } else {
-    lines.push("狀態：有效會員｜等級：" + tier.name + " " + tier.icon + (tier.manual ? "（店方設定）" : ""));
+  const parts = String(data || "").split(":");
+  const action = parts[0];
+  const phone = phoneLast8V223(parts[1] || "");
+  if (!phone) return stop(env, cq, "找不到會員電話");
+
+  if (action === "member_refresh" || action === "member_edit_cancel") {
+    await clearMemberEditDraftV211(env, chatId);
+    const loaded = await findActiveMemberV223(env, phone);
+    if (!loaded.member) return stop(env, cq, "找不到會員資料");
+    const enriched = await enrichMemberStatsForTelegram(env, loaded.member).catch(() => loaded.member);
+    await editTelegramMessage(env, chatId, messageId, buildMemberDetailText(enriched, false), buildMemberDetailReplyMarkup(enriched, false));
+    return stop(env, cq, action === "member_refresh" ? "已重新讀取會員資料" : "已取消");
   }
 
-  lines.push("姓名：" + (member.name || "-"));
-  lines.push("電話：" + (member.phone || "-"));
-  lines.push("生日：" + (member.birthday || "-"));
-  if (member.note) lines.push("備註：" + member.note);
-  if (member.createdAt) lines.push("註冊時間：" + formatDateTime(member.createdAt));
-  if (member.deletedAt && !confirmingDelete) lines.push("刪除時間：" + formatDateTime(member.deletedAt));
-  if (deleted && !confirmingDelete) lines.push("已刪除相關訂單：" + Number(member.deletedOrders || 0));
-  if (member.restoredAt && !deleted && !confirmingDelete) lines.push("恢復時間：" + formatDateTime(member.restoredAt));
-  if (member.restoredAt && !deleted && !confirmingDelete) lines.push("已恢復相關訂單：" + Number(member.restoredOrders || 0));
-  lines.push("");
-  lines.push("累積訂單：" + Number(member.totalOrders || 0));
-  lines.push("累積杯數：" + Number(member.totalCups || 0));
-  lines.push("累積消費：MOP " + String(Math.round(Number(member.totalSpent || 0) * 100) / 100));
-  lines.push("");
-
-  if (confirmingDelete) lines.push("請確認是否刪除此會員資料。");
-  else if (deleted) lines.push("此會員已刪除。客戶不能再用此會員登入；如需要可重新註冊。");
-  else lines.push("提示：可在會員詳細頁修改生日或會員等級。");
-
-  return lines.join("\n").trim();
-};
-
-
-/* V217: Dedupe member list display. The KV may intentionally keep 853 / non-853 aliases, but Telegram list should show one account. */
-function memberDedupeKeyV217(member) {
-  const p = normalizePhone((member && member.phone) || "");
-  if (p.length >= 8) return p.slice(-8);
-  return p;
-}
-
-function memberRecordTimeV217(member) {
-  return Math.max(
-    new Date((member && member.manualTierUpdatedAt) || 0).getTime() || 0,
-    new Date((member && member.birthdayUpdatedAt) || 0).getTime() || 0,
-    new Date((member && member.updatedAt) || 0).getTime() || 0,
-    new Date((member && member.createdAt) || 0).getTime() || 0
-  );
-}
-
-function dedupeMembersForListV217(members) {
-  const map = new Map();
-  (Array.isArray(members) ? members : []).forEach(member => {
-    if (!member) return;
-    const key = memberDedupeKeyV217(member);
-    if (!key) return;
-    const existing = map.get(key);
-    if (!existing || memberRecordTimeV217(member) >= memberRecordTimeV217(existing)) {
-      map.set(key, member);
-    }
-  });
-  return Array.from(map.values());
-}
-
-
-/* V218: Maintenance mode + robust Telegram birthday input + member list dedupe. */
-const MAINTENANCE_KEY_V218 = "sky31:maintenance:v1";
-
-function memberDedupeKeyV218(member) {
-  const p = normalizePhone((member && member.phone) || "");
-  return p.length >= 8 ? p.slice(-8) : p;
-}
-
-function memberRecordTimeV218(member) {
-  return Math.max(
-    new Date((member && member.manualTierUpdatedAt) || 0).getTime() || 0,
-    new Date((member && member.birthdayUpdatedAt) || 0).getTime() || 0,
-    new Date((member && member.updatedAt) || 0).getTime() || 0,
-    new Date((member && member.createdAt) || 0).getTime() || 0
-  );
-}
-
-function dedupeMembersForListV218(members) {
-  const map = new Map();
-  (Array.isArray(members) ? members : []).forEach(member => {
-    if (!member) return;
-    const key = memberDedupeKeyV218(member);
-    if (!key) return;
-    const existing = map.get(key);
-    if (!existing || memberRecordTimeV218(member) >= memberRecordTimeV218(existing)) {
-      map.set(key, member);
-    }
-  });
-  return Array.from(map.values());
-}
-
-function normalizeBirthdayInputV218(input) {
-  let s = String(input || "").trim();
-  if (!s) return "";
-  s = s.replace(/[．。]/g, ".")
-       .replace(/[\/\.]/g, "-")
-       .replace(/年/g, "-")
-       .replace(/月/g, "-")
-       .replace(/日/g, "")
-       .replace(/\s+/g, "");
-  const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-  if (!m) return "";
-  const y = Number(m[1]);
-  const mo = Number(m[2]);
-  const d = Number(m[3]);
-  if (y < 1900 || y > 2100 || mo < 1 || mo > 12 || d < 1 || d > 31) return "";
-  const date = new Date(Date.UTC(y, mo - 1, d));
-  if (
-    date.getUTCFullYear() !== y ||
-    date.getUTCMonth() + 1 !== mo ||
-    date.getUTCDate() !== d
-  ) return "";
-  return String(y).padStart(4, "0") + "-" + String(mo).padStart(2, "0") + "-" + String(d).padStart(2, "0");
-}
-
-birthdayValidV211 = function(value) {
-  return !!normalizeBirthdayInputV218(value);
-};
-
-saveMemberEditDraftV211 = async function(env, chatId, draft) {
-  const payload = JSON.stringify(draft || {});
-  await env.ORDERS.put(memberEditDraftKeyV211(chatId), payload, { expirationTtl: MEMBER_EDIT_DRAFT_TTL_V211 });
-  await env.ORDERS.put("member_edit_draft:last:" + String(chatId || ""), payload, { expirationTtl: MEMBER_EDIT_DRAFT_TTL_V211 });
-};
-
-getMemberEditDraftV211 = async function(env, chatId) {
-  const keys = [
-    memberEditDraftKeyV211(chatId),
-    "member_edit_draft:last:" + String(chatId || "")
-  ];
-  for (const key of keys) {
-    const raw = await env.ORDERS.get(key);
-    if (!raw) continue;
-    try { return JSON.parse(raw); } catch (_) {}
+  if (action === "member_edit_birthday") {
+    const loaded = await findActiveMemberV223(env, phone);
+    if (!loaded.member) return stop(env, cq, "找不到會員資料，請返回列表重新選擇");
+    await saveMemberEditDraftV211(env, chatId, { type: "birthday", phone, createdAt: new Date().toISOString() });
+    await editTelegramMessage(env, chatId, messageId, "🎂 更改會員生日\n\n請直接傳送生日日期。\n可接受格式：\n1990-08-18\n1990/08/18\n1990.08.18\n1990年8月18日\n\n輸入「取消」可取消操作。", { inline_keyboard: [[{ text: "取消", callback_data: "member_edit_cancel:" + phone }]] });
+    return stop(env, cq, "請輸入生日日期");
   }
-  return null;
-};
 
-clearMemberEditDraftV211 = async function(env, chatId) {
-  await env.ORDERS.delete(memberEditDraftKeyV211(chatId));
-  await env.ORDERS.delete("member_edit_draft:last:" + String(chatId || ""));
-};
+  if (action === "member_tier_menu") {
+    const loaded = await findActiveMemberV223(env, phone);
+    if (!loaded.member) return stop(env, cq, "找不到會員資料，請返回列表重新選擇");
+    const rows = memberTierListV211().map(t => ([{ text: t.icon + " " + t.name + "｜" + (t.cups === 0 ? "加入即成為會員" : "累計 " + t.cups + " 杯起"), callback_data: "member_tier_set:" + phone + ":" + t.key }]));
+    rows.push([{ text: "取消", callback_data: "member_edit_cancel:" + phone }]);
+    await editTelegramMessage(env, chatId, messageId, "🏅 更改會員等級\n\n請選擇要設定的會員等級。", { inline_keyboard: rows });
+    return stop(env, cq, "請選擇會員等級");
+  }
 
-handleMemberEditDraftTextV211 = async function(env, message, text, draft) {
+  if (action === "member_tier_set") {
+    const tier = memberTierByKeyV211(parts[2] || "");
+    if (!tier) return stop(env, cq, "會員等級無效");
+    const loaded = await findActiveMemberV223(env, phone);
+    if (!loaded.member) return stop(env, cq, "找不到會員資料，請返回列表重新選擇");
+
+    const stats = await enrichMemberStatsForTelegram(env, loaded.member).catch(() => loaded.member);
+    const currentCups = Number(stats.totalCups || loaded.member.totalCups || 0);
+    loaded.member.totalCups = Math.max(Number(loaded.member.totalCups || 0), currentCups);
+    loaded.member.manualTierKey = tier.key;
+    loaded.member.manualTierName = tier.name;
+    loaded.member.manualTierIcon = tier.icon;
+    loaded.member.manualTierBaseCups = Number(tier.cups || 0);
+    loaded.member.manualTierStartCups = currentCups;
+    loaded.member.manualTierSetAtCups = currentCups;
+    loaded.member.manualTierOriginalCups = currentCups;
+    loaded.member.memberTierOverrideKey = tier.key;
+    loaded.member.memberTierOverrideName = tier.name;
+    loaded.member.memberTierOverrideIcon = tier.icon;
+    loaded.member.manualTierUpdatedAt = new Date().toISOString();
+    loaded.member.manualTierUpdatedBy = "telegram";
+
+    const saved = await saveActiveMemberV223(env, loaded);
+    const enriched = await enrichMemberStatsForTelegram(env, saved.member).catch(() => saved.member);
+    await editTelegramMessage(env, chatId, messageId, buildMemberDetailText(enriched, false), buildMemberDetailReplyMarkup(enriched, false));
+    return stop(env, cq, "已更改會員等級：" + tier.name);
+  }
+
+  return stop(env, cq, "未知會員編輯操作");
+}
+
+async function handleMemberEditDraftTextV211(env, message, text, draft) {
   const chatId = message.chat && message.chat.id ? message.chat.id : env.TELEGRAM_CHAT_ID;
   if (!isAuthorizedTelegramChat(env, chatId)) {
     await clearMemberEditDraftV211(env, chatId);
@@ -4332,99 +4362,62 @@ handleMemberEditDraftTextV211 = async function(env, message, text, draft) {
   }
 
   if (draft && draft.type === "birthday") {
-    const birthday = normalizeBirthdayInputV218(raw);
+    const birthday = normalizeBirthdayInputV223(raw);
     if (!birthday) {
-      await sendTelegramMessage(
-        env,
-        chatId,
-        "生日格式不正確，請重新輸入。\n\n可接受格式：\n1990-08-18\n1990/08/18\n1990.08.18\n1990年8月18日\n\n輸入「取消」可取消操作。",
-        null
-      );
+      await sendTelegramMessage(env, chatId, "生日格式不正確，請重新輸入。\n\n可接受格式：\n1990-08-18\n1990/08/18\n1990.08.18\n1990年8月18日\n\n輸入「取消」可取消操作。", null);
       return json({ ok: true });
     }
 
-    const loaded = await loadActiveMemberForEditV211(env, draft.phone);
+    const loaded = await findActiveMemberV223(env, draft.phone);
     if (!loaded.member) {
       await clearMemberEditDraftV211(env, chatId);
-      await sendTelegramMessage(env, chatId, "找不到會員資料，已取消。", null);
+      await sendTelegramMessage(env, chatId, "找不到會員資料，生日未能更改。請返回會員列表重新選擇。", buildCommandMenuMarkupV183 ? buildCommandMenuMarkupV183() : null);
       return json({ ok: true });
     }
 
-    const member = loaded.member;
-    member.birthday = birthday;
-    member.birthdayUpdatedAt = new Date().toISOString();
-    member.birthdayUpdatedBy = "telegram";
-    member.updatedAt = member.birthdayUpdatedAt;
-
-    await saveActiveMemberForEditV211(env, loaded);
+    loaded.member.birthday = birthday;
+    loaded.member.birthdayUpdatedAt = new Date().toISOString();
+    loaded.member.birthdayUpdatedBy = "telegram";
+    const saved = await saveActiveMemberV223(env, loaded);
     await clearMemberEditDraftV211(env, chatId);
 
-    const enriched = await enrichMemberStatsForTelegram(env, member);
-    const birthdayMonthNowV218 = Number(birthday.split("-")[1]) === (new Date().getUTCMonth() + 1);
-    await sendTelegramMessage(
-      env,
-      chatId,
-      "✅ 已更新會員生日：" + birthday +
-      (birthdayMonthNowV218 ? "\n🎂 生日月優惠已觸發，客人在會員中心會看到生日祝福和生日月飲品券。" : "") +
-      "\n\n" + buildMemberDetailText(enriched, false),
-      buildMemberDetailReplyMarkup(enriched, false)
-    );
+    const enriched = await enrichMemberStatsForTelegram(env, saved.member).catch(() => saved.member);
+    const birthdayMonthNow = Number(birthday.split("-")[1]) === (new Date().getUTCMonth() + 1);
+    await sendTelegramMessage(env, chatId, "✅ 已更新會員生日：" + birthday + (birthdayMonthNow ? "\n🎂 生日月優惠已觸發，客人在會員中心會看到生日祝福和生日月飲品券。" : "") + "\n\n" + buildMemberDetailText(enriched, false), buildMemberDetailReplyMarkup(enriched, false));
     return json({ ok: true });
   }
 
   await clearMemberEditDraftV211(env, chatId);
   await sendTelegramMessage(env, chatId, "未找到正在編輯的會員資料，請重新進入會員詳細頁操作。", buildCommandMenuMarkupV183 ? buildCommandMenuMarkupV183() : null);
   return json({ ok: true });
-};
+}
 
+/* Maintenance mode retained from previous versions, cleanly implemented here. */
 async function getMaintenanceConfigV218(env) {
   try {
-    const raw = await env.ORDERS.get(MAINTENANCE_KEY_V218);
+    const raw = await env.ORDERS.get(MAINTENANCE_KEY_V223);
     if (!raw) return { active: false, message: "", updatedAt: "", updatedBy: "" };
     const config = JSON.parse(raw);
-    return {
-      active: config && config.active === true,
-      message: String((config && config.message) || "系統維護，暫停使用。"),
-      updatedAt: String((config && config.updatedAt) || ""),
-      updatedBy: String((config && config.updatedBy) || "")
-    };
+    return { active: config && config.active === true, message: String((config && config.message) || "系統維護，暫停使用。"), updatedAt: String((config && config.updatedAt) || ""), updatedBy: String((config && config.updatedBy) || "") };
   } catch (_) {
     return { active: false, message: "", updatedAt: "", updatedBy: "" };
   }
 }
 
-async function setMaintenanceConfigV218(env, active, by) {
-  const config = {
-    active: active === true,
-    message: active === true ? "系統維護，暫停使用。" : "",
-    updatedAt: new Date().toISOString(),
-    updatedBy: String(by || "telegram")
-  };
-  await env.ORDERS.put(MAINTENANCE_KEY_V218, JSON.stringify(config));
+async function setMaintenanceConfigV223(env, active, by) {
+  const config = { active: active === true, message: active === true ? "系統維護，暫停使用。" : "", updatedAt: new Date().toISOString(), updatedBy: String(by || "telegram") };
+  await env.ORDERS.put(MAINTENANCE_KEY_V223, JSON.stringify(config));
   return config;
 }
 
-function buildMaintenanceTextV218(config) {
-  config = config || {};
-  return [
-    "🛠 Sky31 系統維護",
-    "",
-    "目前狀態：" + (config.active ? "維護中，網站暫停使用" : "正常開放"),
-    config.updatedAt ? "更新時間：" + formatDateTime(config.updatedAt) : "",
-    "",
-    config.active
-      ? "客人打開網站時會停留在維護視窗，直到你按「取消維護」。"
-      : "按「啟用維護」後，網站會即時彈出維護視窗並暫停所有操作。"
-  ].filter(Boolean).join("\n");
+function buildMaintenanceTextV223(config) {
+  return ["🛠 Sky31 系統維護", "", "目前狀態：" + (config && config.active ? "維護中，網站暫停使用" : "正常開放"), config && config.updatedAt ? "更新時間：" + formatDateTime(config.updatedAt) : "", "", config && config.active ? "客人打開網站時會停留在維護視窗，直到你按「取消維護」。" : "按「啟用維護」後，網站會即時彈出維護視窗並暫停所有操作。"].filter(Boolean).join("\n");
 }
 
-function buildMaintenanceMarkupV218(config) {
+function buildMaintenanceMarkupV223(config) {
   const rows = [];
-  if (config && config.active) {
-    rows.push([{ text: "✅ 取消維護，恢復使用", callback_data: "maint_off:x" }]);
-  } else {
-    rows.push([{ text: "🛠 啟用維護，暫停使用", callback_data: "maint_on:x" }]);
-  }
+  if (config && config.active) rows.push([{ text: "✅ 取消維護，恢復使用", callback_data: "maint_off:x" }]);
+  else rows.push([{ text: "🛠 啟用維護，暫停使用", callback_data: "maint_on:x" }]);
   rows.push([{ text: "🔄 重新整理狀態", callback_data: "maint_status:x" }]);
   rows.push([{ text: "返回功能列表", callback_data: "limited_cmd_menu:x" }]);
   return { inline_keyboard: rows };
@@ -4434,200 +4427,38 @@ async function handleMaintenanceActionV218(env, cq, data) {
   const chatId = cq.message && cq.message.chat ? cq.message.chat.id : env.TELEGRAM_CHAT_ID;
   const messageId = cq.message ? cq.message.message_id : null;
   if (!isAuthorizedTelegramChat(env, chatId)) return stop(env, cq, "沒有權限");
-
   let config = await getMaintenanceConfigV218(env);
-
-  if (String(data || "").startsWith("maint_on:")) {
-    config = await setMaintenanceConfigV218(env, true, "telegram");
-  } else if (String(data || "").startsWith("maint_off:")) {
-    config = await setMaintenanceConfigV218(env, false, "telegram");
-  }
-
-  await editTelegramMessage(env, chatId, messageId, buildMaintenanceTextV218(config), buildMaintenanceMarkupV218(config));
+  if (String(data || "").startsWith("maint_on:")) config = await setMaintenanceConfigV223(env, true, "telegram");
+  if (String(data || "").startsWith("maint_off:")) config = await setMaintenanceConfigV223(env, false, "telegram");
+  await editTelegramMessage(env, chatId, messageId, buildMaintenanceTextV223(config), buildMaintenanceMarkupV223(config));
   return stop(env, cq, config.active ? "維護模式已啟用" : "維護模式已取消");
 }
 
-
-/* V219: Safe duplicate member merge cleanup.
-   Deletes only duplicate member:* alias keys after merging data into a canonical member:853xxxx key.
-   It does NOT delete order:* records, phone:* indexes, rewards, history, birthday, or tier fields. */
-function memberDedupeKeyV219(member) {
-  const p = normalizePhone((member && member.phone) || "");
-  if (p.length >= 8) return p.slice(-8);
-  return p;
-}
-
-function memberRecordTimeV219(member) {
-  return Math.max(
-    new Date((member && member.manualTierUpdatedAt) || 0).getTime() || 0,
-    new Date((member && member.birthdayUpdatedAt) || 0).getTime() || 0,
-    new Date((member && member.updatedAt) || 0).getTime() || 0,
-    new Date((member && member.createdAt) || 0).getTime() || 0
-  );
-}
-
-function memberCompletenessScoreV219(member) {
-  member = member || {};
-  let score = 0;
-  if (member.name) score += 10;
-  if (member.birthday) score += 8;
-  if (member.manualTierKey || member.memberTierOverrideKey || member.memberTierManualKey) score += 8;
-  score += Math.min(20, Number(member.totalOrders || 0));
-  score += Math.min(80, Number(member.totalCups || 0));
-  score += Math.min(80, Number(member.totalSpent || 0) / 10);
-  score += Math.min(20, Array.isArray(member.recentOrderNos) ? member.recentOrderNos.length : 0);
-  score += Math.min(10, Array.isArray(member.recentOrders) ? member.recentOrders.length : 0);
-  score += memberRecordTimeV219(member) / 10000000000000;
-  return score;
-}
-
-function mergeMemberRecordsV219(records) {
-  records = Array.isArray(records) ? records.filter(Boolean) : [];
-  records.sort((a, b) => memberCompletenessScoreV219(b.member || b) - memberCompletenessScoreV219(a.member || a));
-
-  const winnerEntry = records[0] || { key: "", member: {} };
-  const out = { ...(winnerEntry.member || winnerEntry || {}) };
-
-  function takeNewer(field, timeField) {
-    let best = out[field] || "";
-    let bestTime = new Date(out[timeField] || out.updatedAt || 0).getTime() || 0;
-    records.forEach(entry => {
-      const m = entry.member || entry || {};
-      if (!m[field]) return;
-      const t = new Date(m[timeField] || m.updatedAt || 0).getTime() || 0;
-      if (!best || t >= bestTime) {
-        best = m[field];
-        bestTime = t;
-      }
-    });
-    out[field] = best || "";
-  }
-
-  takeNewer("birthday", "birthdayUpdatedAt");
-  takeNewer("manualTierKey", "manualTierUpdatedAt");
-  takeNewer("manualTierName", "manualTierUpdatedAt");
-  takeNewer("manualTierIcon", "manualTierUpdatedAt");
-  takeNewer("memberTierOverrideKey", "manualTierUpdatedAt");
-  takeNewer("memberTierOverrideName", "manualTierUpdatedAt");
-  takeNewer("memberTierOverrideIcon", "manualTierUpdatedAt");
-
-  const allOrderNos = new Set();
-  records.forEach(entry => {
-    const m = entry.member || entry || {};
-    (Array.isArray(m.recentOrderNos) ? m.recentOrderNos : []).forEach(no => { if (no) allOrderNos.add(String(no)); });
-    out.totalOrders = Math.max(Number(out.totalOrders || 0), Number(m.totalOrders || 0));
-    out.totalCups = Math.max(Number(out.totalCups || 0), Number(m.totalCups || 0));
-    out.totalSpent = Math.max(Number(out.totalSpent || 0), Number(m.totalSpent || 0));
-    out.rewardRedeemed = Math.max(Number(out.rewardRedeemed || out.rewardsRedeemed || 0), Number(m.rewardRedeemed || m.rewardsRedeemed || 0));
-    out.rewardsRedeemed = out.rewardRedeemed;
-    if (!out.name && m.name) out.name = m.name;
-    if (!out.note && m.note) out.note = m.note;
-    if (!out.createdAt || (m.createdAt && String(m.createdAt) < String(out.createdAt))) out.createdAt = m.createdAt;
-  });
-
-  out.recentOrderNos = Array.from(allOrderNos).slice(0, 2000);
-  out.phone = normalizePhone(out.phone || "");
-  if (out.phone.length === 8) out.phone = "853" + out.phone;
-  if (out.phone.length > 8 && !out.phone.startsWith("853")) out.phone = out.phone.slice(-8);
-  out.updatedAt = new Date().toISOString();
-  out.mergedDuplicateAt = out.updatedAt;
-  out.mergedDuplicateCount = records.length;
-
-  // Keep manual tier progression fields if any duplicate had them.
-  records.forEach(entry => {
-    const m = entry.member || entry || {};
-    if (out.manualTierKey && (m.manualTierKey || m.memberTierOverrideKey || m.memberTierManualKey)) {
-      out.manualTierStartCups = Number(out.manualTierStartCups || m.manualTierStartCups || m.manualTierSetAtCups || m.manualTierOriginalCups || m.totalCups || 0);
-      out.manualTierBaseCups = Number(out.manualTierBaseCups || m.manualTierBaseCups || 0);
-      out.manualTierUpdatedAt = out.manualTierUpdatedAt || m.manualTierUpdatedAt || m.updatedAt || "";
-      out.manualTierUpdatedBy = out.manualTierUpdatedBy || m.manualTierUpdatedBy || "";
-    }
-  });
-
-  return { winnerKey: winnerEntry.key || "", member: out };
-}
-
-function dedupeMembersForListV219(members) {
+/* Duplicate merge retained, using the same clean V223 member lookup/merge logic. */
+async function mergeDuplicateMembersV223(env, dryRun = true) {
+  const active = await listMembersByPrefix(env, "member:", false);
   const groups = new Map();
-  (Array.isArray(members) ? members : []).forEach(member => {
-    const key = memberDedupeKeyV219(member);
-    if (!key) return;
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push({ key: member._kvKey || "", member });
+  active.forEach(member => {
+    const last8 = phoneLast8V223(member.phone || member._kvKey);
+    if (!last8) return;
+    if (!groups.has(last8)) groups.set(last8, []);
+    groups.get(last8).push({ key: member._kvKey || ("member:" + normalizePhone(member.phone)), member });
   });
 
-  const out = [];
-  groups.forEach(records => {
-    const merged = mergeMemberRecordsV219(records).member;
-    merged._deleted = records.some(r => r.member && r.member._deleted) && !records.some(r => r.member && !r.member._deleted);
-    merged._duplicateCount = records.length;
-    out.push(merged);
-  });
-  return out;
-}
-
-async function scanDuplicateMembersV219(env) {
-  let cursor = undefined;
-  const groups = new Map();
-  let totalKeys = 0;
-
-  do {
-    const page = await env.ORDERS.list({ prefix: "member:", cursor });
-    for (const key of (page.keys || [])) {
-      const raw = await env.ORDERS.get(key.name);
-      if (!raw) continue;
-      try {
-        const member = JSON.parse(raw);
-        if (!member || member.deletedAt) continue;
-        const p = normalizePhone(member.phone || key.name.replace("member:", ""));
-        const groupKey = p.length >= 8 ? p.slice(-8) : p;
-        if (!groupKey) continue;
-        totalKeys += 1;
-        member.phone = p;
-        if (!groups.has(groupKey)) groups.set(groupKey, []);
-        groups.get(groupKey).push({ key: key.name, member });
-      } catch (_) {}
-    }
-    cursor = page.cursor;
-    if (page.list_complete !== false) break;
-  } while (cursor);
-
-  const duplicateGroups = [];
-  groups.forEach((records, key) => {
-    if (records.length > 1) duplicateGroups.push({ key, records });
-  });
-
-  return { totalKeys, groups, duplicateGroups };
-}
-
-async function mergeDuplicateMembersV219(env, dryRun = true) {
-  const scan = await scanDuplicateMembersV219(env);
-  let groupsMerged = 0;
-  let keysDeleted = 0;
   const details = [];
+  let keysDeleted = 0;
+  let groupsMerged = 0;
 
-  for (const group of scan.duplicateGroups) {
-    const merged = mergeMemberRecordsV219(group.records);
-    let canonicalPhone = normalizePhone(merged.member.phone || "");
-    if (canonicalPhone.length === 8) canonicalPhone = "853" + canonicalPhone;
-    if (!canonicalPhone.startsWith("853") && canonicalPhone.length > 8) canonicalPhone = "853" + canonicalPhone.slice(-8);
-    if (!canonicalPhone) canonicalPhone = "853" + group.key;
-
-    merged.member.phone = canonicalPhone;
-    const canonicalKey = "member:" + canonicalPhone;
-
-    const duplicateKeys = group.records.map(r => r.key).filter(k => k && k !== canonicalKey);
-
-    details.push({
-      phone: canonicalPhone,
-      count: group.records.length,
-      keep: canonicalKey,
-      remove: duplicateKeys
-    });
-
+  for (const [last8, records] of groups.entries()) {
+    if (records.length <= 1) continue;
+    const member = mergeMemberPayloadsV223(records, last8);
+    member.phone = canonicalPhoneV223(last8);
+    const canonicalKey = memberKeyV223(last8);
+    const remove = records.map(r => r.key).filter(k => k && k !== canonicalKey);
+    details.push({ phone: member.phone, count: records.length, keep: canonicalKey, remove });
     if (!dryRun) {
-      await env.ORDERS.put(canonicalKey, JSON.stringify(merged.member), { expirationTtl: 60 * 60 * 24 * 3650 });
-      for (const key of duplicateKeys) {
+      await env.ORDERS.put(canonicalKey, JSON.stringify(member), { expirationTtl: 60 * 60 * 24 * 3650 });
+      for (const key of remove) {
         await env.ORDERS.delete(key);
         keysDeleted += 1;
       }
@@ -4635,16 +4466,10 @@ async function mergeDuplicateMembersV219(env, dryRun = true) {
     }
   }
 
-  return {
-    totalMemberKeys: scan.totalKeys,
-    duplicateGroups: scan.duplicateGroups.length,
-    groupsMerged,
-    keysDeleted,
-    details
-  };
+  return { totalMemberKeys: active.length, duplicateGroups: details.length, groupsMerged, keysDeleted, details };
 }
 
-function buildMemberDuplicateMergeTextV219(result, confirm = false) {
+function buildMemberDuplicateMergeTextV223(result) {
   const lines = [];
   lines.push("🧹 合併重複會員");
   lines.push("");
@@ -4653,25 +4478,16 @@ function buildMemberDuplicateMergeTextV219(result, confirm = false) {
   if (result.groupsMerged) lines.push("已合併組數：" + Number(result.groupsMerged || 0));
   if (result.keysDeleted) lines.push("已刪除多餘 alias：" + Number(result.keysDeleted || 0));
   lines.push("");
-  if (!result.duplicateGroups) {
-    lines.push("目前沒有需要合併的重複會員。");
-  } else {
-    lines.push(confirm ? "以下重複會員將會合併：" : "偵測到以下重複會員：");
-    (result.details || []).slice(0, 12).forEach(d => {
-      lines.push("• " + d.phone + "｜保留 " + d.keep + "｜刪除 " + d.remove.length + " 個 alias");
-    });
-    if ((result.details || []).length > 12) lines.push("……其餘已省略");
-  }
+  if (!result.duplicateGroups) lines.push("目前沒有需要合併的重複會員。");
+  else (result.details || []).slice(0, 12).forEach(d => lines.push("• " + d.phone + "｜保留 " + d.keep + "｜刪除 " + d.remove.length + " 個 alias"));
   lines.push("");
-  lines.push("安全說明：只刪除多餘 member:* alias，不會刪除 order:* 訂單、phone:* 訂單索引、累計杯數或會員優惠資料。");
+  lines.push("只會合併 member:* alias，不會刪除 order:* 訂單或 phone:* 索引。");
   return lines.join("\n").trim();
 }
 
-function buildMemberDuplicateMergeMarkupV219(result, confirm = false) {
+function buildMemberDuplicateMergeMarkupV223(result) {
   const rows = [];
-  if (result && result.duplicateGroups && !confirm) {
-    rows.push([{ text: "⚠️ 確認合併並刪除多餘 alias", callback_data: "member_merge_confirm:x" }]);
-  }
+  if (result && result.duplicateGroups) rows.push([{ text: "⚠️ 確認合併並刪除多餘 alias", callback_data: "member_merge_confirm:x" }]);
   rows.push([{ text: "📋 查看會員列表", callback_data: "member_list:all" }]);
   rows.push([{ text: "🔄 重新掃描", callback_data: "member_merge_duplicates:x" }]);
   rows.push([{ text: "返回功能列表", callback_data: "limited_cmd_menu:x" }]);
@@ -4682,284 +4498,20 @@ async function handleMemberDuplicateMergeActionV219(env, cq, data) {
   const chatId = cq.message && cq.message.chat ? cq.message.chat.id : env.TELEGRAM_CHAT_ID;
   const messageId = cq.message ? cq.message.message_id : null;
   if (!isAuthorizedTelegramChat(env, chatId)) return stop(env, cq, "沒有權限");
-
   const confirm = String(data || "").startsWith("member_merge_confirm:");
-  const result = await mergeDuplicateMembersV219(env, !confirm);
-
-  await editTelegramMessage(
-    env,
-    chatId,
-    messageId,
-    buildMemberDuplicateMergeTextV219(result, false),
-    buildMemberDuplicateMergeMarkupV219(result, false)
-  );
-
+  const result = await mergeDuplicateMembersV223(env, !confirm);
+  await editTelegramMessage(env, chatId, messageId, buildMemberDuplicateMergeTextV223(result), buildMemberDuplicateMergeMarkupV223(result));
   return stop(env, cq, confirm ? "已完成合併重複會員" : "已完成掃描");
 }
 
-
-/* V222: Fix member edit lookup after duplicate merge.
-   Fixes both birthday edit and tier edit by using last-8 phone lookup,
-   canonical member:853xxxx storage, and full member:* fallback scan. */
-function normalizePhoneLast8V222(phone) {
-  const p = normalizePhone(phone || "");
-  return p.length >= 8 ? p.slice(-8) : p;
-}
-
-function memberCanonicalPhoneV222(phone) {
-  const last8 = normalizePhoneLast8V222(phone);
-  return last8 ? "853" + last8 : normalizePhone(phone || "");
-}
-
-function memberLookupPhoneV222(memberOrPhone) {
-  const p = typeof memberOrPhone === "object"
-    ? normalizePhone((memberOrPhone && memberOrPhone.phone) || (memberOrPhone && memberOrPhone._kvKey) || "")
-    : normalizePhone(memberOrPhone || "");
-  return normalizePhoneLast8V222(p);
-}
-
-function normalizeBirthdayInputV222(input) {
-  let s = String(input || "").trim();
-  if (!s) return "";
-  s = s.replace(/[．。]/g, ".")
-       .replace(/[\/\.]/g, "-")
-       .replace(/年/g, "-")
-       .replace(/月/g, "-")
-       .replace(/日/g, "")
-       .replace(/\s+/g, "");
-  const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-  if (!m) return "";
-  const y = Number(m[1]);
-  const mo = Number(m[2]);
-  const d = Number(m[3]);
-  if (y < 1900 || y > 2100 || mo < 1 || mo > 12 || d < 1 || d > 31) return "";
-  const date = new Date(Date.UTC(y, mo - 1, d));
-  if (date.getUTCFullYear() !== y || date.getUTCMonth() + 1 !== mo || date.getUTCDate() !== d) return "";
-  return String(y).padStart(4, "0") + "-" + String(mo).padStart(2, "0") + "-" + String(d).padStart(2, "0");
-}
-
-birthdayValidV211 = function(value) {
-  return !!normalizeBirthdayInputV222(value);
-};
-
-async function findActiveMemberByPhoneV222(env, phone) {
-  const last8 = normalizePhoneLast8V222(phone);
-  if (!last8) return { key: "", member: null, matches: [] };
-
-  const directKeys = [
-    "member:" + normalizePhone(phone),
-    "member:" + last8,
-    "member:853" + last8
-  ].filter(k => k !== "member:");
-
-  const matches = [];
-  const seen = new Set();
-
-  async function tryKey(key) {
-    if (!key || seen.has(key)) return;
-    seen.add(key);
-    const raw = await env.ORDERS.get(key);
-    if (!raw) return;
-    try {
-      const member = JSON.parse(raw);
-      if (!member || member.deletedAt) return;
-      const stored = normalizePhone(member.phone || key.replace("member:", ""));
-      if (stored.slice(-8) === last8 || normalizePhone(key).slice(-8) === last8) {
-        member.phone = stored || memberCanonicalPhoneV222(last8);
-        member._kvKey = key;
-        matches.push({ key, member });
-      }
-    } catch (_) {}
-  }
-
-  for (const key of Array.from(new Set(directKeys))) await tryKey(key);
-
-  // Full fallback scan after aliases were merged/deleted.
-  let cursor = undefined;
-  let checked = 0;
-  do {
-    const page = await env.ORDERS.list({ prefix: "member:", cursor });
-    for (const key of (page.keys || [])) {
-      checked += 1;
-      if (checked > 6000) break;
-      await tryKey(key.name);
-    }
-    cursor = page.cursor;
-    if (page.list_complete !== false) break;
-  } while (cursor && checked <= 6000);
-
-  if (!matches.length) return { key: "", member: null, matches: [] };
-
-  function timeOf(m) {
-    return Math.max(
-      new Date((m && m.manualTierUpdatedAt) || 0).getTime() || 0,
-      new Date((m && m.birthdayUpdatedAt) || 0).getTime() || 0,
-      new Date((m && m.updatedAt) || 0).getTime() || 0,
-      new Date((m && m.createdAt) || 0).getTime() || 0
-    );
-  }
-
-  matches.sort((a, b) => timeOf(b.member) - timeOf(a.member));
-
-  // Merge important fields from all matches, preserving existing counters and latest birthday/tier.
-  const merged = { ...matches[matches.length - 1].member, ...matches[0].member };
-  for (const item of matches) {
-    const m = item.member || {};
-    if (m.birthday && (!merged.birthday || new Date(m.birthdayUpdatedAt || 0) >= new Date(merged.birthdayUpdatedAt || 0))) {
-      merged.birthday = m.birthday;
-      merged.birthdayUpdatedAt = m.birthdayUpdatedAt || merged.birthdayUpdatedAt || "";
-      merged.birthdayUpdatedBy = m.birthdayUpdatedBy || merged.birthdayUpdatedBy || "";
-    }
-    if ((m.manualTierKey || m.memberTierOverrideKey || m.memberTierManualKey) &&
-        (!merged.manualTierKey || new Date(m.manualTierUpdatedAt || 0) >= new Date(merged.manualTierUpdatedAt || 0))) {
-      merged.manualTierKey = m.manualTierKey || m.memberTierOverrideKey || m.memberTierManualKey || "";
-      merged.manualTierName = m.manualTierName || m.memberTierOverrideName || "";
-      merged.manualTierIcon = m.manualTierIcon || m.memberTierOverrideIcon || "";
-      merged.memberTierOverrideKey = merged.manualTierKey;
-      merged.memberTierOverrideName = merged.manualTierName;
-      merged.memberTierOverrideIcon = merged.manualTierIcon;
-      merged.manualTierUpdatedAt = m.manualTierUpdatedAt || merged.manualTierUpdatedAt || "";
-      merged.manualTierUpdatedBy = m.manualTierUpdatedBy || merged.manualTierUpdatedBy || "";
-      merged.manualTierBaseCups = Number(m.manualTierBaseCups || merged.manualTierBaseCups || 0);
-      merged.manualTierStartCups = Number(m.manualTierStartCups || m.manualTierSetAtCups || m.manualTierOriginalCups || merged.manualTierStartCups || 0);
-      merged.manualTierSetAtCups = merged.manualTierStartCups;
-      merged.manualTierOriginalCups = merged.manualTierStartCups;
-    }
-    merged.totalOrders = Math.max(Number(merged.totalOrders || 0), Number(m.totalOrders || 0));
-    merged.totalCups = Math.max(Number(merged.totalCups || 0), Number(m.totalCups || 0));
-    merged.totalSpent = Math.max(Number(merged.totalSpent || 0), Number(m.totalSpent || 0));
-    merged.rewardRedeemed = Math.max(Number(merged.rewardRedeemed || merged.rewardsRedeemed || 0), Number(m.rewardRedeemed || m.rewardsRedeemed || 0));
-    merged.rewardsRedeemed = merged.rewardRedeemed;
-  }
-
-  const canonical = memberCanonicalPhoneV222(last8);
-  merged.phone = canonical;
-  merged.updatedAt = merged.updatedAt || new Date().toISOString();
-
-  return { key: "member:" + canonical, member: merged, matches };
-}
-
-loadActiveMemberForEditV211 = async function(env, phone) {
-  return await findActiveMemberByPhoneV222(env, phone);
-};
-
-saveActiveMemberForEditV211 = async function(env, loaded) {
-  const member = loaded && loaded.member ? loaded.member : null;
-  if (!member) return;
-  const last8 = normalizePhoneLast8V222(member.phone);
-  const canonical = memberCanonicalPhoneV222(last8);
-  member.phone = canonical;
-  member.updatedAt = member.updatedAt || new Date().toISOString();
-
-  const keysToSave = new Set();
-  keysToSave.add("member:" + canonical);
-
-  // Update any existing aliases that still exist, so old buttons and old phone formats keep working.
-  const matches = (loaded && Array.isArray(loaded.matches)) ? loaded.matches : [];
-  matches.forEach(m => { if (m && m.key) keysToSave.add(m.key); });
-
-  // Only keep canonical and existing aliases in sync. Do not create new short alias if it was already cleaned.
-  for (const key of keysToSave) {
-    await env.ORDERS.put(key, JSON.stringify(member), { expirationTtl: 60 * 60 * 24 * 3650 });
-  }
-};
-
-buildMemberDetailReplyMarkup = function(member, deleted = false) {
-  const lookup = memberLookupPhoneV222(member);
-  const rows = [];
-  if (deleted) {
-    rows.push([{ text: "↩️ 恢復賬號", callback_data: "member_restore:" + lookup }]);
-  } else {
-    rows.push([{ text: "🔄 重新讀取會員資料", callback_data: "member_refresh:" + lookup }]);
-    rows.push([{ text: "🎂 更改生日", callback_data: "member_edit_birthday:" + lookup }]);
-    rows.push([{ text: "🏅 更改會員等級", callback_data: "member_tier_menu:" + lookup }]);
-    rows.push([{ text: "🗑️ 刪除賬號", callback_data: "member_delete:" + lookup }]);
-  }
-  rows.push([{ text: "📋 返回用戶列表", callback_data: "member_list:all" }]);
-  rows.push([{ text: "返回功能列表", callback_data: "limited_cmd_menu:x" }]);
-  return { inline_keyboard: rows };
-};
-
-saveMemberEditDraftV211 = async function(env, chatId, draft) {
-  const payload = JSON.stringify(draft || {});
-  await env.ORDERS.put(memberEditDraftKeyV211(chatId), payload, { expirationTtl: MEMBER_EDIT_DRAFT_TTL_V211 });
-  await env.ORDERS.put("member_edit_draft:last:" + String(chatId || ""), payload, { expirationTtl: MEMBER_EDIT_DRAFT_TTL_V211 });
-};
-
-getMemberEditDraftV211 = async function(env, chatId) {
-  const keys = [
-    memberEditDraftKeyV211(chatId),
-    "member_edit_draft:last:" + String(chatId || "")
-  ];
-  for (const key of keys) {
-    const raw = await env.ORDERS.get(key);
-    if (!raw) continue;
-    try { return JSON.parse(raw); } catch (_) {}
-  }
-  return null;
-};
-
-clearMemberEditDraftV211 = async function(env, chatId) {
-  await env.ORDERS.delete(memberEditDraftKeyV211(chatId));
-  await env.ORDERS.delete("member_edit_draft:last:" + String(chatId || ""));
-};
-
-handleMemberEditDraftTextV211 = async function(env, message, text, draft) {
-  const chatId = message.chat && message.chat.id ? message.chat.id : env.TELEGRAM_CHAT_ID;
-  if (!isAuthorizedTelegramChat(env, chatId)) {
-    await clearMemberEditDraftV211(env, chatId);
-    return json({ ok: true });
-  }
-
-  const raw = String(text || "").trim();
-  if (raw === "取消") {
-    await clearMemberEditDraftV211(env, chatId);
-    await sendTelegramMessage(env, chatId, "已取消會員資料修改。", buildCommandMenuMarkupV183 ? buildCommandMenuMarkupV183() : null);
-    return json({ ok: true });
-  }
-
-  if (draft && draft.type === "birthday") {
-    const birthday = normalizeBirthdayInputV222(raw);
-    if (!birthday) {
-      await sendTelegramMessage(
-        env,
-        chatId,
-        "生日格式不正確，請重新輸入。\n\n可接受格式：\n1990-08-18\n1990/08/18\n1990.08.18\n1990年8月18日\n\n輸入「取消」可取消操作。",
-        null
-      );
-      return json({ ok: true });
-    }
-
-    const loaded = await loadActiveMemberForEditV211(env, draft.phone);
-    if (!loaded.member) {
-      await clearMemberEditDraftV211(env, chatId);
-      await sendTelegramMessage(env, chatId, "找不到會員資料，生日未能更改。請重新進入會員列表，再打開該會員詳細資料操作。", buildCommandMenuMarkupV183 ? buildCommandMenuMarkupV183() : null);
-      return json({ ok: true });
-    }
-
-    const member = loaded.member;
-    member.birthday = birthday;
-    member.birthdayUpdatedAt = new Date().toISOString();
-    member.birthdayUpdatedBy = "telegram";
-    member.updatedAt = member.birthdayUpdatedAt;
-
-    await saveActiveMemberForEditV211(env, loaded);
-    await clearMemberEditDraftV211(env, chatId);
-
-    const enriched = await enrichMemberStatsForTelegram(env, member).catch(() => member);
-    const birthdayMonthNow = Number(birthday.split("-")[1]) === (new Date().getUTCMonth() + 1);
-    await sendTelegramMessage(
-      env,
-      chatId,
-      "✅ 已更新會員生日：" + birthday +
-      (birthdayMonthNow ? "\n🎂 生日月優惠已觸發，客人在會員中心會看到生日祝福和生日月飲品券。" : "") +
-      "\n\n" + buildMemberDetailText(enriched, false),
-      buildMemberDetailReplyMarkup(enriched, false)
-    );
-    return json({ ok: true });
-  }
-
-  await clearMemberEditDraftV211(env, chatId);
-  await sendTelegramMessage(env, chatId, "未找到正在編輯的會員資料，請重新進入會員詳細頁操作。", buildCommandMenuMarkupV183 ? buildCommandMenuMarkupV183() : null);
-  return json({ ok: true });
+buildCommandMenuMarkupV183 = function() {
+  return {
+    inline_keyboard: [
+      [{ text: "➕ 新增限定豆子", callback_data: "limited_wizard_add:x" }],
+      [{ text: "✨ 限定豆子列表 / 編輯", callback_data: "limited_list:all" }],
+      [{ text: "👤 查詢會員", callback_data: "member_list:active:0" }],
+      [{ text: "🧹 合併重複會員", callback_data: "member_merge_duplicates:x" }],
+      [{ text: "🛠 系統維護", callback_data: "maint_status:x" }]
+    ]
+  };
 };
