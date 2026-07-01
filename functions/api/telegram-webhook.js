@@ -7,7 +7,7 @@ export async function onRequest(context) {
     return json({
       ok: true,
       endpoint: "telegram-webhook",
-      version: "V215",
+      version: "V216",
       method,
       message: "Webhook endpoint reachable. Telegram sends POST updates here."
     });
@@ -3764,10 +3764,20 @@ function memberTierByCupsV211(cups) {
 
 function memberDisplayTierV211(member) {
   member = member || {};
-  const manual = memberTierByKeyV211(member.manualTierKey || member.memberTierOverrideKey || member.memberTierManualKey || "");
-  const natural = memberTierByCupsV211(member.totalCups || member.cups || member.totalItems || 0);
-  const tier = manual || natural;
-  return { ...tier, manual: !!manual };
+  const totalCups = Number(member.totalCups || member.cups || member.totalItems || 0);
+  const manualBase = memberTierByKeyV211(member.manualTierKey || member.memberTierOverrideKey || member.memberTierManualKey || "");
+  if (!manualBase) {
+    const tier = memberTierByCupsV211(totalCups);
+    return { ...tier, manual: false, effectiveCups: totalCups, cupsToNext: 0 };
+  }
+
+  const startCups = Number(member.manualTierStartCups || member.manualTierSetAtCups || member.manualTierOriginalCups || totalCups || 0);
+  const baseCups = Number(member.manualTierBaseCups || manualBase.cups || 0);
+  const gained = Math.max(0, totalCups - startCups);
+  const effectiveCups = baseCups + gained;
+  const tier = memberTierByCupsV211(effectiveCups);
+  const next = memberTierListV211().find(t => t.cups > effectiveCups) || null;
+  return { ...tier, manual: true, manualBase, manualBaseCups: baseCups, manualStartCups: startCups, gainedSinceManualTier: gained, effectiveCups, cupsToNext: next ? Math.max(0, next.cups - effectiveCups) : 0, nextTier: next };
 }
 
 function birthdayValidV211(value) {
@@ -3923,9 +3933,16 @@ async function handleMemberAdminEditActionV211(env, cq, data) {
     if (!loaded.member) return stop(env, cq, "找不到會員資料");
 
     const member = loaded.member;
+    const memberStatsForTierV216 = await enrichMemberStatsForTelegram(env, member).catch(() => member);
+    const currentTotalCupsV216 = Number(memberStatsForTierV216.totalCups || member.totalCups || member.cups || 0);
+    member.totalCups = Math.max(Number(member.totalCups || 0), currentTotalCupsV216);
     member.manualTierKey = tier.key;
     member.manualTierName = tier.name;
     member.manualTierIcon = tier.icon;
+    member.manualTierBaseCups = Number(tier.cups || 0);
+    member.manualTierStartCups = currentTotalCupsV216;
+    member.manualTierSetAtCups = currentTotalCupsV216;
+    member.manualTierOriginalCups = currentTotalCupsV216;
     member.memberTierOverrideKey = tier.key;
     member.memberTierOverrideName = tier.name;
     member.memberTierOverrideIcon = tier.icon;
@@ -3996,7 +4013,10 @@ buildMemberDetailText = function(member, deleted = false) {
   if (deleted) {
     lines.push("狀態：已刪除");
   } else {
-    lines.push("狀態：有效會員｜等級：" + tier.name + " " + tier.icon + (tier.manual ? "（店方設定）" : ""));
+    lines.push("狀態：有效會員｜等級：" + tier.name + " " + tier.icon + (tier.manual ? "（店方設定起點）" : ""));
+    if (tier.manual && tier.manualBase) {
+      lines.push("店方設定起點：" + tier.manualBase.name + " " + tier.manualBase.icon + "｜之後已累計：" + Number(tier.gainedSinceManualTier || 0) + " 杯" + (tier.nextTier ? "｜距離 " + tier.nextTier.name + " 還差 " + Number(tier.cupsToNext || 0) + " 杯" : "｜已達最高等級"));
+    }
   }
   lines.push("姓名：" + (member.name || "-"));
   lines.push("電話：" + (member.phone || "-"));

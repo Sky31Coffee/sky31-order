@@ -278,11 +278,11 @@ function sky31OrderTierByKeyV213(key) {
   key = String(key || "").toLowerCase();
   if (key === "vip") key = "blackgold";
   const map = {
-    regular: { key: "regular", name: "普通會員", icon: "🌱" },
-    silver: { key: "silver", name: "銀卡會員", icon: "🥈" },
-    gold: { key: "gold", name: "金卡會員", icon: "🥇" },
-    diamond: { key: "diamond", name: "鑽石會員", icon: "💎" },
-    blackgold: { key: "blackgold", name: "黑金會員", icon: "👑" }
+    regular: { key: "regular", name: "普通會員", icon: "🌱", cups: 0 },
+    silver: { key: "silver", name: "銀卡會員", icon: "🥈", cups: 30 },
+    gold: { key: "gold", name: "金卡會員", icon: "🥇", cups: 60 },
+    diamond: { key: "diamond", name: "鑽石會員", icon: "💎", cups: 100 },
+    blackgold: { key: "blackgold", name: "黑金會員", icon: "👑", cups: 180 }
   };
   return map[key] || null;
 }
@@ -296,11 +296,26 @@ function sky31OrderTierByCupsV213(cups) {
   return sky31OrderTierByKeyV213("regular");
 }
 
+function sky31OrderTierThresholdV216(key) {
+  const tier = sky31OrderTierByKeyV213(key);
+  return tier ? Number(tier.cups || 0) : 0;
+}
+
 function sky31OrderDisplayTierV213(member) {
   member = member || {};
-  const manual = sky31OrderTierByKeyV213(member.manualTierKey || member.memberTierOverrideKey || member.memberTierManualKey || "");
-  const natural = sky31OrderTierByKeyV213(member.memberTierKey || "") || sky31OrderTierByCupsV213(member.totalCups || member.cups || member.totalItems || 0);
-  return { ...(manual || natural), manual: !!manual };
+  const totalCups = Number(member.totalCups || member.cups || member.totalItems || 0);
+  const manualBase = sky31OrderTierByKeyV213(member.manualTierKey || member.memberTierOverrideKey || member.memberTierManualKey || "");
+  if (!manualBase) {
+    const natural = sky31OrderTierByKeyV213(member.memberTierKey || "") || sky31OrderTierByCupsV213(totalCups);
+    return { ...(natural || sky31OrderTierByKeyV213("regular")), manual: false, effectiveCups: totalCups };
+  }
+
+  const startCups = Number(member.manualTierStartCups || member.manualTierSetAtCups || member.manualTierOriginalCups || totalCups || 0);
+  const baseCups = Number(member.manualTierBaseCups || sky31OrderTierThresholdV216(manualBase.key));
+  const gained = Math.max(0, totalCups - startCups);
+  const effectiveCups = baseCups + gained;
+  const tier = sky31OrderTierByCupsV213(effectiveCups);
+  return { ...tier, manual: true, manualBase, manualBaseCups: baseCups, manualStartCups: startCups, gainedSinceManualTier: gained, effectiveCups };
 }
 
 function sky31OrderLimitedSurchargeTotalV213(cart) {

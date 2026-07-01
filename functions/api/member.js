@@ -328,6 +328,8 @@ async function enrichMemberWithOrders(env, member) {
     memberTierOverrideIcon: fixedMember.memberTierOverrideIcon || fixedMember.manualTierIcon || "",
     manualTierUpdatedAt: fixedMember.manualTierUpdatedAt || "",
     manualTierUpdatedBy: fixedMember.manualTierUpdatedBy || "",
+    manualTierStartCups: Number(fixedMember.manualTierStartCups || fixedMember.manualTierSetAtCups || fixedMember.manualTierOriginalCups || fixedMember.totalCups || 0),
+    manualTierBaseCups: Number(fixedMember.manualTierBaseCups || sky31TierThresholdV216(fixedMember.manualTierKey || fixedMember.memberTierOverrideKey || fixedMember.memberTierManualKey || "")),
     birthdayLockedAt: fixedMember.birthdayLockedAt || "",
     birthdayUpdatedAt: fixedMember.birthdayUpdatedAt || "",
     birthdayUpdatedBy: fixedMember.birthdayUpdatedBy || "",
@@ -657,13 +659,15 @@ function sky31RewardsFromMemberV196(member) {
 function sky31DecorateMemberV196(member) {
   if (!member || typeof member !== "object") return member;
   const rewards = sky31RewardsFromMemberV196(member);
-  const manualTier = sky31TierByKeyV211(member.manualTierKey || member.memberTierOverrideKey || member.memberTierManualKey || "");
-  const displayTier = manualTier || rewards.tier;
+  const displayTier = sky31DisplayTierV216(member, rewards.tier);
+  const manualTier = displayTier.manualBase;
   return {
     ...member,
     manualTierKey: member.manualTierKey || member.memberTierOverrideKey || member.memberTierManualKey || "",
     manualTierName: member.manualTierName || member.memberTierOverrideName || (manualTier && manualTier.name) || "",
     manualTierIcon: member.manualTierIcon || member.memberTierOverrideIcon || (manualTier && manualTier.icon) || "",
+    manualTierBaseCups: Number(member.manualTierBaseCups || (manualTier ? sky31TierThresholdV216(manualTier.key) : 0)),
+    manualTierStartCups: Number(member.manualTierStartCups || member.manualTierSetAtCups || member.manualTierOriginalCups || member.totalCups || member.cups || 0),
     memberTierOverrideKey: member.memberTierOverrideKey || member.manualTierKey || "",
     memberTierOverrideName: member.memberTierOverrideName || member.manualTierName || "",
     memberTierOverrideIcon: member.memberTierOverrideIcon || member.manualTierIcon || "",
@@ -679,7 +683,11 @@ function sky31DecorateMemberV196(member) {
     memberTier: displayTier.name,
     memberTierIcon: displayTier.icon,
     memberTierKey: displayTier.key,
-    memberTierManual: !!manualTier
+    memberTierManual: !!displayTier.manual,
+    memberTierManualBase: displayTier.manualBase ? displayTier.manualBase.name : "",
+    memberTierEffectiveCups: displayTier.effectiveCups,
+    memberTierCupsToNext: displayTier.cupsToNext,
+    memberTierGainedSinceManual: displayTier.gainedSinceManualTier || 0
   };
 }
 
@@ -742,4 +750,48 @@ function sky31TierByKeyV211(key) {
     blackgold: { key: "blackgold", name: "黑金會員", icon: "👑", next: null }
   };
   return map[key] || null;
+}
+
+
+function sky31TierThresholdV216(key) {
+  key = String(key || "").toLowerCase();
+  if (key === "vip") key = "blackgold";
+  const map = { regular: 0, silver: 30, gold: 60, diamond: 100, blackgold: 180 };
+  return map[key] == null ? 0 : map[key];
+}
+
+function sky31TierByCupsV216(cups) {
+  cups = Number(cups || 0);
+  if (cups >= 180) return sky31TierByKeyV211("blackgold");
+  if (cups >= 100) return sky31TierByKeyV211("diamond");
+  if (cups >= 60) return sky31TierByKeyV211("gold");
+  if (cups >= 30) return sky31TierByKeyV211("silver");
+  return sky31TierByKeyV211("regular");
+}
+
+function sky31DisplayTierV216(member, naturalTier) {
+  member = member || {};
+  const totalCups = Number(member.totalCups || member.cups || member.totalItems || 0);
+  const manualBase = sky31TierByKeyV211(member.manualTierKey || member.memberTierOverrideKey || member.memberTierManualKey || "");
+  if (!manualBase) {
+    const tier = naturalTier || sky31TierByCupsV216(totalCups);
+    return { ...tier, manual: false, effectiveCups: totalCups, manualBase: null, cupsToNext: tier.next ? Math.max(0, tier.next - totalCups) : 0 };
+  }
+
+  const startCups = Number(member.manualTierStartCups || member.manualTierSetAtCups || member.manualTierOriginalCups || totalCups || 0);
+  const baseCups = Number(member.manualTierBaseCups || sky31TierThresholdV216(manualBase.key));
+  const gained = Math.max(0, totalCups - startCups);
+  const effectiveCups = baseCups + gained;
+  const tier = sky31TierByCupsV216(effectiveCups);
+  const next = tier.next == null ? null : tier.next;
+  return {
+    ...tier,
+    manual: true,
+    manualBase,
+    manualBaseCups: baseCups,
+    manualStartCups: startCups,
+    gainedSinceManualTier: gained,
+    effectiveCups,
+    cupsToNext: next == null ? 0 : Math.max(0, next - effectiveCups)
+  };
 }
