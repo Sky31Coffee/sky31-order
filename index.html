@@ -15307,7 +15307,7 @@ window.addEventListener("load", function() {
       const val = "Limited｜" + label + "｜風味：" + flavor;
       return '<div class="chip bean-chip limited-bean-option" data-value="' + safe181(val) + '" data-bean-label="' + safe181(label) + '" data-bean-flavor="' + safe181(flavor) + '" data-surcharge="5">' +
         '<b>✨ ' + safe181(label) + '<span class="limited-surcharge-badge">+MOP 5</span></b>' +
-        '<span class="flavor">限定豆子：' + safe181(flavor) + '<br>' + safe181(note) + '</span>' +
+        '<span class="flavor">風味：' + safe181(flavor) + '<br>' + safe181(note) + '</span>' +
       '</div>';
     };
   }
@@ -15995,7 +15995,7 @@ window.addEventListener("load", function() {
     return '' +
       '<div class="chip bean-chip limited-bean-option v207-limited-bean-option v198-limited-bean-option" data-value="' + esc207(val) + '" data-bean-label="' + esc207(beanName) + '" data-bean-flavor="' + esc207(beanFlavor) + '" data-surcharge="' + bean.surcharge + '">' +
         '<b>✨ ' + esc207(beanName) + '<span class="limited-surcharge-badge">+MOP ' + bean.surcharge + '</span></b>' +
-        '<span class="flavor">限定豆子：' + esc207(beanFlavor) + '<br>' + esc207(bean.note || bean.descLabel || "限時供應，售完即止。") + '</span>' +
+        '<span class="flavor">風味：' + esc207(beanFlavor) + '<br>' + esc207(bean.note || bean.descLabel || "限時供應，售完即止。") + '</span>' +
       '</div>';
   }
 
@@ -16689,5 +16689,6 @@ window.addEventListener("load", function() {
 })();
 </script>
 
+<!-- V215: Limited bean option label changed from 限定豆子 to 風味. -->
 </body>
 </html>
