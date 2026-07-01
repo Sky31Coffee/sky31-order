@@ -7669,6 +7669,82 @@ body:has(#orderApp.hidden) #sky31PersistentCart.sky31-cart-body-level{
   max-width:48% !important;
 }
 
+
+/* V207: stable Limited Bean name/description from Telegram data */
+#limitedBeanPreview.v198-limited-grid .landing-bean-topline span{
+  text-transform:none !important;
+  letter-spacing:0 !important;
+  font-size:11px !important;
+  font-weight:900 !important;
+  color:rgba(72,86,112,.62) !important;
+  max-width:58% !important;
+  overflow:hidden !important;
+  text-overflow:ellipsis !important;
+  white-space:nowrap !important;
+}
+#limitedBeanPreview.v198-limited-grid .landing-bean-topline b{
+  max-width:42% !important;
+  white-space:nowrap !important;
+  overflow:hidden !important;
+  text-overflow:ellipsis !important;
+}
+#beanChips .bean-chip.limited-bean-option.v207-limited-bean-option b,
+#beanChips .bean-chip.limited-bean-option.v198-limited-bean-option b{
+  white-space:normal !important;
+  overflow:visible !important;
+  text-overflow:clip !important;
+}
+#beanChips .bean-chip.limited-bean-option.v207-limited-bean-option .flavor,
+#beanChips .bean-chip.limited-bean-option.v198-limited-bean-option .flavor{
+  white-space:normal !important;
+  overflow:visible !important;
+}
+
+
+/* V208: Limited Bean +MOP 5 price calculation stability */
+.detail-price-box .detail-price-grid{
+  grid-template-columns:minmax(0,1fr) minmax(0,1.35fr) !important;
+}
+.detail-price-box .detail-price-grid strong,
+.detail-price-box .detail-price-grid span{
+  min-width:0 !important;
+  overflow-wrap:anywhere !important;
+  word-break:break-word !important;
+}
+.detail-price-box .detail-price-grid .v208-limited-surcharge{
+  color:rgba(151,88,9,.96) !important;
+  font-weight:950 !important;
+}
+.v208-price-note{
+  margin-top:8px !important;
+  color:rgba(151,88,9,.76) !important;
+  font-size:11.5px !important;
+  line-height:1.45 !important;
+  font-weight:780 !important;
+}
+.cart-price-line .v208-surcharge-tag,
+.v201-checkout-reward .v208-surcharge-tag{
+  color:rgba(151,88,9,.92) !important;
+  font-weight:900 !important;
+}
+
+
+/* V209: remove old limited bean renderer side effects */
+#beanChips .bean-chip.limited-bean-option{
+  display:block !important;
+  visibility:visible !important;
+  opacity:1 !important;
+}
+#beanChips .bean-chip.limited-bean-option:not(:first-of-type){
+  display:block !important;
+}
+#beanChips .limited-bean-selection-placeholder,
+#beanChips .bean-refresh-line,
+#beanChips .v188-limited-sync-line,
+#beanChips .v189-limited-sync-line{
+  display:none !important;
+}
+
 </style>
 
 <style>
@@ -14526,431 +14602,6 @@ window.addEventListener("load", function() {
 
 
 <script>
-/* V175 dynamic Limited menu from Cloudflare KV / Telegram bot */
-(function(){
-  var V175_LIMITED_KEY = "__sky31_v175_limited_applied";
-  var FALLBACK_IMAGE = "./americano-new.jpg";
-
-  function safe(s){ return typeof esc === "function" ? esc(s) : String(s || ""); }
-  function num(v){ var n = Number(v); return Number.isFinite(n) && n > 0 ? n : 0; }
-
-  function normalizeLimitedItem(item){
-    item = item || {};
-    var id = String(item.id || item.limitedId || ("limited_" + Date.now())).replace(/[^a-zA-Z0-9_-]/g, "").slice(0,32) || ("limited_" + Date.now());
-    var name = String(item.name || item.title || "Limited Coffee").trim();
-    var cn = String(item.cn || item.zh || item.chinese || "期間限定").trim();
-    var bean = String(item.bean || item.beanName || item.beanLabel || "期間限定豆子").trim();
-    var flavor = String(item.flavor || item.tasting || "").trim();
-    var note = String(item.note || item.desc2 || item.beanNote || "").trim();
-    var desc = String(item.desc || item.description || ((bean || cn) + (flavor ? "｜" + flavor : ""))).trim();
-    var milk = item.milk;
-    if(typeof milk === "string") milk = !/^(no|false|0|否|不|不需要|black)$/i.test(milk.trim());
-    if(milk == null) milk = true;
-    var tempMode = String(item.tempMode || item.temp || item.temperature || "both").toLowerCase();
-    var fixedPrice = num(item.fixedPrice || item.price);
-    var hotPrice = num(item.hotPrice || item.hot || item.priceHot);
-    var icedPrice = num(item.icedPrice || item.iced || item.priceIced || item.coldPrice);
-    if(!fixedPrice && !hotPrice && !icedPrice) fixedPrice = 45;
-    return {
-      id:id,
-      limitedId:id,
-      isLimited:true,
-      name:name,
-      cn:cn,
-      desc:desc,
-      milk:!!milk,
-      image:String(item.image || item.imageUrl || item.img || FALLBACK_IMAGE).trim() || FALLBACK_IMAGE,
-      forceIced: tempMode === "iced" || tempMode === "ice" || tempMode === "cold",
-      hideTemp:false,
-      tempMode:tempMode,
-      fixedPrice:fixedPrice,
-      hotPrice:hotPrice || fixedPrice,
-      icedPrice:icedPrice || fixedPrice || hotPrice,
-      beanLabel:bean,
-      beanFlavor:flavor,
-      beanNote:note,
-      active:item.active !== false,
-      updatedAt:item.updatedAt || ""
-    };
-  }
-
-  function clearLimitedProducts(){
-    if(typeof products === "undefined" || !Array.isArray(products)) return;
-    for(var i=products.length-1;i>=0;i--){
-      if(products[i] && products[i].isLimited) products.splice(i,1);
-    }
-  }
-
-  function installLimitedBeanProfiles(items){
-    try{
-      if(typeof beanProfiles === "undefined") return;
-      items.forEach(function(p){
-        beanProfiles["limited:" + p.limitedId] = [{
-          id:p.limitedId,
-          label:p.beanLabel || p.cn || p.name,
-          icon:"✨",
-          recommend:true,
-          flavor:p.beanFlavor || "期間限定",
-          note:p.beanNote || p.desc || "Sky31 期間限定豆子"
-        }];
-      });
-    }catch(e){}
-  }
-
-  function patchLimitedBeanGroup(){
-    if(window.__sky31LimitedBeanGroupPatched) return;
-    window.__sky31LimitedBeanGroupPatched = true;
-    try{
-      var old = beanGroupForProduct;
-      beanGroupForProduct = function(product){
-        if(product && product.isLimited) return "limited:" + product.limitedId;
-        return old ? old(product) : null;
-      };
-    }catch(e){}
-  }
-
-  function patchLimitedPrice(){
-    if(window.__sky31LimitedPricePatched) return;
-    window.__sky31LimitedPricePatched = true;
-    var oldItem = window.sky31PriceForItem;
-    var oldProduct = window.sky31PriceForProduct;
-    var oldLabel = window.sky31PriceLabelForProduct;
-    function isIced(temp){ temp = String(temp || ""); return temp.indexOf("Iced") >= 0 || temp.indexOf("凍") >= 0 || temp.indexOf("冻") >= 0; }
-    function priceOf(p, temp){
-      if(!p || !p.isLimited) return null;
-      if(Number(p.fixedPrice || 0) > 0) return Number(p.fixedPrice || 0);
-      return isIced(temp) ? Number(p.icedPrice || p.hotPrice || 0) : Number(p.hotPrice || p.icedPrice || 0);
-    }
-    window.sky31PriceForProduct = function(product, temp){
-      var v = priceOf(product, temp);
-      if(v != null) return v;
-      return oldProduct ? oldProduct(product, temp) : 0;
-    };
-    window.sky31PriceForItem = function(item){
-      var v = priceOf(item, item && item.temp);
-      if(v != null) return v;
-      return oldItem ? oldItem(item) : 0;
-    };
-    window.sky31PriceLabelForProduct = function(product){
-      if(product && product.isLimited){
-        if(Number(product.fixedPrice || 0) > 0) return "MOP " + Number(product.fixedPrice);
-        return "熱 MOP " + Number(product.hotPrice || 0) + " / 凍 MOP " + Number(product.icedPrice || 0);
-      }
-      return oldLabel ? oldLabel(product) : "";
-    };
-  }
-
-  function renderProductCard(p, idx){
-    var item = document.createElement("div");
-    item.className = "product" + (p.isLimited ? " limited-product" : "");
-    item.onclick = function(){ openDetail(idx); };
-    var price = typeof sky31PriceLabelForProduct === "function" ? sky31PriceLabelForProduct(p) : "";
-    var meta = p.isLimited ? '<span class="limited-meta-line">' + safe(p.beanLabel || "Limited Beans") + (p.beanFlavor ? '｜' + safe(p.beanFlavor) : '') + '</span>' : '';
-    item.innerHTML =
-      '<div class="product-img" style="background-image:url(' + safe(p.image || FALLBACK_IMAGE) + ')"></div>' +
-      '<div class="product-body">' +
-        '<h3>' + safe(p.name) + '</h3>' +
-        '<p>' + safe(p.cn) + '</p>' + meta +
-        '<div class="menu-price-line">' + safe(price) + '</div>' +
-      '</div>';
-    return item;
-  }
-
-  function installRenderMenu(){
-    if(window.__sky31LimitedRenderInstalled) return;
-    window.__sky31LimitedRenderInstalled = true;
-    window.renderMenu = function(){
-      if(typeof products === "undefined" || !Array.isArray(products)) return;
-      var limitedSection = document.getElementById("limitedMenuSection");
-      var limitedMenu = document.getElementById("limitedMenu");
-      var menu = document.getElementById("menu");
-      if(menu) menu.innerHTML = "";
-      if(limitedMenu) limitedMenu.innerHTML = "";
-
-      var limitedCount = 0;
-      products.forEach(function(p, idx){
-        if(!p || p.active === false) return;
-        if(p.isLimited){
-          limitedCount++;
-          if(limitedMenu) limitedMenu.appendChild(renderProductCard(p, idx));
-        }else{
-          if(menu) menu.appendChild(renderProductCard(p, idx));
-        }
-      });
-
-      if(limitedSection){
-        if(limitedCount > 0) limitedSection.classList.remove("hidden");
-        else limitedSection.classList.add("hidden");
-      }
-    };
-  }
-
-  function renderLandingLimited(items){
-    var box = document.getElementById("limitedBeanPreview");
-    if(!box) return;
-    var active = (items || []).filter(function(x){ return x && x.active !== false; }).slice(0,2);
-    box.className = "landing-beans-grid v198-limited-grid";
-    if(!active.length){
-      box.innerHTML = '<div class="landing-bean-panel v198-limited-empty"><div class="landing-bean-icon">✨</div><div class="landing-bean-copy"><div class="landing-bean-topline"><span>Limited Beans</span><b>期間限定豆子</b></div><div class="landing-bean-flavor">暫時未上架，請留意 Sky31 最新更新。</div></div></div>';
-      return;
-    }
-    box.innerHTML = active.map(function(p){
-      var name = p.beanLabel || p.bean || p.name || p.cn || "期間限定豆子";
-      var flavor = p.beanFlavor || p.flavor || p.tasting || p.desc || "限時供應";
-      return '<div class="landing-bean-panel v198-limited-panel">' +
-        '<div class="landing-bean-icon">✨</div>' +
-        '<div class="landing-bean-copy">' +
-          '<div class="landing-bean-topline"><span>Limited Beans</span><b>' + safe(name) + '</b></div>' +
-          '<div class="landing-bean-flavor">' + safe(flavor) + '</div>' +
-        '</div>' +
-      '</div>';
-    }).join("");
-  }
-
-  function applyLimitedMenu(rawItems){
-    patchLimitedPrice();
-    patchLimitedBeanGroup();
-    installRenderMenu();
-    var items = (Array.isArray(rawItems) ? rawItems : []).map(normalizeLimitedItem).filter(function(x){ return x.active !== false; });
-    clearLimitedProducts();
-    installLimitedBeanProfiles(items);
-    for(var i=items.length-1;i>=0;i--){ products.unshift(items[i]); }
-    renderLandingLimited(items);
-    try{ renderMenu(); }catch(e){}
-  }
-
-  async function loadLimitedMenu(){
-    try{
-      var res = await fetch("/api/menu?t=" + Date.now(), {cache:"no-store"});
-      var data = await res.json();
-      if(data && data.ok) applyLimitedMenu(data.limitedItems || []);
-      else applyLimitedMenu([]);
-    }catch(e){
-      applyLimitedMenu([]);
-    }
-  }
-
-  document.addEventListener("DOMContentLoaded", loadLimitedMenu);
-  setTimeout(loadLimitedMenu, 300);
-})();
-</script>
-
-<script>
-/* V178: Telegram Bot limited beans also appear in Bean Selection and auto refresh. */
-(function(){
-  var limitedBeanChoices = [];
-  var lastLimitedLoadedAt = "";
-  var loadingLimitedBeans = false;
-
-  function safeV178(s){
-    return typeof esc === "function"
-      ? esc(s)
-      : String(s == null ? "" : s).replace(/[&<>"']/g, function(m){
-          return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m];
-        });
-  }
-
-  function normalizeLimitedBeanForChoice(item){
-    item = item || {};
-    var active = item.active !== false;
-    var id = String(item.id || item.limitedId || item.name || "").replace(/[^a-zA-Z0-9_-]/g,"").slice(0,32);
-    var bean = String(item.bean || item.beanName || item.beanLabel || item.name || "期間限定豆子").trim();
-    var cn = String(item.cn || item.zh || item.chinese || item.title || item.name || "期間限定").trim();
-    var flavor = String(item.flavor || item.tasting || item.tastingNotes || item.beanFlavor || "").trim();
-    var note = String(item.note || item.beanNote || item.desc || item.description || "").trim();
-    var tempMode = String(item.tempMode || item.temp || item.temperature || "both").toLowerCase();
-    var milk = item.milk;
-    if(typeof milk === "string") milk = !/^(no|false|0|否|不|不需要|black)$/i.test(milk.trim());
-    if(milk == null) milk = true;
-
-    return {
-      id: id || ("limited_" + bean.replace(/\s+/g,"_").slice(0,18)),
-      active: active,
-      label: bean,
-      cn: cn,
-      flavor: flavor || "期間限定",
-      note: note || "由 Sky31 Telegram Bot 即時更新",
-      milk: !!milk,
-      tempMode: tempMode,
-      updatedAt: item.updatedAt || ""
-    };
-  }
-
-  function productAcceptsLimitedBean(product){
-    if(!product || !product.name) return false;
-    if(product.isLimited) return false;
-    var n = String(product.name || "");
-    if(n === "Classic Chocolate") return false;
-    if(n === "Americano") return true;
-    if(n === "Latte" || n === "Cappuccino" || n === "Mocha") return true;
-    if(n.indexOf("Dirty") >= 0) return true;
-    return !!product.milk && n !== "Classic Chocolate";
-  }
-
-  function limitedBeanFitsProduct(bean, product){
-    if(!bean || !productAcceptsLimitedBean(product)) return false;
-    var n = String(product.name || "");
-    var tempMode = String(bean.tempMode || "both").toLowerCase();
-
-    if(n === "Americano"){
-      return true;
-    }
-
-    if(n.indexOf("Dirty") >= 0){
-      return tempMode !== "hot";
-    }
-
-    if(product.milk){
-      return bean.milk !== false;
-    }
-
-    return true;
-  }
-
-  function makeLimitedBeanChip(bean){
-    var val = "Limited｜" + bean.label + "｜風味：" + bean.flavor;
-    var updated = bean.updatedAt ? '<span class="limited-updated">更新：' + safeV178(String(bean.updatedAt).slice(0,10)) + '</span>' : "";
-    return '<div class="chip bean-chip limited-bean-option" data-value="' + safeV178(val) + '" data-bean-label="' + safeV178(bean.label) + '" data-bean-flavor="' + safeV178(bean.flavor) + '">' +
-      '<b>✨ ' + safeV178(bean.label) + '</b>' +
-      '<span class="flavor">期間限定：' + safeV178(bean.flavor) + '<br>' + safeV178(bean.note) + '</span>' +
-      updated +
-    '</div>';
-  }
-
-  function currentProductBeanProfiles(product){
-    var group = null;
-    try{ group = beanGroupForProduct(product); }catch(e){}
-    if(!group) return [];
-    if(typeof beanProfiles === "undefined" || !beanProfiles[group]) return [];
-    return beanProfiles[group] || [];
-  }
-
-  function renderBeanProfilesWithLimited(product){
-    var beanBox = document.getElementById("beanBox");
-    var beanChips = document.getElementById("beanChips");
-    if(!beanBox || !beanChips) return;
-
-    var baseProfiles = currentProductBeanProfiles(product);
-    if(!baseProfiles.length && !productAcceptsLimitedBean(product)){
-      beanBox.classList.add("hidden");
-      beanChips.innerHTML = "";
-      return;
-    }
-
-    beanBox.classList.remove("hidden");
-
-    var html = baseProfiles.map(function(b){
-      var active = b.recommend ? " active" : "";
-      var rec = b.recommend ? '<span class="recommend">推薦</span>' : "";
-      return '<div class="chip bean-chip' + active + '" data-value="' + safeV178(b.label) + '｜風味：' + safeV178(b.flavor) + '" data-bean-label="' + safeV178(b.label) + '" data-bean-flavor="' + safeV178(b.flavor) + '">' +
-        '<b>' + safeV178(b.icon || "☕") + ' ' + safeV178(b.label) + rec + '</b>' +
-        '<span class="flavor">風味：' + safeV178(b.flavor) + '<br>' + safeV178(b.note || "") + '</span>' +
-      '</div>';
-    }).join("");
-
-    var limitedForProduct = limitedBeanChoices.filter(function(x){ return limitedBeanFitsProduct(x, product); });
-    if(limitedForProduct.length){
-      html += limitedForProduct.map(makeLimitedBeanChip).join("");
-    }else if(productAcceptsLimitedBean(product)){
-      html += '<div class="chip bean-chip limited-bean-selection-placeholder" data-value="">' +
-        '<b>✨ 期間限定豆子</b>' +
-        '<span class="flavor">期間限定豆子暫未上架。<br>下一支驚喜豆單正在準備中，敬請期待。</span>' +
-      '</div>';
-    }
-
-    html += '<div class="bean-refresh-line"><span>限定豆子資訊會即時更新</span><button type="button" onclick="window.SKY31_REFRESH_LIMITED_BEANS && window.SKY31_REFRESH_LIMITED_BEANS(true)">立即更新</button></div>';
-
-    beanChips.innerHTML = html;
-
-    if(!beanChips.querySelector(".chip.active") && beanChips.querySelector(".chip[data-value]:not([data-value=''])")){
-      beanChips.querySelector(".chip[data-value]:not([data-value=''])").classList.add("active");
-    }
-
-    if(typeof bindChips === "function") bindChips(beanBox);
-    beanChips.querySelectorAll(".limited-bean-selection-placeholder").forEach(function(el){
-      el.onclick = function(ev){
-        ev.preventDefault();
-        ev.stopPropagation();
-      };
-    });
-  }
-
-  var originalConfigureBean = window.configureBean || configureBean;
-  window.configureBean = configureBean = function(){
-    renderBeanProfilesWithLimited(window.current || current);
-  };
-
-  var originalShortBean = window.shortBean || (typeof shortBean === "function" ? shortBean : null);
-  window.shortBean = shortBean = function(bean){
-    if(bean && String(bean).indexOf("Limited｜") === 0){
-      var parts = String(bean).split("｜");
-      return "✨ " + (parts[1] || "Limited Beans");
-    }
-    return originalShortBean ? originalShortBean(bean) : (bean ? sky31BeanDisplayV204(bean) : "未選豆");
-  };
-
-  async function loadLimitedBeanChoices(force){
-    if(loadingLimitedBeans && !force) return;
-    loadingLimitedBeans = true;
-    try{
-      var res = await fetch("/api/menu?scope=bean-options&t=" + Date.now(), {cache:"no-store"});
-      var data = await res.json();
-      var items = (data && data.ok && Array.isArray(data.limitedItems)) ? data.limitedItems : [];
-      limitedBeanChoices = items.map(normalizeLimitedBeanForChoice).filter(function(x){ return x.active !== false; });
-      window.SKY31_LIMITED_BEAN_CHOICES = limitedBeanChoices.slice();
-      lastLimitedLoadedAt = new Date().toISOString();
-
-      var overlay = document.getElementById("overlay");
-      if(overlay && overlay.classList.contains("show")){
-        try{ configureBean(); }catch(e){}
-      }
-
-      if(typeof window.SKY31_REFRESH_LIMITED === "function"){
-        try{ window.SKY31_REFRESH_LIMITED(); }catch(e){}
-      }
-    }catch(e){
-      limitedBeanChoices = limitedBeanChoices || [];
-    }finally{
-      loadingLimitedBeans = false;
-    }
-  }
-
-  window.SKY31_REFRESH_LIMITED_BEANS = loadLimitedBeanChoices;
-
-  var oldOpenDetail = window.openDetail || openDetail;
-  window.openDetail = openDetail = function(i){
-    oldOpenDetail(i);
-    loadLimitedBeanChoices(true).then(function(){
-      try{ configureBean(); }catch(e){}
-    });
-  };
-
-  var oldEnterOrderPage = window.enterOrderPage || null;
-  if(oldEnterOrderPage){
-    window.enterOrderPage = enterOrderPage = function(){
-      var r = oldEnterOrderPage.apply(this, arguments);
-      loadLimitedBeanChoices(true);
-      return r;
-    };
-  }
-
-  document.addEventListener("DOMContentLoaded", function(){
-    loadLimitedBeanChoices(true);
-    setTimeout(function(){ try{ configureBean(); }catch(e){} }, 500);
-  });
-
-  document.addEventListener("visibilitychange", function(){
-    if(!document.hidden) loadLimitedBeanChoices(true);
-  });
-
-  setInterval(function(){
-    loadLimitedBeanChoices(false);
-  }, 60000);
-})();
-</script>
-
-
-<script>
 /* V180: remove standalone Limited menu card; keep Limited only as bean options. Restore Mocha base beans. */
 (function(){
   function safe180(s){
@@ -15423,245 +15074,6 @@ window.addEventListener("load", function() {
 
 
 <script>
-/* V198: stable two Limited Beans renderer. No flicker, no stacked old one-bean logic. */
-(function(){
-  const SURCHARGE = 5;
-  let lastLandingSig = "";
-  let lastChoiceSig = "";
-
-  function esc198(s){
-    if(typeof esc === "function") return esc(s);
-    return String(s == null ? "" : s).replace(/[&<>"']/g, function(m){
-      return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m];
-    });
-  }
-
-  function normalize198(item){
-    item = item || {};
-    function firstRealValue(list){
-      for(const v of list){
-        const s = String(v || "").trim();
-        if(!s) continue;
-        if(s === "期間限定豆子" || s === "Limited" || s === "Limited Beans") continue;
-        return s;
-      }
-      return "";
-    }
-
-    const label = firstRealValue([item.bean, item.beanName, item.name, item.beanLabel, item.cn, item.zh, item.chinese]) || "期間限定豆子";
-    const flavor = firstRealValue([item.flavor, item.beanFlavor, item.tasting]) || "限時供應";
-    const descLabel = firstRealValue([item.desc, item.description, item.note, item.beanNote]) || "期間限定";
-    const note = firstRealValue([item.note, item.beanNote, item.desc, item.description]) || "限時供應，售完即止。";
-
-    return {
-      id: String(item.id || item.limitedId || label).replace(/[^a-zA-Z0-9_-]/g,"").slice(0,40),
-      active: item.active !== false && item.deleted !== true,
-      label,
-      flavor,
-      descLabel,
-      note,
-      surcharge: Number(item.surcharge || item.limitedSurcharge || SURCHARGE) || SURCHARGE
-    };
-  }
-
-  async function fetchLimitedBeans198(){
-    try{
-      const res = await fetch("/api/menu?t=" + Date.now(), { cache:"no-store" });
-      const data = await res.json().catch(() => ({}));
-      if(!data || !data.ok){
-        window.SKY31_LIMITED_BEANS_V198 = [];
-        return [];
-      }
-
-      let list = Array.isArray(data.limitedItems) ? data.limitedItems : [];
-
-      if(list.length < 2 && Array.isArray(data.allLimitedItems) && data.allLimitedItems.length){
-        const all = data.allLimitedItems.map(normalize198).filter(x => x.active);
-        const ids = Array.isArray(data.currentLimitedBeanIds) ? data.currentLimitedBeanIds.map(String) : [];
-        const selected = [];
-
-        ids.forEach(id => {
-          const found = all.find(x => String(x.id) === String(id));
-          if(found && !selected.find(x => x.id === found.id)) selected.push(found);
-        });
-
-        all.forEach(item => {
-          if(selected.length < 2 && !selected.find(x => x.id === item.id)) selected.push(item);
-        });
-
-        list = selected;
-      }
-
-      const beans = list.map(normalize198).filter(x => x.active).slice(0,2);
-      window.SKY31_LIMITED_BEANS_V198 = beans;
-      window.SKY31_LIMITED_BEANS_V197 = beans;
-      window.SKY31_CURRENT_LIMITED_BEANS_V191 = beans;
-      window.SKY31_LIMITED_BEAN_CHOICES_V181 = beans;
-      window.SKY31_LIMITED_BEAN_CHOICES = beans;
-      return beans;
-    }catch(e){
-      return window.SKY31_LIMITED_BEANS_V198 || [];
-    }
-  }
-
-  function beanSig198(beans){
-    return (beans || []).map(b => [b.id,b.label,b.flavor,b.surcharge].join("|")).join(";;");
-  }
-
-  function renderLanding198(force){
-    const box = document.getElementById("limitedBeanPreview");
-    if(!box) return;
-
-    const beans = (window.SKY31_LIMITED_BEANS_V198 || []).slice(0,2);
-    const sig = beanSig198(beans);
-    if(!force && sig === lastLandingSig && box.classList.contains("v198-limited-grid")) return;
-    lastLandingSig = sig;
-
-    box.className = "landing-beans-grid v198-limited-grid";
-
-    if(!beans.length){
-      box.innerHTML = '<div class="landing-bean-panel v198-limited-empty"><div class="landing-bean-icon">✨</div><div class="landing-bean-copy"><div class="landing-bean-topline"><span>期間限定</span><b>期間限定豆子</b></div><div class="landing-bean-flavor">暫時未上架，請留意 Sky31 最新更新。</div></div></div>';
-      return;
-    }
-
-    box.innerHTML = beans.map(bean => {
-      const descLabel = bean.descLabel || bean.note || "期間限定";
-      return '' +
-        '<div class="landing-bean-panel v198-limited-panel" data-limited-id="' + esc198(bean.id) + '">' +
-          '<div class="landing-bean-icon">✨</div>' +
-          '<div class="landing-bean-copy">' +
-            '<div class="landing-bean-topline">' +
-              '<span title="' + esc198(descLabel) + '">' + esc198(descLabel) + '</span>' +
-              '<b title="' + esc198(bean.label) + '">' + esc198(bean.label) + '</b>' +
-            '</div>' +
-            '<div class="landing-bean-flavor">' + esc198(bean.flavor) + '</div>' +
-          '</div>' +
-        '</div>';
-    }).join("");
-  }
-
-  function currentProduct198(){
-    try{
-      if(typeof current !== "undefined" && current) return current;
-      if(window.current) return window.current;
-    }catch(e){}
-    return null;
-  }
-
-  function productAccepts198(product){
-    if(!product || product.isLimited) return false;
-    const n = String(product.name || "");
-    if(n === "Classic Chocolate") return false;
-    return n === "Americano" || n === "Latte" || n === "Cappuccino" || n === "Mocha" || n.indexOf("Dirty") >= 0 || !!product.milk;
-  }
-
-  function chip198(bean){
-    const beanName = bean.label || "期間限定豆子";
-    const beanFlavor = bean.flavor || "限時供應";
-    const val = "Limited｜" + beanName + "｜風味：" + beanFlavor;
-    return '' +
-      '<div class="chip bean-chip limited-bean-option v198-limited-bean-option" data-value="' + esc198(val) + '" data-bean-label="' + esc198(beanName) + '" data-bean-flavor="' + esc198(beanFlavor) + '" data-surcharge="' + bean.surcharge + '">' +
-        '<b>✨ ' + esc198(beanName) + '<span class="limited-surcharge-badge">+MOP ' + bean.surcharge + '</span></b>' +
-        '<span class="flavor">限定豆子：' + esc198(beanFlavor) + '<br>' + esc198(bean.note || "限時供應，售完即止。") + '</span>' +
-      '</div>';
-  }
-
-  function renderBeanChoices198(force){
-    const product = currentProduct198();
-    const beanBox = document.getElementById("beanBox");
-    const beanChips = document.getElementById("beanChips");
-    if(!beanBox || !beanChips || !productAccepts198(product)) return;
-
-    const beans = (window.SKY31_LIMITED_BEANS_V198 || []).slice(0,2);
-    const sig = String(product.name || "") + "::" + beanSig198(beans);
-    const currentCount = beanChips.querySelectorAll(".limited-bean-option").length;
-    if(!force && sig === lastChoiceSig && currentCount === beans.length){
-      beanChips.querySelectorAll(".bean-refresh-line,.v188-limited-sync-line,.v189-limited-sync-line").forEach(el => el.remove());
-      return;
-    }
-    lastChoiceSig = sig;
-
-    const selected = beanChips.querySelector(".bean-chip.active");
-    const selectedValue = selected ? selected.getAttribute("data-value") : "";
-
-    beanBox.classList.remove("hidden");
-    beanChips.querySelectorAll(".limited-bean-option,.limited-bean-selection-placeholder,.bean-refresh-line,.v188-limited-sync-line,.v189-limited-sync-line").forEach(el => el.remove());
-
-    if(beans.length){
-      beans.forEach(bean => beanChips.insertAdjacentHTML("beforeend", chip198(bean)));
-    }else{
-      beanChips.insertAdjacentHTML("beforeend",
-        '<div class="chip bean-chip limited-bean-selection-placeholder" data-value="">' +
-          '<b>✨ 期間限定豆子</b>' +
-          '<span class="flavor">期間限定豆子暫未上架。<br>下一支驚喜豆單正在準備中，敬請期待。</span>' +
-        '</div>'
-      );
-    }
-
-    if(typeof bindChips === "function") bindChips(beanBox);
-
-    if(selectedValue){
-      const restored = Array.from(beanChips.querySelectorAll(".bean-chip")).find(el => el.getAttribute("data-value") === selectedValue);
-      if(restored){
-        beanChips.querySelectorAll(".bean-chip").forEach(el => el.classList.remove("active"));
-        restored.classList.add("active");
-      }
-    }
-
-    beanChips.querySelectorAll(".limited-bean-selection-placeholder").forEach(function(el){
-      el.onclick = function(ev){ ev.preventDefault(); ev.stopPropagation(); };
-    });
-
-    if(typeof window.sky31UpdateDetailPrice === "function"){
-      setTimeout(window.sky31UpdateDetailPrice, 0);
-    }
-  }
-
-  async function refresh198(force){
-    await fetchLimitedBeans198();
-    renderLanding198(!!force);
-    renderBeanChoices198(!!force);
-    setTimeout(function(){ renderLanding198(false); renderBeanChoices198(false); }, 120);
-    return window.SKY31_LIMITED_BEANS_V198 || [];
-  }
-
-  window.SKY31_REFRESH_LIMITED_BEANS = refresh198;
-
-  const oldOpenDetail198 = window.openDetail || (typeof openDetail === "function" ? openDetail : null);
-  if(oldOpenDetail198 && !window.__SKY31_V198_OPEN_PATCHED){
-    window.__SKY31_V198_OPEN_PATCHED = true;
-    window.openDetail = openDetail = function(){
-      const r = oldOpenDetail198.apply(this, arguments);
-      refresh198(true);
-      setTimeout(function(){ renderBeanChoices198(true); }, 260);
-      return r;
-    };
-  }
-
-  const oldConfigureBean198 = window.configureBean || (typeof configureBean === "function" ? configureBean : null);
-  if(oldConfigureBean198 && !window.__SKY31_V198_CONFIG_PATCHED){
-    window.__SKY31_V198_CONFIG_PATCHED = true;
-    window.configureBean = configureBean = function(){
-      const r = oldConfigureBean198.apply(this, arguments);
-      renderBeanChoices198(true);
-      setTimeout(function(){ renderBeanChoices198(false); }, 160);
-      return r;
-    };
-  }
-
-  document.addEventListener("DOMContentLoaded", function(){
-    refresh198(true);
-    setTimeout(function(){ refresh198(false); }, 600);
-  });
-  window.addEventListener("focus", function(){ refresh198(false); });
-  document.addEventListener("visibilitychange", function(){ if(!document.hidden) refresh198(false); });
-  window.addEventListener("resize", function(){ renderLanding198(false); });
-})();
-</script>
-
-
-
-<script>
 /* V201: direct checkout redemption display; no duplicate reward overlay. */
 (function(){
   const MEMBER_KEY = "sky31_member_v1";
@@ -15867,6 +15279,588 @@ window.addEventListener("load", function() {
 
   document.addEventListener("DOMContentLoaded", function(){
     syncMember201().then(function(m){ renderSummary201(m); });
+  });
+})();
+</script>
+
+
+<script>
+/* V207: single stable Limited Bean renderer. Telegram data wins; no fallback to generic name when real data exists. */
+(function(){
+  const SURCHARGE = 5;
+  let lastLandingSig = "";
+  let lastChoiceSig = "";
+
+  function esc207(s){
+    if(typeof esc === "function") return esc(s);
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function(m){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m];
+    });
+  }
+
+  function real207(list){
+    for(const v of list){
+      let s = String(v == null ? "" : v).trim();
+      if(!s) continue;
+      if(s === "Limited" || s === "Limited Beans" || s === "期間限定豆子" || s === "限定豆子") continue;
+      if(/^limited\s*beans?$/i.test(s)) continue;
+      return s;
+    }
+    return "";
+  }
+
+  function normalize207(item){
+    item = item || {};
+
+    // Many old Telegram/KV versions stored the real bean name under different keys.
+    // Priority: explicit beanName/name first, then bean/cn. Avoid generic defaults.
+    const label = real207([
+      item.beanName,
+      item.name,
+      item.title,
+      item.label,
+      item.cn,
+      item.zh,
+      item.chinese,
+      item.beanLabel,
+      item.bean
+    ]) || "期間限定豆子";
+
+    const flavor = real207([
+      item.flavor,
+      item.beanFlavor,
+      item.tasting,
+      item.taste,
+      item.notes
+    ]) || real207([item.desc, item.description, item.note, item.beanNote]) || "限時供應";
+
+    // Landing page grey row left label: use Telegram description/note, not fixed Limited Beans.
+    const descLabel = real207([
+      item.desc,
+      item.description,
+      item.note,
+      item.beanNote,
+      item.subtitle,
+      item.origin,
+      item.region
+    ]) || "期間限定";
+
+    const note = real207([
+      item.note,
+      item.beanNote,
+      item.desc,
+      item.description
+    ]) || flavor || "限時供應，售完即止。";
+
+    return {
+      id: String(item.id || item.limitedId || label).replace(/[^a-zA-Z0-9_-]/g,"").slice(0,40),
+      active: item.active !== false && item.deleted !== true,
+      label,
+      flavor,
+      descLabel,
+      note,
+      surcharge: Number(item.surcharge || item.limitedSurcharge || SURCHARGE) || SURCHARGE
+    };
+  }
+
+  async function fetchLimitedBeans207(){
+    try{
+      const res = await fetch("/api/menu?t=" + Date.now(), { cache:"no-store" });
+      const data = await res.json().catch(() => ({}));
+      if(!data || !data.ok){
+        window.SKY31_LIMITED_BEANS_V207 = [];
+        return [];
+      }
+
+      let list = Array.isArray(data.limitedItems) ? data.limitedItems : [];
+
+      // If public list is incomplete/generic, recover from allLimitedItems + currentLimitedBeanIds.
+      const needsRecovery = list.some(x => !real207([x && x.beanName, x && x.name, x && x.title, x && x.label, x && x.cn, x && x.bean]));
+      if(needsRecovery && Array.isArray(data.allLimitedItems) && data.allLimitedItems.length){
+        const all = data.allLimitedItems.map(normalize207).filter(x => x.active);
+        const ids = Array.isArray(data.currentLimitedBeanIds) ? data.currentLimitedBeanIds.map(String) : [];
+        const selected = [];
+        ids.forEach(id => {
+          const found = all.find(x => String(x.id) === String(id));
+          if(found && !selected.find(x => x.id === found.id)) selected.push(found);
+        });
+        all.forEach(item => {
+          if(selected.length < 2 && !selected.find(x => x.id === item.id)) selected.push(item);
+        });
+        if(selected.length) list = selected;
+      }
+
+      const beans = list.map(normalize207).filter(x => x.active).slice(0,2);
+
+      window.SKY31_LIMITED_BEANS_V207 = beans;
+      window.SKY31_LIMITED_BEANS_V198 = beans;
+      window.SKY31_LIMITED_BEANS_V197 = beans;
+      window.SKY31_CURRENT_LIMITED_BEANS_V191 = beans;
+      window.SKY31_LIMITED_BEAN_CHOICES_V181 = beans;
+      window.SKY31_LIMITED_BEAN_CHOICES = beans;
+      window.SKY31_CURRENT_LIMITED_BEAN_V189 = beans[0] || null;
+      window.SKY31_CURRENT_LIMITED_BEAN_V188 = beans[0] || null;
+
+      return beans;
+    }catch(e){
+      return window.SKY31_LIMITED_BEANS_V207 || [];
+    }
+  }
+
+  function beanSig207(beans){
+    return (beans || []).map(b => [b.id,b.label,b.flavor,b.descLabel,b.surcharge].join("|")).join(";;");
+  }
+
+  function renderLanding207(force){
+    const box = document.getElementById("limitedBeanPreview");
+    if(!box) return;
+
+    const beans = (window.SKY31_LIMITED_BEANS_V207 || window.SKY31_LIMITED_BEANS_V198 || []).slice(0,2);
+    const sig = beanSig207(beans);
+    if(!force && sig === lastLandingSig && box.classList.contains("v198-limited-grid")) return;
+    lastLandingSig = sig;
+
+    box.className = "landing-beans-grid v198-limited-grid";
+
+    if(!beans.length){
+      box.innerHTML = '<div class="landing-bean-panel v198-limited-empty"><div class="landing-bean-icon">✨</div><div class="landing-bean-copy"><div class="landing-bean-topline"><span>期間限定</span><b>期間限定豆子</b></div><div class="landing-bean-flavor">暫時未上架，請留意 Sky31 最新更新。</div></div></div>';
+      return;
+    }
+
+    box.innerHTML = beans.map(bean => {
+      const left = bean.descLabel || bean.note || "期間限定";
+      return '' +
+        '<div class="landing-bean-panel v198-limited-panel" data-limited-id="' + esc207(bean.id) + '">' +
+          '<div class="landing-bean-icon">✨</div>' +
+          '<div class="landing-bean-copy">' +
+            '<div class="landing-bean-topline">' +
+              '<span title="' + esc207(left) + '">' + esc207(left) + '</span>' +
+              '<b title="' + esc207(bean.label) + '">' + esc207(bean.label) + '</b>' +
+            '</div>' +
+            '<div class="landing-bean-flavor">' + esc207(bean.flavor) + '</div>' +
+          '</div>' +
+        '</div>';
+    }).join("");
+  }
+
+  function currentProduct207(){
+    try{
+      if(typeof current !== "undefined" && current) return current;
+      if(window.current) return window.current;
+    }catch(e){}
+    return null;
+  }
+
+  function productAccepts207(product){
+    if(!product || product.isLimited) return false;
+    const n = String(product.name || "");
+    if(n === "Classic Chocolate") return false;
+    return n === "Americano" || n === "Latte" || n === "Cappuccino" || n === "Mocha" || n.indexOf("Dirty") >= 0 || !!product.milk;
+  }
+
+  function chip207(bean){
+    const beanName = bean.label || "期間限定豆子";
+    const beanFlavor = bean.flavor || "限時供應";
+    const val = "Limited｜" + beanName + "｜風味：" + beanFlavor;
+    return '' +
+      '<div class="chip bean-chip limited-bean-option v207-limited-bean-option v198-limited-bean-option" data-value="' + esc207(val) + '" data-bean-label="' + esc207(beanName) + '" data-bean-flavor="' + esc207(beanFlavor) + '" data-surcharge="' + bean.surcharge + '">' +
+        '<b>✨ ' + esc207(beanName) + '<span class="limited-surcharge-badge">+MOP ' + bean.surcharge + '</span></b>' +
+        '<span class="flavor">限定豆子：' + esc207(beanFlavor) + '<br>' + esc207(bean.note || bean.descLabel || "限時供應，售完即止。") + '</span>' +
+      '</div>';
+  }
+
+  function renderBeanChoices207(force){
+    const product = currentProduct207();
+    const beanBox = document.getElementById("beanBox");
+    const beanChips = document.getElementById("beanChips");
+    if(!beanBox || !beanChips || !productAccepts207(product)) return;
+
+    const beans = (window.SKY31_LIMITED_BEANS_V207 || window.SKY31_LIMITED_BEANS_V198 || []).slice(0,2);
+    const sig = String(product.name || "") + "::" + beanSig207(beans);
+    const currentCount = beanChips.querySelectorAll(".limited-bean-option").length;
+    const currentNames = Array.from(beanChips.querySelectorAll(".limited-bean-option")).map(el => (el.getAttribute("data-bean-label") || "").trim()).join("|");
+
+    if(!force && sig === lastChoiceSig && currentCount === beans.length && !currentNames.includes("期間限定豆子")){
+      beanChips.querySelectorAll(".bean-refresh-line,.v188-limited-sync-line,.v189-limited-sync-line").forEach(el => el.remove());
+      return;
+    }
+    lastChoiceSig = sig;
+
+    const selected = beanChips.querySelector(".bean-chip.active");
+    const selectedValue = selected ? selected.getAttribute("data-value") : "";
+
+    beanBox.classList.remove("hidden");
+    beanChips.querySelectorAll(".limited-bean-option,.limited-bean-selection-placeholder,.bean-refresh-line,.v188-limited-sync-line,.v189-limited-sync-line").forEach(el => el.remove());
+
+    if(beans.length){
+      beans.forEach(bean => beanChips.insertAdjacentHTML("beforeend", chip207(bean)));
+    }else{
+      beanChips.insertAdjacentHTML("beforeend",
+        '<div class="chip bean-chip limited-bean-selection-placeholder" data-value="">' +
+          '<b>✨ 期間限定豆子</b>' +
+          '<span class="flavor">期間限定豆子暫未上架。<br>下一支驚喜豆單正在準備中，敬請期待。</span>' +
+        '</div>'
+      );
+    }
+
+    if(typeof bindChips === "function") bindChips(beanBox);
+
+    if(selectedValue){
+      const restored = Array.from(beanChips.querySelectorAll(".bean-chip")).find(el => el.getAttribute("data-value") === selectedValue);
+      if(restored){
+        beanChips.querySelectorAll(".bean-chip").forEach(el => el.classList.remove("active"));
+        restored.classList.add("active");
+      }
+    }
+
+    beanChips.querySelectorAll(".limited-bean-selection-placeholder").forEach(function(el){
+      el.onclick = function(ev){ ev.preventDefault(); ev.stopPropagation(); };
+    });
+
+    if(typeof window.sky31UpdateDetailPrice === "function"){
+      setTimeout(window.sky31UpdateDetailPrice, 0);
+    }
+  }
+
+  async function refresh207(force){
+    await fetchLimitedBeans207();
+    renderLanding207(!!force);
+    renderBeanChoices207(!!force);
+    setTimeout(function(){ renderLanding207(false); renderBeanChoices207(false); }, 120);
+    setTimeout(function(){ renderLanding207(false); renderBeanChoices207(true); }, 620);
+    return window.SKY31_LIMITED_BEANS_V207 || [];
+  }
+
+  window.SKY31_REFRESH_LIMITED_BEANS = refresh207;
+  window.SKY31_RENDER_LIMITED_BEANS_V207 = refresh207;
+
+  const oldOpenDetail207 = window.openDetail || (typeof openDetail === "function" ? openDetail : null);
+  if(oldOpenDetail207 && !window.__SKY31_V207_OPEN_PATCHED){
+    window.__SKY31_V207_OPEN_PATCHED = true;
+    window.openDetail = openDetail = function(){
+      const r = oldOpenDetail207.apply(this, arguments);
+      refresh207(true);
+      setTimeout(function(){ renderBeanChoices207(true); }, 260);
+      setTimeout(function(){ renderBeanChoices207(true); }, 760);
+      return r;
+    };
+  }
+
+  const oldConfigureBean207 = window.configureBean || (typeof configureBean === "function" ? configureBean : null);
+  if(oldConfigureBean207 && !window.__SKY31_V207_CONFIG_PATCHED){
+    window.__SKY31_V207_CONFIG_PATCHED = true;
+    window.configureBean = configureBean = function(){
+      const r = oldConfigureBean207.apply(this, arguments);
+      renderBeanChoices207(true);
+      setTimeout(function(){ renderBeanChoices207(true); }, 160);
+      setTimeout(function(){ renderBeanChoices207(true); }, 650);
+      return r;
+    };
+  }
+
+  document.addEventListener("DOMContentLoaded", function(){
+    refresh207(true);
+    setTimeout(function(){ refresh207(true); }, 500);
+    setTimeout(function(){ refresh207(false); }, 1400);
+  });
+  window.addEventListener("focus", function(){ refresh207(false); });
+  document.addEventListener("visibilitychange", function(){ if(!document.hidden) refresh207(false); });
+  window.addEventListener("resize", function(){ renderLanding207(false); });
+})();
+</script>
+
+
+<script>
+/* V208: Limited bean surcharge is calculated once, displayed always, and survives bean/qty changes. */
+(function(){
+  const LIMITED_SURCHARGE_V208 = 5;
+
+  function esc208(s){
+    if(typeof esc === "function") return esc(s);
+    return String(s == null ? "" : s).replace(/[&<>"']/g,function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];
+    });
+  }
+
+  function money208(n){
+    if(typeof sky31Money === "function") return sky31Money(n);
+    n = Number(n || 0);
+    return "MOP " + (Math.round(n * 100) / 100).toString();
+  }
+
+  function isLimitedBean208(bean){
+    const s = String(bean || "");
+    return s.indexOf("Limited｜") === 0 || s.indexOf("Limited|") === 0;
+  }
+
+  function activeBeanChip208(){
+    return document.querySelector('[data-field="bean"] .chip.active');
+  }
+
+  function selectedBeanText208(){
+    const el = activeBeanChip208();
+    if(!el) return "";
+    const value = el.getAttribute("data-value") || "";
+    if(isLimitedBean208(value)) return value;
+
+    if(el.classList.contains("limited-bean-option")){
+      const label = el.getAttribute("data-bean-label") || "期間限定豆子";
+      const flavor = el.getAttribute("data-bean-flavor") || "限時供應";
+      return "Limited｜" + label + "｜風味：" + flavor;
+    }
+
+    return value || el.textContent.trim();
+  }
+
+  function limitedSurcharge208(bean){
+    if(!isLimitedBean208(bean)) return 0;
+    const el = activeBeanChip208();
+    const fromDom = Number(el && el.getAttribute("data-surcharge"));
+    return Number.isFinite(fromDom) && fromDom > 0 ? fromDom : LIMITED_SURCHARGE_V208;
+  }
+
+  function beanDisplay208(bean){
+    if(window.sky31BeanDisplayV204) return window.sky31BeanDisplayV204(bean);
+    const s = String(bean || "");
+    if(isLimitedBean208(s)){
+      const parts = s.indexOf("｜") >= 0 ? s.split("｜") : s.split("|");
+      const name = parts[1] || "期間限定豆子";
+      const flavor = parts.slice(2).join("｜").replace(/^風味[:：]?\s*/,"").trim();
+      return name + (flavor ? "（限定豆子｜" + flavor + "）" : "（限定豆子）");
+    }
+    return s.split("|")[0].split("｜")[0].trim();
+  }
+
+  const basePriceForProduct208 = window.__SKY31_BASE_PRICE_FOR_PRODUCT_V208 || window.sky31PriceForProduct;
+  const basePriceForItem208 = window.__SKY31_BASE_PRICE_FOR_ITEM_V208 || window.sky31PriceForItem;
+  window.__SKY31_BASE_PRICE_FOR_PRODUCT_V208 = basePriceForProduct208;
+  window.__SKY31_BASE_PRICE_FOR_ITEM_V208 = basePriceForItem208;
+
+  function baseProductPrice208(product, temp){
+    try{
+      if(typeof basePriceForProduct208 === "function") return Number(basePriceForProduct208(product, temp) || 0);
+    }catch(e){}
+    return 0;
+  }
+
+  function baseItemPrice208(item){
+    try{
+      if(typeof basePriceForItem208 === "function") return Number(basePriceForItem208(item) || 0);
+    }catch(e){}
+    return Number(item && (item.basePrice || item.unitPrice || item.price) || 0);
+  }
+
+  function pricedItem208(item){
+    const x = Object.assign({}, item || {});
+    const qty = Math.max(1, Number(x.qty || x.quantity || 1));
+    const base = Number(x.basePrice || baseItemPrice208(x) || 0);
+    const surcharge = isLimitedBean208(x.bean) ? Number(x.beanSurcharge || x.limitedSurcharge || LIMITED_SURCHARGE_V208) : 0;
+    const unit = base + surcharge;
+    x.qty = qty;
+    x.quantity = qty;
+    x.basePrice = base;
+    x.beanSurcharge = surcharge;
+    x.limitedSurcharge = surcharge;
+    x.unitPrice = unit;
+    x.price = unit;
+    x.subtotal = unit * qty;
+    x.currency = "MOP";
+    return x;
+  }
+
+  window.sky31PriceForItem = function(item){
+    const x = item || {};
+    return baseItemPrice208(x) + (isLimitedBean208(x.bean) ? Number(x.beanSurcharge || x.limitedSurcharge || LIMITED_SURCHARGE_V208) : 0);
+  };
+
+  window.sky31PriceForProduct = function(product, temp){
+    const bean = selectedBeanText208();
+    return baseProductPrice208(product, temp) + limitedSurcharge208(bean);
+  };
+
+  window.sky31EnrichedItem = pricedItem208;
+  window.sky31EnrichedCart = function(){
+    try{
+      return (Array.isArray(window.cart) ? window.cart : cart).map(pricedItem208);
+    }catch(e){ return []; }
+  };
+  window.sky31CartTotal = function(c){
+    const list = Array.isArray(c) ? c : window.sky31EnrichedCart();
+    return list.reduce(function(sum, item){
+      const x = pricedItem208(item);
+      return sum + Number(x.subtotal || 0);
+    }, 0);
+  };
+
+  function ensureDetailPriceBox208(){
+    let box = document.getElementById("detailPriceBox");
+    if(!box){
+      box = document.createElement("div");
+      box.id = "detailPriceBox";
+      box.className = "detail-price-box";
+    }
+    const qty = document.getElementById("detailQty");
+    const qtyBlock = qty ? qty.parentElement : null;
+    const desc = document.getElementById("detailDesc");
+    if(qtyBlock && qtyBlock.parentNode){
+      if(qtyBlock.nextSibling !== box) qtyBlock.parentNode.insertBefore(box, qtyBlock.nextSibling);
+    }else if(desc && desc.parentNode){
+      desc.parentNode.insertBefore(box, desc.nextSibling);
+    }
+    return box;
+  }
+
+  function updateDetailPrice208(){
+    if(typeof current === "undefined" || !current) return;
+    const box = ensureDetailPriceBox208();
+    if(!box) return;
+
+    const temp = current.forceIced ? "Iced 凍" : (typeof chipValue === "function" ? chipValue("temp") : "Hot 熱");
+    const bean = selectedBeanText208();
+    const base = baseProductPrice208(current, temp);
+    const surcharge = limitedSurcharge208(bean);
+    const unit = base + surcharge;
+    let qty = Number((document.getElementById("detailQty") || {}).textContent || (typeof detailQty !== "undefined" ? detailQty : 1) || 1);
+    if(!qty || isNaN(qty)) qty = 1;
+
+    const surchargeRow = surcharge > 0
+      ? '<span>限定豆子加價</span><strong class="v208-limited-surcharge">+' + money208(surcharge) + '</strong>'
+      : '';
+
+    const beanRow = bean
+      ? '<span>豆子</span><strong>' + esc208(beanDisplay208(bean)) + '</strong>'
+      : '';
+
+    const note = surcharge > 0
+      ? '<div class="v208-price-note">已選限定豆子，系統會自動每杯 +MOP ' + surcharge + '；增加杯量時會同步計算。</div>'
+      : '';
+
+    box.innerHTML =
+      '<div class="detail-price-title">價格明細 Price Details</div>' +
+      '<div class="detail-price-grid">' +
+        '<span>飲品</span><strong>' + esc208(current.name || current.cn || "飲品") + '</strong>' +
+        '<span>規格</span><strong>' + esc208(temp || "-") + '</strong>' +
+        beanRow +
+        '<span>原單價</span><strong>' + money208(base) + '</strong>' +
+        surchargeRow +
+        '<span>單杯合計</span><strong>' + money208(unit) + '</strong>' +
+        '<span>杯量</span><strong>' + qty + ' 杯</strong>' +
+        '<span>小計</span><strong class="detail-subtotal">' + money208(unit * qty) + '</strong>' +
+      '</div>' + note;
+  }
+
+  window.sky31UpdateDetailPrice = updateDetailPrice208;
+
+  const oldChangeDetailQty208 = window.changeDetailQty || (typeof changeDetailQty === "function" ? changeDetailQty : null);
+  window.changeDetailQty = changeDetailQty = function(delta){
+    if(typeof oldChangeDetailQty208 === "function") oldChangeDetailQty208.apply(this, arguments);
+    requestAnimationFrame(updateDetailPrice208);
+    setTimeout(updateDetailPrice208, 80);
+  };
+
+  const oldAddToCart208 = window.addToCart || (typeof addToCart === "function" ? addToCart : null);
+  window.addToCart = addToCart = function(){
+    try{
+      if(typeof current === "undefined" || !current){
+        if(typeof oldAddToCart208 === "function") return oldAddToCart208.apply(this, arguments);
+        return;
+      }
+      const temp = typeof chipValue === "function" ? chipValue("temp") : "";
+      const iceBox = document.getElementById("iceBox");
+      const ice = iceBox && iceBox.classList.contains("hidden") ? "不適用" : (typeof chipValue === "function" ? chipValue("ice") : "");
+      const bean = selectedBeanText208();
+      const base = baseProductPrice208(current, temp);
+      const surcharge = limitedSurcharge208(bean);
+      const unit = base + surcharge;
+      const qty = Math.max(1, Number(typeof detailQty !== "undefined" ? detailQty : ((document.getElementById("detailQty") || {}).textContent || 1)));
+
+      const item = {
+        name: current.name,
+        cn: current.cn,
+        image: current.image,
+        temp: temp,
+        ice: ice,
+        milk: current.milk && typeof chipValue === "function" ? chipValue("milk") : "No Milk 不加奶",
+        bean: bean,
+        pickup: typeof chipValue === "function" ? chipValue("pickup") : "",
+        note: (typeof val === "function" ? val("note") : "") || "無備註",
+        qty: qty,
+        basePrice: base,
+        beanSurcharge: surcharge,
+        limitedSurcharge: surcharge,
+        unitPrice: unit,
+        price: unit,
+        subtotal: unit * qty,
+        currency: "MOP"
+      };
+
+      if(Array.isArray(window.cart)) window.cart.push(item);
+      else if(typeof cart !== "undefined" && Array.isArray(cart)) cart.push(item);
+      else return oldAddToCart208 && oldAddToCart208.apply(this, arguments);
+
+      if(typeof updateAll === "function") updateAll();
+      if(typeof closeDetail === "function") closeDetail();
+      return;
+    }catch(e){
+      if(typeof oldAddToCart208 === "function") return oldAddToCart208.apply(this, arguments);
+    }
+  };
+
+  function patchCartRows208(){
+    try{
+      const c = Array.isArray(window.cart) ? window.cart : (typeof cart !== "undefined" ? cart : []);
+      c.forEach(function(item, i){
+        const priced = pricedItem208(item);
+        Object.assign(item, priced);
+      });
+    }catch(e){}
+  }
+
+  const oldUpdateAll208 = window.updateAll || (typeof updateAll === "function" ? updateAll : null);
+  window.updateAll = updateAll = function(){
+    patchCartRows208();
+    if(typeof oldUpdateAll208 === "function") oldUpdateAll208.apply(this, arguments);
+  };
+
+  const oldMakeSummary208 = window.makeCustomerSummary || (typeof makeCustomerSummary === "function" ? makeCustomerSummary : null);
+  window.makeCustomerSummary = makeCustomerSummary = function(){
+    patchCartRows208();
+    if(typeof oldMakeSummary208 === "function"){
+      const text = oldMakeSummary208.apply(this, arguments);
+      return text;
+    }
+    return "";
+  };
+
+  document.addEventListener("click", function(ev){
+    const target = ev.target && ev.target.closest ? ev.target.closest(".chip, .qty-btn") : null;
+    if(!target) return;
+    setTimeout(updateDetailPrice208, 40);
+    setTimeout(updateDetailPrice208, 160);
+  }, true);
+
+  const oldOpenDetail208 = window.openDetail || (typeof openDetail === "function" ? openDetail : null);
+  window.openDetail = openDetail = function(){
+    const r = oldOpenDetail208 && oldOpenDetail208.apply(this, arguments);
+    setTimeout(updateDetailPrice208, 120);
+    setTimeout(updateDetailPrice208, 620);
+    return r;
+  };
+
+  const oldConfigureBean208 = window.configureBean || (typeof configureBean === "function" ? configureBean : null);
+  window.configureBean = configureBean = function(){
+    const r = oldConfigureBean208 && oldConfigureBean208.apply(this, arguments);
+    setTimeout(updateDetailPrice208, 80);
+    setTimeout(updateDetailPrice208, 500);
+    return r;
+  };
+
+  window.SKY31_IS_LIMITED_BEAN = isLimitedBean208;
+  window.SKY31_LIMITED_BEAN_SURCHARGE = function(bean){ return isLimitedBean208(bean) ? LIMITED_SURCHARGE_V208 : 0; };
+  window.SKY31_SELECTED_BEAN_TEXT_V208 = selectedBeanText208;
+
+  document.addEventListener("DOMContentLoaded", function(){
+    setTimeout(updateDetailPrice208, 600);
   });
 })();
 </script>
