@@ -7,7 +7,7 @@ export async function onRequest(context) {
     return json({
       ok: true,
       endpoint: "telegram-webhook",
-      version: "V198",
+      version: "V199",
       method,
       message: "Webhook endpoint reachable. Telegram sends POST updates here."
     });
@@ -759,7 +759,7 @@ async function enrichMemberStatsForTelegram(env, member) {
       const cups = orderCupsForMemberQuery(order);
       const amount = Number(order.totalAmount || cartTotalForMemberQuery(order.cart) || 0);
 
-      if (order.status !== "cancelled") {
+      if (sky31TelegramSuccessfulOrderV199(order)) {
         totalOrders += 1;
         totalCups += cups;
         totalSpent += amount;
@@ -1108,7 +1108,7 @@ async function restoreMemberOrders(env, phone) {
     let order = null;
     try { order = JSON.parse(orderRaw); } catch (_) { order = null; }
 
-    if (order && order.status !== "cancelled") {
+    if (order && sky31TelegramSuccessfulOrderV199(order)) {
       restoredOrders += 1;
       totalCups += orderCupsForMemberRestore(order);
       totalSpent += Number(order.totalAmount || cartTotalForMemberRestore(order.cart) || 0);
@@ -1255,6 +1255,7 @@ async function saveAndRefresh(env, cq, order) {
 
   // V170: keep edited orders long-term. Do not revert to old 14-day TTL when Telegram buttons are pressed.
   await env.ORDERS.put("order:" + order.orderNo, JSON.stringify(order), { expirationTtl: 60 * 60 * 24 * 3650 });
+  try { await recalcMemberFromOrdersV199(env, order); } catch (_) {}
 
   await editTelegramMessage(env, cq.message.chat.id, cq.message.message_id, buildTelegramText(order), buildReplyMarkup(order));
 }
@@ -1391,13 +1392,20 @@ function statusLabel(s) {
 
 function beanIcon(bean) {
   bean = String(bean || "");
+  if (bean.indexOf("Limited｜") === 0 || bean.indexOf("Limited|") === 0 || bean.includes("限定豆子")) return "✨";
   if (bean.includes("淺烘") || bean.includes("浅烘")) return "🌸";
   if (bean.includes("中深烘") || bean.includes("拼配")) return "🍫";
   return "☕";
 }
 
 function cleanBeanName(bean) {
-  return String(bean || "").split("|")[0].split("｜")[0].trim();
+  const s = String(bean || "");
+  if (s.indexOf("Limited｜") === 0 || s.indexOf("Limited|") === 0) {
+    const parts = s.includes("｜") ? s.split("｜") : s.split("|");
+    const name = parts[1] || "期間限定豆子";
+    return name + "（限定豆子 +MOP 5）";
+  }
+  return s.split("|")[0].split("｜")[0].trim();
 }
 
 async function answerCallback(env, callbackQueryId, text) {
@@ -3556,3 +3564,81 @@ handleLimitedMenuAction = async function(env, cq, data) {
 
   return _oldHandleLimitedMenuActionV191(env, cq, data);
 };
+
+
+/* V199: member lifetime stats in Telegram count picked_up successful transactions only. */
+function sky31TelegramSuccessfulOrderV199(order) {
+  const s = String(order && order.status || "").toLowerCase();
+  return s === "picked_up" || s === "pickedup" || s === "picked-up";
+}
+
+function sky31SamePhoneV199(a, b) {
+  a = normalizePhone(a);
+  b = normalizePhone(b);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  if (a.length === 11 && a.startsWith("853") && a.slice(3) === b) return true;
+  if (b.length === 11 && b.startsWith("853") && b.slice(3) === a) return true;
+  return false;
+}
+
+async function recalcMemberFromOrdersV199(env, changedOrder) {
+  const phone = normalizePhone(changedOrder && (changedOrder.memberPhone || changedOrder.phone || changedOrder.submittedPhone));
+  if (!phone || !env || !env.ORDERS) return;
+
+  const rawMember = await env.ORDERS.get("member:" + phone);
+  if (!rawMember) return;
+
+  let member = null;
+  try { member = JSON.parse(rawMember); } catch (_) { return; }
+  if (!member || member.deletedAt) return;
+
+  const orderNos = new Set();
+  const candidates = [phone];
+  if (phone.length === 8) candidates.push("853" + phone);
+  if (phone.length === 11 && phone.startsWith("853")) candidates.push(phone.slice(3));
+
+  for (const candidate of Array.from(new Set(candidates))) {
+    let cursor = undefined;
+    do {
+      const page = await env.ORDERS.list({ prefix: "phone:" + candidate + ":", cursor });
+      for (const key of (page.keys || [])) {
+        const no = String(key.name || "").replace("phone:" + candidate + ":", "");
+        if (no) orderNos.add(no);
+      }
+      cursor = page.cursor;
+      if (page.list_complete !== false) break;
+    } while (cursor);
+  }
+
+  let totalOrders = 0;
+  let totalCups = 0;
+  let totalSpent = 0;
+  let rewardRedeemed = 0;
+  const recentOrderNos = [];
+
+  for (const no of orderNos) {
+    const raw = await env.ORDERS.get("order:" + no);
+    if (!raw) continue;
+    let order = null;
+    try { order = JSON.parse(raw); } catch (_) { continue; }
+    const phones = [order.phone, order.memberPhone, order.submittedPhone].map(normalizePhone).filter(Boolean);
+    if (!phones.some(p => sky31SamePhoneV199(p, phone))) continue;
+    recentOrderNos.push(order.orderNo || no);
+    if (!sky31TelegramSuccessfulOrderV199(order)) continue;
+    totalOrders += 1;
+    totalCups += orderCupsForMemberQuery(order);
+    totalSpent += Number(order.totalAmount || cartTotalForMemberQuery(order.cart) || 0);
+    rewardRedeemed += Math.max(0, Number(order.rewardUse || order.rewardUseRequested || 0));
+  }
+
+  member.totalOrders = totalOrders;
+  member.totalCups = totalCups;
+  member.totalSpent = Math.round(totalSpent * 100) / 100;
+  member.rewardRedeemed = rewardRedeemed;
+  member.rewardsRedeemed = rewardRedeemed;
+  member.recentOrderNos = Array.from(new Set(recentOrderNos)).slice(0, 2000);
+  member.updatedAt = new Date().toISOString();
+
+  await env.ORDERS.put("member:" + phone, JSON.stringify(member), { expirationTtl: 60 * 60 * 24 * 3650 });
+}

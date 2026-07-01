@@ -142,6 +142,7 @@ async function enrichMemberWithOrders(env, member) {
   let totalOrders = 0;
   let totalCups = 0;
   let totalSpent = 0;
+  let redeemedRewards = 0;
   const historyStartAt = member.historyStartAt ? new Date(member.historyStartAt).getTime() : 0;
 
   for (const no of orderNos) {
@@ -169,12 +170,13 @@ async function enrichMemberWithOrders(env, member) {
 
     const cups = orderCups(order);
     const amount = Number(order.totalAmount || cartTotal(order.cart) || 0);
-    const cancelled = isCancelledOrder(order);
+    const successful = isSuccessfulPickedUpOrderV199(order);
 
-    if (!cancelled) {
+    if (successful) {
       totalOrders += 1;
       totalCups += cups;
       totalSpent += amount;
+      redeemedRewards += Math.max(0, Number(order.rewardUse || order.rewardUseRequested || 0));
     }
 
     allOrders.push({
@@ -198,13 +200,12 @@ async function enrichMemberWithOrders(env, member) {
 
   const sortedOrders = sortOrdersForMember(allOrders);
 
-  // Lifetime totals should not go backwards.
-  // Some older versions only stored a limited recent list or failed to increment
-  // totalCups after member_ordered existed. Use the larger value between the
-  // persisted member totals and the totals recomputed from all available orders.
-  const finalTotalOrders = Math.max(Number(member.totalOrders || 0), totalOrders);
-  const finalTotalCups = Math.max(Number(member.totalCups || 0), totalCups);
-  const finalTotalSpent = Math.max(Number(member.totalSpent || 0), Math.round(totalSpent * 100) / 100);
+  // V199: lifetime reward stats must reflect successful transactions only.
+  // Pending, cancelled, completed-but-not-picked-up orders do not count.
+  const finalTotalOrders = totalOrders;
+  const finalTotalCups = totalCups;
+  const finalTotalSpent = Math.round(totalSpent * 100) / 100;
+  const finalRewardRedeemed = redeemedRewards;
 
   const fixedMember = {
     ...member,
@@ -215,6 +216,8 @@ async function enrichMemberWithOrders(env, member) {
     totalOrders: finalTotalOrders,
     totalCups: finalTotalCups,
     totalSpent: Math.round(finalTotalSpent * 100) / 100,
+    rewardRedeemed: finalRewardRedeemed,
+    rewardsRedeemed: finalRewardRedeemed,
     recentOrderNos: sortedOrders.map(o => o.orderNo).filter(Boolean).slice(0, 2000)
   };
 
@@ -225,6 +228,7 @@ async function enrichMemberWithOrders(env, member) {
       Number(member.totalOrders || 0) !== fixedMember.totalOrders ||
       Number(member.totalCups || 0) !== fixedMember.totalCups ||
       Number(member.totalSpent || 0) !== fixedMember.totalSpent ||
+      Number(member.rewardRedeemed || member.rewardsRedeemed || 0) !== Number(fixedMember.rewardRedeemed || 0) ||
       JSON.stringify(member.recentOrderNos || []) !== JSON.stringify(fixedMember.recentOrderNos || [])
     ) {
       await env.ORDERS.put("member:" + phone, JSON.stringify(fixedMember));
@@ -244,8 +248,8 @@ async function enrichMemberWithOrders(env, member) {
     totalOrders: fixedMember.totalOrders,
     totalCups: fixedMember.totalCups,
     totalSpent: fixedMember.totalSpent,
-    rewardRedeemed: Number(fixedMember.rewardRedeemed || fixedMember.rewardsRedeemed || 0),
-    rewardsRedeemed: Number(fixedMember.rewardRedeemed || fixedMember.rewardsRedeemed || 0),
+    rewardRedeemed: Number(fixedMember.rewardRedeemed || 0),
+    rewardsRedeemed: Number(fixedMember.rewardRedeemed || 0),
     recentOrders: sortedOrders,
     historyOrders: sortedOrders,
     orders: sortedOrders
@@ -503,7 +507,7 @@ function sky31RewardTierV192(totalCups) {
   if (totalCups >= 100) return { key: "diamond", name: "鑽石會員", icon: "💎", next: 180 };
   if (totalCups >= 60) return { key: "gold", name: "金卡會員", icon: "🥇", next: 100 };
   if (totalCups >= 30) return { key: "silver", name: "銀卡會員", icon: "🥈", next: 60 };
-  return { key: "regular", name: "普通會員", icon: "🪪", next: 30 };
+  return { key: "regular", name: "普通會員", icon: "👤", next: 30 };
 }
 
 function sky31RewardsFromMemberV192(member) {
@@ -519,7 +523,7 @@ function sky31RewardsFromMemberV192(member) {
     redeemedRewards: redeemed,
     availableRewards: available,
     cupsToNextReward: Math.max(0, 10 - (totalCups % 10 || 10)),
-    rule: "每累計 10 杯，可免費兌換任何 1 杯飲品",
+    rule: "成功領取累計 10 杯，可免費兌換任何 1 杯飲品",
     tier
   };
 }
@@ -543,7 +547,7 @@ function sky31RewardTierV196(totalCups) {
   if (totalCups >= 100) return { key: "diamond", name: "鑽石會員", icon: "💎", next: 180 };
   if (totalCups >= 60) return { key: "gold", name: "金卡會員", icon: "🥇", next: 100 };
   if (totalCups >= 30) return { key: "silver", name: "銀卡會員", icon: "🥈", next: 60 };
-  return { key: "regular", name: "普通會員", icon: "🪪", next: 30 };
+  return { key: "regular", name: "普通會員", icon: "👤", next: 30 };
 }
 
 function sky31RewardsFromMemberV196(member) {
@@ -562,7 +566,7 @@ function sky31RewardsFromMemberV196(member) {
     availableRewards: available,
     cupsToNextReward,
     nextRewardAt: (earned + 1) * 10,
-    rule: "每累計 10 杯，可免費兌換任何 1 杯飲品",
+    rule: "成功領取累計 10 杯，可免費兌換任何 1 杯飲品",
     tier
   };
 }
@@ -582,4 +586,11 @@ function sky31DecorateMemberV196(member) {
     memberTierIcon: rewards.tier.icon,
     memberTierKey: rewards.tier.key
   };
+}
+
+
+/* V199: successful member lifetime stats only count picked_up orders. */
+function isSuccessfulPickedUpOrderV199(order) {
+  const s = String(order && order.status || "").toLowerCase();
+  return s === "picked_up" || s === "pickedup" || s === "picked-up";
 }

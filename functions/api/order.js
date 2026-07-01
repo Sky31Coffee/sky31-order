@@ -32,6 +32,13 @@ if (!cart.length && !String(body.orderText || "").trim()) {
     const createdAt = new Date();
     const pickup = body.pickup || getPickupFromCart(cart) || "Now 即取";
     const pickupTime = resolvePickupTime(pickup, createdAt);
+    const subtotalBeforeRewardV199 = cartTotal(cart);
+    const rewardUseV199 = Math.max(0, Number((typeof sky31RewardCalcV192 !== "undefined" && sky31RewardCalcV192.useRewards) || 0));
+    const rawRewardDiscountV199 = Math.max(0, Number((typeof sky31RewardCalcV192 !== "undefined" && sky31RewardCalcV192.rewardDiscount) || 0));
+    const rewardDiscountV199 = Math.min(subtotalBeforeRewardV199, rawRewardDiscountV199);
+    const rewardFreeItemsV199 = (typeof sky31RewardCalcV192 !== "undefined" && sky31RewardCalcV192.freeItems) || [];
+    const totalAfterRewardV199 = Math.max(0, subtotalBeforeRewardV199 - rewardDiscountV199);
+
 
     const order = {
       orderNo,
@@ -44,7 +51,11 @@ if (!cart.length && !String(body.orderText || "").trim()) {
       submittedPhone: normalizePhone(submittedPhone),
       pickup,
       pickupTime,
-      totalAmount: cartTotal(cart),
+      subtotalBeforeReward: subtotalBeforeRewardV199,
+      rewardUse: rewardUseV199,
+      rewardDiscount: rewardDiscountV199,
+      rewardFreeItems: rewardFreeItemsV199,
+      totalAmount: totalAfterRewardV199,
       currency: "MOP",
       cart,
       orderNote: String(body.orderNote || body.note || "").trim(),
@@ -62,7 +73,7 @@ if (!cart.length && !String(body.orderText || "").trim()) {
     const ttl = 60 * 60 * 24 * 3650; // V166: long-term order/member history
     await env.ORDERS.put("order:" + orderNo, JSON.stringify(order), { expirationTtl: ttl });
     await saveOrderMemberIndexes(env, order, ttl);
-    try { await updateMemberAfterOrder(env, order, ttl); } catch (_) {}
+    // V199: member cups/rewards are counted only after Telegram marks the order as picked_up.
 
     const bg = sendTelegram(env, order.orderText, orderNo)
       .then(async tg => {
@@ -77,7 +88,7 @@ if (!cart.length && !String(body.orderText || "").trim()) {
 
     if (context.waitUntil) context.waitUntil(bg);
 
-    return json({ ok: true, orderNo, status: order.status, pickupTime, totalAmount: order.totalAmount, currency: order.currency });
+    return json({ ok: true, orderNo, status: order.status, pickupTime, totalAmount: order.totalAmount, subtotalBeforeReward: order.subtotalBeforeReward, rewardUse: order.rewardUse, rewardDiscount: order.rewardDiscount, currency: order.currency });
   } catch (e) {
     return json({ ok: false, error: e.message || "提交失敗，請稍後再試" }, 500);
   }
@@ -387,8 +398,9 @@ function beanIcon(bean) {
 function cleanBeanName(bean) {
   const s = String(bean || "");
   if (isLimitedBeanOrder(s)) {
-    const parts = s.split("｜");
-    return (parts[1] || "期間限定豆子") + "（限定豆子 +MOP 5）";
+    const parts = s.includes("｜") ? s.split("｜") : s.split("|");
+    const name = parts[1] || "期間限定豆子";
+    return name + "（限定豆子 +MOP 5）";
   }
   return s.split("|")[0].split("｜")[0].trim();
 }
@@ -423,6 +435,8 @@ async function saveOrderMemberIndexes(env, order, ttl) {
 }
 
 async function updateMemberAfterOrder(env, order, ttl) {
+  // V199: count only picked_up successful transactions.
+  if (String(order && order.status || '').toLowerCase() !== 'picked_up') return;
   const phone = normalizePhone(order.memberPhone || order.phone);
   if (!phone || !order.orderNo) return;
 
@@ -518,7 +532,7 @@ function sky31RewardTierV192(totalCups) {
   if (totalCups >= 100) return { key: "diamond", name: "鑽石會員", icon: "💎", next: 180 };
   if (totalCups >= 60) return { key: "gold", name: "金卡會員", icon: "🥇", next: 100 };
   if (totalCups >= 30) return { key: "silver", name: "銀卡會員", icon: "🥈", next: 60 };
-  return { key: "regular", name: "普通會員", icon: "🪪", next: 30 };
+  return { key: "regular", name: "普通會員", icon: "👤", next: 30 };
 }
 
 function sky31RewardsFromMemberV192(member) {
@@ -566,7 +580,8 @@ async function sky31LoadMemberForRewardV192(env, phone) {
   if (!p || !env || !env.ORDERS) return null;
   try {
     const raw = await env.ORDERS.get("member:" + p);
-    return raw ? JSON.parse(raw) : null;
+    const member = raw ? JSON.parse(raw) : null;
+    return await sky31RecomputeMemberForRewardV199(env, member || { phone: p }, p);
   } catch (_) {
     return null;
   }
@@ -593,4 +608,68 @@ function sky31RewardTelegramLineV192(order) {
   const discount = Number(order && order.rewardDiscount || 0);
   if (!use || !discount) return "";
   return "🎁 會員獎賞兌換 ×" + use + "｜-" + money(discount);
+}
+
+
+/* V199: reward availability is based on picked_up successful transactions only. */
+function sky31OrderSuccessV199(order) {
+  const s = String(order && order.status || "").toLowerCase();
+  return s === "picked_up" || s === "pickedup" || s === "picked-up";
+}
+
+function sky31SamePhoneV199(a, b) {
+  a = normalizePhone(a);
+  b = normalizePhone(b);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  return phoneWithoutMacauCode(a) === phoneWithoutMacauCode(b);
+}
+
+async function sky31RecomputeMemberForRewardV199(env, member, phone) {
+  phone = normalizePhone(phone || (member && member.phone));
+  if (!phone || !env || !env.ORDERS) return member;
+
+  const orderNos = new Set();
+  const candidates = memberPhoneCandidates(phone);
+  for (const candidate of candidates) {
+    let cursor = undefined;
+    do {
+      const page = await env.ORDERS.list({ prefix: "phone:" + candidate + ":", cursor });
+      for (const key of (page.keys || [])) {
+        const no = String(key.name || "").replace("phone:" + candidate + ":", "");
+        if (no) orderNos.add(no);
+      }
+      cursor = page.cursor;
+      if (page.list_complete !== false) break;
+    } while (cursor);
+  }
+
+  let totalOrders = 0;
+  let totalCups = 0;
+  let totalSpent = 0;
+  let rewardRedeemed = 0;
+
+  for (const no of orderNos) {
+    const raw = await env.ORDERS.get("order:" + no);
+    if (!raw) continue;
+    let order = null;
+    try { order = JSON.parse(raw); } catch (_) { continue; }
+    const phones = [order.phone, order.memberPhone, order.submittedPhone].map(normalizePhone).filter(Boolean);
+    if (!phones.some(p => sky31SamePhoneV199(p, phone))) continue;
+    if (!sky31OrderSuccessV199(order)) continue;
+    totalOrders += 1;
+    totalCups += sky31OrderDrinkCupCountV192(order.cart);
+    totalSpent += Number(order.totalAmount || 0);
+    rewardRedeemed += Math.max(0, Number(order.rewardUse || order.rewardUseRequested || 0));
+  }
+
+  return {
+    ...(member || {}),
+    phone,
+    totalOrders,
+    totalCups,
+    totalSpent: Math.round(totalSpent * 100) / 100,
+    rewardRedeemed,
+    rewardsRedeemed: rewardRedeemed
+  };
 }
