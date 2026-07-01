@@ -235,6 +235,7 @@ function formatOrder(order) {
         qty: Number(item.qty || item.quantity || 1),
         image: item.image || "",
         bean: item.bean || "",
+        beanDisplay: limitedBeanDisplayV204(item.bean || ""),
         flavor: item.flavor || "",
         temp: item.temp || item.temperature || "",
         ice: item.ice || "",
@@ -264,4 +265,18 @@ function json(data, status = 200) {
       "Cache-Control": "no-store"
     }
   });
+}
+
+
+/* V204: limited bean display helper for future status clients. */
+function limitedBeanDisplayV204(bean) {
+  const s = String(bean || "").trim();
+  if (!s) return "";
+  if (s.indexOf("Limited｜") === 0 || s.indexOf("Limited|") === 0) {
+    const parts = s.indexOf("｜") >= 0 ? s.split("｜") : s.split("|");
+    const name = String(parts[1] || "期間限定豆子").trim();
+    const flavor = parts.slice(2).join("｜").replace(/^風味[:：]?\s*/,"").trim();
+    return name + (flavor ? "（限定豆子｜" + flavor + "）" : "（限定豆子）");
+  }
+  return s.split("|")[0].split("｜")[0].trim();
 }
