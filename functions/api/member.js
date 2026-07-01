@@ -95,68 +95,116 @@ async function loadMember(env, phone) {
   phone = normalizePhone(phone);
   if (!phone) return null;
 
-  // 1) Fast direct lookup with common phone variants.
-  const candidates = memberPhoneCandidates(phone);
-  for (const candidate of candidates) {
-    const raw = await env.ORDERS.get("member:" + candidate);
-    if (!raw) continue;
+  // V214: collect all matching member records instead of returning the first stale duplicate.
+  // This fixes cases where Telegram edited member:853xxxx but frontend reads member:xxxx.
+  const matches = [];
+  const seenKeys = new Set();
 
-    try {
-      const member = JSON.parse(raw);
-      if (member && !member.deletedAt) {
-        member.phone = normalizePhone(member.phone || candidate);
-        return member;
-      }
-    } catch (_) {}
+  function addCandidate(key, member) {
+    if (!member || member.deletedAt || seenKeys.has(key)) return;
+    seenKeys.add(key);
+    const keyPhone = normalizePhone(String(key || "").replace(/^member:/, ""));
+    const storedPhone = normalizePhone(member.phone || keyPhone);
+    if (!samePhoneForMemberLookup(storedPhone, phone) && !samePhoneForMemberLookup(keyPhone, phone)) return;
+    member.phone = storedPhone || keyPhone || phone;
+    matches.push({ key, member });
   }
 
-  // 2) Fallback scan for older data whose KV key or stored phone uses another format.
-  // This prevents the contradictory case:
-  // login says not found, but registration says the phone already exists.
+  const candidates = memberPhoneCandidates(phone);
+  for (const candidate of candidates) {
+    const key = "member:" + candidate;
+    const raw = await env.ORDERS.get(key);
+    if (!raw) continue;
+    try { addCandidate(key, JSON.parse(raw)); } catch (_) {}
+  }
+
   let cursor = undefined;
   let checked = 0;
-
   do {
     const page = await env.ORDERS.list({ prefix: "member:", cursor });
 
     for (const key of (page.keys || [])) {
       checked += 1;
-      if (checked > 3000) return null;
-
-      const keyPhone = normalizePhone(key.name.replace("member:", ""));
-      if (!samePhoneForMemberLookup(keyPhone, phone)) {
-        // If the key itself does not match, still inspect stored phone below.
-      }
+      if (checked > 5000) break;
 
       const raw = await env.ORDERS.get(key.name);
       if (!raw) continue;
-
-      try {
-        const member = JSON.parse(raw);
-        if (!member || member.deletedAt) continue;
-
-        const storedPhone = normalizePhone(member.phone || keyPhone);
-        if (samePhoneForMemberLookup(storedPhone, phone) || samePhoneForMemberLookup(keyPhone, phone)) {
-          member.phone = storedPhone || keyPhone || phone;
-
-          // Self-heal: save a normalized lookup key for future fast login.
-          const normalizedKey = "member:" + phone;
-          if (key.name !== normalizedKey) {
-            try {
-              await env.ORDERS.put(normalizedKey, JSON.stringify(member));
-            } catch (_) {}
-          }
-
-          return member;
-        }
-      } catch (_) {}
+      try { addCandidate(key.name, JSON.parse(raw)); } catch (_) {}
     }
 
     cursor = page.cursor;
     if (page.list_complete !== false) break;
-  } while (cursor);
+  } while (cursor && checked <= 5000);
 
-  return null;
+  if (!matches.length) return null;
+
+  function manualKeyOf(member) {
+    return String(member.manualTierKey || member.memberTierOverrideKey || member.memberTierManualKey || "").trim();
+  }
+
+  function timeOf(member) {
+    return Math.max(
+      new Date(member.manualTierUpdatedAt || 0).getTime() || 0,
+      new Date(member.birthdayUpdatedAt || 0).getTime() || 0,
+      new Date(member.updatedAt || 0).getTime() || 0,
+      new Date(member.createdAt || 0).getTime() || 0
+    );
+  }
+
+  matches.sort((a, b) => {
+    const am = manualKeyOf(a.member) ? 1 : 0;
+    const bm = manualKeyOf(b.member) ? 1 : 0;
+    if (bm !== am) return bm - am;
+    return timeOf(b.member) - timeOf(a.member);
+  });
+
+  const base = { ...matches[matches.length - 1].member, ...matches[0].member };
+
+  // Merge the newest manual tier fields from any duplicate record.
+  const manualSource = matches.find(x => manualKeyOf(x.member));
+  if (manualSource) {
+    const m = manualSource.member;
+    base.manualTierKey = m.manualTierKey || m.memberTierOverrideKey || m.memberTierManualKey || "";
+    base.manualTierName = m.manualTierName || m.memberTierOverrideName || "";
+    base.manualTierIcon = m.manualTierIcon || m.memberTierOverrideIcon || "";
+    base.memberTierOverrideKey = base.manualTierKey;
+    base.memberTierOverrideName = base.manualTierName;
+    base.memberTierOverrideIcon = base.manualTierIcon;
+    base.manualTierUpdatedAt = m.manualTierUpdatedAt || m.updatedAt || base.manualTierUpdatedAt || "";
+    base.manualTierUpdatedBy = m.manualTierUpdatedBy || base.manualTierUpdatedBy || "";
+  }
+
+  // Preserve birthday from any record if the chosen base does not have one.
+  const birthdaySource = matches.find(x => x.member && x.member.birthday);
+  if (birthdaySource && !base.birthday) {
+    base.birthday = birthdaySource.member.birthday;
+    base.birthdayUpdatedAt = birthdaySource.member.birthdayUpdatedAt || base.birthdayUpdatedAt || "";
+    base.birthdayUpdatedBy = birthdaySource.member.birthdayUpdatedBy || base.birthdayUpdatedBy || "";
+  }
+
+  // Preserve highest counters to avoid rolling back stats from a stale duplicate.
+  for (const item of matches) {
+    const m = item.member || {};
+    base.totalOrders = Math.max(Number(base.totalOrders || 0), Number(m.totalOrders || 0));
+    base.totalCups = Math.max(Number(base.totalCups || 0), Number(m.totalCups || 0));
+    base.totalSpent = Math.max(Number(base.totalSpent || 0), Number(m.totalSpent || 0));
+    base.rewardRedeemed = Math.max(Number(base.rewardRedeemed || base.rewardsRedeemed || 0), Number(m.rewardRedeemed || m.rewardsRedeemed || 0));
+    base.rewardsRedeemed = base.rewardRedeemed;
+  }
+
+  base.phone = normalizePhone(base.phone || phone);
+  base.updatedAt = base.updatedAt || new Date().toISOString();
+
+  // Self-heal all phone variants so frontend, order API and Telegram read the same tier.
+  const keysToSave = new Set(matches.map(x => x.key));
+  memberPhoneCandidates(base.phone || phone).forEach(p => keysToSave.add("member:" + p));
+  keysToSave.add("member:" + phone);
+
+  for (const key of keysToSave) {
+    try { await env.ORDERS.put(key, JSON.stringify(base), { expirationTtl: 60 * 60 * 24 * 3650 }); } catch (_) {}
+  }
+
+  return base;
 }
 
 async function enrichMemberWithOrders(env, member) {
@@ -272,6 +320,17 @@ async function enrichMemberWithOrders(env, member) {
     totalOrders: fixedMember.totalOrders,
     totalCups: fixedMember.totalCups,
     totalSpent: fixedMember.totalSpent,
+    manualTierKey: fixedMember.manualTierKey || fixedMember.memberTierOverrideKey || fixedMember.memberTierManualKey || "",
+    manualTierName: fixedMember.manualTierName || fixedMember.memberTierOverrideName || "",
+    manualTierIcon: fixedMember.manualTierIcon || fixedMember.memberTierOverrideIcon || "",
+    memberTierOverrideKey: fixedMember.memberTierOverrideKey || fixedMember.manualTierKey || "",
+    memberTierOverrideName: fixedMember.memberTierOverrideName || fixedMember.manualTierName || "",
+    memberTierOverrideIcon: fixedMember.memberTierOverrideIcon || fixedMember.manualTierIcon || "",
+    manualTierUpdatedAt: fixedMember.manualTierUpdatedAt || "",
+    manualTierUpdatedBy: fixedMember.manualTierUpdatedBy || "",
+    birthdayLockedAt: fixedMember.birthdayLockedAt || "",
+    birthdayUpdatedAt: fixedMember.birthdayUpdatedAt || "",
+    birthdayUpdatedBy: fixedMember.birthdayUpdatedBy || "",
     rewardRedeemed: Number(fixedMember.rewardRedeemed || 0),
     rewardsRedeemed: Number(fixedMember.rewardRedeemed || 0),
     recentOrders: sortedOrders,
@@ -602,6 +661,12 @@ function sky31DecorateMemberV196(member) {
   const displayTier = manualTier || rewards.tier;
   return {
     ...member,
+    manualTierKey: member.manualTierKey || member.memberTierOverrideKey || member.memberTierManualKey || "",
+    manualTierName: member.manualTierName || member.memberTierOverrideName || (manualTier && manualTier.name) || "",
+    manualTierIcon: member.manualTierIcon || member.memberTierOverrideIcon || (manualTier && manualTier.icon) || "",
+    memberTierOverrideKey: member.memberTierOverrideKey || member.manualTierKey || "",
+    memberTierOverrideName: member.memberTierOverrideName || member.manualTierName || "",
+    memberTierOverrideIcon: member.memberTierOverrideIcon || member.manualTierIcon || "",
     rewardRedeemed: rewards.redeemedRewards,
     rewards,
     availableRewards: rewards.availableRewards,

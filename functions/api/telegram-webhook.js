@@ -7,7 +7,7 @@ export async function onRequest(context) {
     return json({
       ok: true,
       endpoint: "telegram-webhook",
-      version: "V213",
+      version: "V214",
       method,
       message: "Webhook endpoint reachable. Telegram sends POST updates here."
     });
@@ -56,7 +56,8 @@ async function handleTelegramPost(context) {
     data.startsWith("member_edit_birthday:") ||
     data.startsWith("member_edit_cancel:") ||
     data.startsWith("member_tier_menu:") ||
-    data.startsWith("member_tier_set:")
+    data.startsWith("member_tier_set:") ||
+    data.startsWith("member_refresh:")
   ) {
     return handleMemberAdminEditActionV211(env, cq, data);
   }
@@ -3821,10 +3822,39 @@ async function loadActiveMemberForEditV211(env, phone) {
 
 async function saveActiveMemberForEditV211(env, loaded) {
   const member = loaded.member;
-  const key = loaded.key || ("member:" + normalizePhone(member.phone));
-  await env.ORDERS.put(key, JSON.stringify(member), { expirationTtl: 60 * 60 * 24 * 3650 });
-  const normalizedKey = "member:" + normalizePhone(member.phone);
-  if (key !== normalizedKey) await env.ORDERS.put(normalizedKey, JSON.stringify(member), { expirationTtl: 60 * 60 * 24 * 3650 });
+  const phone = normalizePhone(member.phone);
+  const keysToSave = new Set();
+
+  if (loaded.key) keysToSave.add(loaded.key);
+  memberPhoneCandidates(phone).forEach(p => keysToSave.add("member:" + p));
+  keysToSave.add("member:" + phone);
+
+  let cursor = undefined;
+  let checked = 0;
+  do {
+    const page = await env.ORDERS.list({ prefix: "member:", cursor });
+    for (const key of (page.keys || [])) {
+      checked += 1;
+      if (checked > 5000) break;
+      try {
+        const raw = await env.ORDERS.get(key.name);
+        if (!raw) continue;
+        const m = JSON.parse(raw);
+        const keyPhone = normalizePhone(key.name.replace("member:", ""));
+        const storedPhone = normalizePhone((m && m.phone) || keyPhone);
+        if (samePhoneForMemberLookup(storedPhone, phone) || samePhoneForMemberLookup(keyPhone, phone)) {
+          keysToSave.add(key.name);
+        }
+      } catch (_) {}
+    }
+    cursor = page.cursor;
+    if (page.list_complete !== false) break;
+  } while (cursor && checked <= 5000);
+
+  const merged = { ...member, phone, updatedAt: member.updatedAt || new Date().toISOString() };
+  for (const key of keysToSave) {
+    await env.ORDERS.put(key, JSON.stringify(merged), { expirationTtl: 60 * 60 * 24 * 3650 });
+  }
 }
 
 async function handleMemberAdminEditActionV211(env, cq, data) {
@@ -3837,6 +3867,15 @@ async function handleMemberAdminEditActionV211(env, cq, data) {
   const phone = normalizePhone(parts[1] || "");
 
   if (!phone) return stop(env, cq, "找不到會員電話");
+
+
+  if (action === "member_refresh") {
+    const loaded = await loadActiveMemberForEditV211(env, phone);
+    if (!loaded.member) return stop(env, cq, "找不到會員資料");
+    const enriched = await enrichMemberStatsForTelegram(env, loaded.member);
+    await editTelegramMessage(env, chatId, messageId, buildMemberDetailText(enriched, false), buildMemberDetailReplyMarkup(enriched, false));
+    return stop(env, cq, "已重新讀取會員資料");
+  }
 
   if (action === "member_edit_cancel") {
     await clearMemberEditDraftV211(env, chatId);
@@ -3999,6 +4038,7 @@ buildMemberDetailReplyMarkup = function(member, deleted = false) {
   if (deleted) {
     rows.push([{ text: "↩️ 恢復賬號", callback_data: "member_restore:" + phone }]);
   } else {
+    rows.push([{ text: "🔄 重新讀取會員資料", callback_data: "member_refresh:" + phone }]);
     rows.push([{ text: "🎂 更改生日", callback_data: "member_edit_birthday:" + phone }]);
     rows.push([{ text: "🏅 更改會員等級", callback_data: "member_tier_menu:" + phone }]);
     rows.push([{ text: "🗑️ 刪除賬號", callback_data: "member_delete:" + phone }]);

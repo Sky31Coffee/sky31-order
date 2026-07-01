@@ -109,60 +109,96 @@ async function ensureActiveMember(env, phone) {
   phone = normalizePhone(phone);
   if (!phone) throw new Error("會員資料不存在或已被刪除，請重新登入或重新註冊");
 
-  const candidates = memberPhoneCandidates(phone);
+  // V214: merge all duplicate member records, prioritizing Telegram manual tier updates.
+  const matches = [];
+  const seen = new Set();
 
-  for (const candidate of candidates) {
-    const raw = await env.ORDERS.get("member:" + candidate);
-    if (!raw) continue;
-
-    try {
-      const member = JSON.parse(raw);
-      if (member && !member.deletedAt) {
-        member.phone = normalizePhone(member.phone || candidate);
-        return member;
-      }
-    } catch (_) {}
+  function add(key, member) {
+    if (!member || member.deletedAt || seen.has(key)) return;
+    seen.add(key);
+    const keyPhone = normalizePhone(String(key || "").replace(/^member:/, ""));
+    const storedPhone = normalizePhone(member.phone || keyPhone);
+    if (!samePhoneForMemberLookup(storedPhone, phone) && !samePhoneForMemberLookup(keyPhone, phone)) return;
+    member.phone = storedPhone || keyPhone || phone;
+    matches.push({ key, member });
   }
 
-  // Fallback: older member data may be saved with 853 / non-853 phone key.
+  for (const candidate of memberPhoneCandidates(phone)) {
+    const key = "member:" + candidate;
+    const raw = await env.ORDERS.get(key);
+    if (!raw) continue;
+    try { add(key, JSON.parse(raw)); } catch (_) {}
+  }
+
   let cursor = undefined;
   let checked = 0;
-
   do {
     const page = await env.ORDERS.list({ prefix: "member:", cursor });
 
     for (const key of (page.keys || [])) {
       checked += 1;
-      if (checked > 500) break;
-
-      const keyPhone = normalizePhone(key.name.replace("member:", ""));
+      if (checked > 5000) break;
       const raw = await env.ORDERS.get(key.name);
       if (!raw) continue;
-
-      try {
-        const member = JSON.parse(raw);
-        if (!member || member.deletedAt) continue;
-
-        const storedPhone = normalizePhone(member.phone || keyPhone);
-
-        if (samePhoneForMemberLookup(storedPhone, phone) || samePhoneForMemberLookup(keyPhone, phone)) {
-          member.phone = storedPhone || keyPhone || phone;
-
-          const normalizedKey = "member:" + phone;
-          if (key.name !== normalizedKey) {
-            try { await env.ORDERS.put(normalizedKey, JSON.stringify(member)); } catch (_) {}
-          }
-
-          return member;
-        }
-      } catch (_) {}
+      try { add(key.name, JSON.parse(raw)); } catch (_) {}
     }
 
     cursor = page.cursor;
     if (page.list_complete !== false) break;
-  } while (cursor);
+  } while (cursor && checked <= 5000);
 
-  throw new Error("會員資料不存在或已被刪除，請重新登入或重新註冊");
+  if (!matches.length) throw new Error("會員資料不存在或已被刪除，請重新登入或重新註冊");
+
+  function manualKeyOf(member) {
+    return String(member.manualTierKey || member.memberTierOverrideKey || member.memberTierManualKey || "").trim();
+  }
+  function timeOf(member) {
+    return Math.max(
+      new Date(member.manualTierUpdatedAt || 0).getTime() || 0,
+      new Date(member.updatedAt || 0).getTime() || 0,
+      new Date(member.createdAt || 0).getTime() || 0
+    );
+  }
+
+  matches.sort((a, b) => {
+    const am = manualKeyOf(a.member) ? 1 : 0;
+    const bm = manualKeyOf(b.member) ? 1 : 0;
+    if (bm !== am) return bm - am;
+    return timeOf(b.member) - timeOf(a.member);
+  });
+
+  const merged = { ...matches[matches.length - 1].member, ...matches[0].member };
+  const manualSource = matches.find(x => manualKeyOf(x.member));
+  if (manualSource) {
+    const m = manualSource.member;
+    merged.manualTierKey = m.manualTierKey || m.memberTierOverrideKey || m.memberTierManualKey || "";
+    merged.manualTierName = m.manualTierName || m.memberTierOverrideName || "";
+    merged.manualTierIcon = m.manualTierIcon || m.memberTierOverrideIcon || "";
+    merged.memberTierOverrideKey = merged.manualTierKey;
+    merged.memberTierOverrideName = merged.manualTierName;
+    merged.memberTierOverrideIcon = merged.manualTierIcon;
+    merged.manualTierUpdatedAt = m.manualTierUpdatedAt || m.updatedAt || "";
+    merged.manualTierUpdatedBy = m.manualTierUpdatedBy || "";
+  }
+
+  for (const item of matches) {
+    const m = item.member || {};
+    merged.totalOrders = Math.max(Number(merged.totalOrders || 0), Number(m.totalOrders || 0));
+    merged.totalCups = Math.max(Number(merged.totalCups || 0), Number(m.totalCups || 0));
+    merged.totalSpent = Math.max(Number(merged.totalSpent || 0), Number(m.totalSpent || 0));
+    merged.rewardRedeemed = Math.max(Number(merged.rewardRedeemed || merged.rewardsRedeemed || 0), Number(m.rewardRedeemed || m.rewardsRedeemed || 0));
+    merged.rewardsRedeemed = merged.rewardRedeemed;
+  }
+
+  merged.phone = normalizePhone(merged.phone || phone);
+  const keysToSave = new Set(matches.map(x => x.key));
+  memberPhoneCandidates(merged.phone || phone).forEach(p => keysToSave.add("member:" + p));
+  keysToSave.add("member:" + phone);
+  for (const key of keysToSave) {
+    try { await env.ORDERS.put(key, JSON.stringify(merged), { expirationTtl: 60 * 60 * 24 * 3650 }); } catch (_) {}
+  }
+
+  return merged;
 }
 
 async function nextOrderNo(env) {
