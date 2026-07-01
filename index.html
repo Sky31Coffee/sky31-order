@@ -6350,6 +6350,72 @@ body:has(#orderApp.hidden) #sky31PersistentCart.sky31-cart-body-level{
   display:none !important;
 }
 
+
+/* V188: limited bean mobile name + menu option sync polish */
+.landing-limited-beans-card .limited-bean-preview-v177 b,
+.landing-limited-beans-card .v176-limited-mini-grid b,
+.landing-limited-beans-card .origin-bean-topline b,
+.limited-bean-mini b{
+  display:block !important;
+  max-width:100% !important;
+  overflow:hidden !important;
+  text-overflow:ellipsis !important;
+  white-space:nowrap !important;
+  line-height:1.25 !important;
+}
+.landing-limited-beans-card .limited-bean-preview-v177 > div,
+.landing-limited-beans-card .v176-limited-mini-grid > div{
+  min-width:0 !important;
+}
+.landing-limited-beans-card .limited-bean-preview-v177 span,
+.landing-limited-beans-card .v176-limited-mini-grid span{
+  line-height:1.45 !important;
+}
+@media(max-width:520px){
+  .landing-limited-beans-card .limited-bean-preview-v177 b,
+  .landing-limited-beans-card .v176-limited-mini-grid b,
+  .landing-limited-beans-card .origin-bean-topline b,
+  .limited-bean-mini b{
+    font-size:13px !important;
+    letter-spacing:-.01em !important;
+  }
+}
+.bean-chip.limited-bean-option.v188-limited-bean-option{
+  padding-top:42px !important;
+}
+.bean-chip.limited-bean-option.v188-limited-bean-option b{
+  display:block !important;
+  max-width:100% !important;
+  overflow:hidden !important;
+  text-overflow:ellipsis !important;
+  white-space:nowrap !important;
+}
+.v188-limited-sync-line{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-top:9px;
+  padding:9px 11px;
+  border-radius:15px;
+  background:rgba(255,255,255,.52);
+  border:1px solid rgba(255,255,255,.70);
+  color:rgba(45,64,90,.58);
+  font-size:11.5px;
+  font-weight:780;
+}
+.v188-limited-sync-line button{
+  appearance:none;
+  border:0;
+  border-radius:999px;
+  padding:6px 10px;
+  background:rgba(255,255,255,.72);
+  color:rgba(30,58,100,.78);
+  font-size:11px;
+  font-weight:900;
+  box-shadow:0 6px 14px rgba(30,58,100,.08);
+}
+
 </style>
 
 <style>
@@ -13954,6 +14020,194 @@ window.addEventListener("load", function() {
   document.addEventListener("click", function(){
     setTimeout(keepOneLimitedBeanV184, 80);
   });
+})();
+</script>
+
+
+<script>
+/* V188: Force Limited Bean to sync into every coffee bean option area. */
+(function(){
+  const SURCHARGE = 5;
+
+  function esc188(s){
+    if(typeof esc === "function") return esc(s);
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function(m){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m];
+    });
+  }
+
+  function normalize188(item){
+    item = item || {};
+    const name = String(item.bean || item.name || item.cn || "期間限定豆子").trim();
+    return {
+      id: String(item.id || name).replace(/[^a-zA-Z0-9_-]/g,"").slice(0,40),
+      active: item.active !== false && item.deleted !== true,
+      label: name,
+      cn: String(item.cn || name).trim(),
+      flavor: String(item.flavor || item.tasting || "").trim() || "期間限定",
+      note: String(item.note || item.desc || item.description || "").trim() || "限時供應，售完即止。",
+      surcharge: Number(item.surcharge || item.limitedSurcharge || SURCHARGE) || SURCHARGE
+    };
+  }
+
+  function productAccepts188(product){
+    if(!product || product.isLimited) return false;
+    const n = String(product.name || "");
+    if(n === "Classic Chocolate") return false;
+    return n === "Americano" || n === "Latte" || n === "Cappuccino" || n === "Mocha" || n.indexOf("Dirty") >= 0 || !!product.milk;
+  }
+
+  async function fetchCurrentLimitedBean188(){
+    try{
+      const res = await fetch("/api/menu?scope=current-limited-bean&t=" + Date.now(), { cache:"no-store" });
+      const data = await res.json().catch(() => ({}));
+      const list = data && data.ok && Array.isArray(data.limitedItems) ? data.limitedItems : [];
+      const bean = list.length ? normalize188(list[0]) : null;
+      window.SKY31_CURRENT_LIMITED_BEAN_V188 = bean && bean.active ? bean : null;
+
+      // Keep old variables updated too, because older V178/V181 functions still read them.
+      window.SKY31_LIMITED_BEAN_CHOICES_V181 = window.SKY31_CURRENT_LIMITED_BEAN_V188 ? [window.SKY31_CURRENT_LIMITED_BEAN_V188] : [];
+      window.SKY31_LIMITED_BEAN_CHOICES = window.SKY31_LIMITED_BEAN_CHOICES_V181.slice();
+
+      return window.SKY31_CURRENT_LIMITED_BEAN_V188;
+    }catch(e){
+      window.SKY31_CURRENT_LIMITED_BEAN_V188 = window.SKY31_CURRENT_LIMITED_BEAN_V188 || null;
+      return window.SKY31_CURRENT_LIMITED_BEAN_V188;
+    }
+  }
+
+  function currentProduct188(){
+    try{
+      if(typeof current !== "undefined" && current) return current;
+      if(window.current) return window.current;
+    }catch(e){}
+    return null;
+  }
+
+  function chipHtml188(bean){
+    const val = "Limited｜" + bean.label + "｜風味：" + bean.flavor;
+    return '' +
+      '<div class="chip bean-chip limited-bean-option v188-limited-bean-option" data-value="' + esc188(val) + '" data-bean-label="' + esc188(bean.label) + '" data-bean-flavor="' + esc188(bean.flavor) + '" data-surcharge="' + bean.surcharge + '">' +
+        '<b>✨ ' + esc188(bean.label) + '<span class="limited-surcharge-badge">+MOP ' + bean.surcharge + '</span></b>' +
+        '<span class="flavor">限定豆子：' + esc188(bean.flavor) + '<br>' + esc188(bean.note) + '</span>' +
+      '</div>';
+  }
+
+  function emptyHtml188(){
+    return '' +
+      '<div class="chip bean-chip limited-bean-selection-placeholder" data-value="">' +
+        '<b>✨ 期間限定豆子</b>' +
+        '<span class="flavor">期間限定豆子暫未上架。<br>下一支驚喜豆單正在準備中，敬請期待。</span>' +
+      '</div>';
+  }
+
+  function syncLine188(){
+    return '' +
+      '<div class="v188-limited-sync-line">' +
+        '<span>限定豆子已同步</span>' +
+        '<button type="button" onclick="window.SKY31_REFRESH_LIMITED_BEANS && window.SKY31_REFRESH_LIMITED_BEANS(true)">更新</button>' +
+      '</div>';
+  }
+
+  function renderIntoBeanBox188(){
+    const product = currentProduct188();
+    const beanChips = document.getElementById("beanChips");
+    const beanBox = document.getElementById("beanBox");
+    if(!beanChips || !beanBox || !productAccepts188(product)) return;
+
+    beanChips.querySelectorAll(".limited-bean-option,.limited-bean-selection-placeholder,.bean-refresh-line,.v188-limited-sync-line").forEach(function(el){
+      el.remove();
+    });
+
+    const bean = window.SKY31_CURRENT_LIMITED_BEAN_V188;
+    beanChips.insertAdjacentHTML("beforeend", bean ? chipHtml188(bean) : emptyHtml188());
+    beanChips.insertAdjacentHTML("beforeend", syncLine188());
+
+    if(typeof bindChips === "function") bindChips(beanBox);
+
+    beanChips.querySelectorAll(".limited-bean-selection-placeholder").forEach(function(el){
+      el.onclick = function(ev){ ev.preventDefault(); ev.stopPropagation(); };
+    });
+
+    beanChips.querySelectorAll(".bean-chip").forEach(function(el){
+      el.addEventListener("click", function(){
+        setTimeout(function(){
+          if(typeof window.sky31UpdateDetailPrice === "function") window.sky31UpdateDetailPrice();
+        }, 0);
+      });
+    });
+
+    if(typeof window.sky31UpdateDetailPrice === "function") window.sky31UpdateDetailPrice();
+  }
+
+  function polishLanding188(){
+    document.querySelectorAll(".landing-limited-beans-card b,.landing-limited-beans-card .origin-bean-topline b").forEach(function(el){
+      el.title = el.textContent || "";
+    });
+  }
+
+  async function refreshLimited188(force){
+    await fetchCurrentLimitedBean188();
+    renderIntoBeanBox188();
+
+    // Refresh landing card with older landing renderer if it exists.
+    if(typeof window.SKY31_REFRESH_LIMITED === "function" && !window.__SKY31_V188_CALLING_LANDING){
+      try{
+        window.__SKY31_V188_CALLING_LANDING = true;
+        await window.SKY31_REFRESH_LIMITED();
+      }catch(e){}finally{
+        window.__SKY31_V188_CALLING_LANDING = false;
+      }
+    }
+    setTimeout(renderIntoBeanBox188, 80);
+    setTimeout(polishLanding188, 120);
+    return window.SKY31_CURRENT_LIMITED_BEAN_V188;
+  }
+
+  // Replace the broken / older immediate refresh behavior.
+  window.SKY31_REFRESH_LIMITED_BEANS = refreshLimited188;
+
+  const oldOpenDetail188 = window.openDetail || (typeof openDetail === "function" ? openDetail : null);
+  if(oldOpenDetail188 && !window.__SKY31_V188_OPEN_DETAIL_PATCHED){
+    window.__SKY31_V188_OPEN_DETAIL_PATCHED = true;
+    window.openDetail = openDetail = function(i){
+      const r = oldOpenDetail188.apply(this, arguments);
+      refreshLimited188(true);
+      setTimeout(renderIntoBeanBox188, 100);
+      setTimeout(renderIntoBeanBox188, 500);
+      return r;
+    };
+  }
+
+  const oldConfigureBean188 = window.configureBean || (typeof configureBean === "function" ? configureBean : null);
+  if(oldConfigureBean188 && !window.__SKY31_V188_CONFIGURE_PATCHED){
+    window.__SKY31_V188_CONFIGURE_PATCHED = true;
+    window.configureBean = configureBean = function(){
+      const r = oldConfigureBean188.apply(this, arguments);
+      setTimeout(renderIntoBeanBox188, 0);
+      setTimeout(renderIntoBeanBox188, 120);
+      return r;
+    };
+  }
+
+  document.addEventListener("DOMContentLoaded", function(){
+    refreshLimited188(true);
+    setTimeout(polishLanding188, 500);
+  });
+  document.addEventListener("visibilitychange", function(){
+    if(!document.hidden) refreshLimited188(true);
+  });
+  window.addEventListener("focus", function(){ refreshLimited188(true); });
+
+  // Fallback: if a detail modal is already open, keep the Limited Bean area alive.
+  setInterval(function(){
+    const beanChips = document.getElementById("beanChips");
+    const product = currentProduct188();
+    if(beanChips && productAccepts188(product)){
+      const hasLimited = beanChips.querySelector(".limited-bean-option") || beanChips.querySelector(".limited-bean-selection-placeholder");
+      if(!hasLimited) renderIntoBeanBox188();
+    }
+  }, 2000);
 })();
 </script>
 
