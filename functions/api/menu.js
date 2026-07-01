@@ -21,7 +21,7 @@ export async function onRequest(context) {
     const visible = publicLimitedItemsV187(config);
     return json({
       ok: true,
-      version: "V205",
+      version: "V206",
       limitedItems: visible,
       currentLimitedBeanId: visible[0] ? visible[0].id : "",
       currentLimitedBeanIds: visible.map(item => item.id),
@@ -83,12 +83,12 @@ function sanitizePublicItems(items) {
     type: "bean",
     active: item.active !== false,
     deleted: item.deleted === true,
-    name: String(item.name || item.bean || item.title || "期間限定豆子").trim(),
+    name: String(item.bean || item.beanName || item.name || item.title || "期間限定豆子").trim(),
     cn: String(item.cn || item.zh || item.chinese || item.name || item.bean || "期間限定豆子").trim(),
-    desc: String(item.desc || item.description || "").trim(),
-    bean: String(item.bean || item.beanName || item.name || "期間限定豆子").trim(),
+    desc: String(item.desc || item.description || item.note || item.beanNote || "").trim(),
+    bean: String(item.bean || item.beanName || item.name || item.cn || "期間限定豆子").trim(),
     flavor: String(item.flavor || item.tasting || "").trim(),
-    note: String(item.note || item.beanNote || "").trim(),
+    note: String(item.note || item.beanNote || item.desc || item.description || "").trim(),
     surcharge: Number(item.surcharge || item.limitedSurcharge || 5) || 5,
     limitedSurcharge: Number(item.surcharge || item.limitedSurcharge || 5) || 5,
     updatedAt: item.updatedAt || ""
