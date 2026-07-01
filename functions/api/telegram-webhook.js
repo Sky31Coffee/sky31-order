@@ -7,7 +7,7 @@ export async function onRequest(context) {
     return json({
       ok: true,
       endpoint: "telegram-webhook",
-      version: "V217",
+      version: "V218",
       method,
       message: "Webhook endpoint reachable. Telegram sends POST updates here."
     });
@@ -39,6 +39,10 @@ async function handleTelegramPost(context) {
   // If this is not awaited, the runtime may return before the request finishes,
   // causing Telegram to keep showing Loading...
   await answerCallback(env, cq.id, "處理中…");
+
+  if (data.startsWith("maint_")) {
+    return handleMaintenanceActionV218(env, cq, data);
+  }
 
   if (data.startsWith("limited_")) {
     return handleLimitedMenuAction(env, cq, data);
@@ -656,10 +660,12 @@ async function listTelegramMembers(env) {
   const active = await listMembersByPrefix(env, "member:", false);
   const deleted = await listMembersByPrefix(env, "member_deleted:", true);
 
-  const members = active.concat(deleted);
+  let members = active.concat(deleted);
+  members = dedupeMembersForListV218(members);
+
   members.sort((a, b) => {
     if (a._deleted !== b._deleted) return a._deleted ? 1 : -1;
-    return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
+    return memberRecordTimeV218(b) - memberRecordTimeV218(a);
   });
 
   return members;
@@ -2422,7 +2428,8 @@ function buildCommandMenuMarkupV183() {
     inline_keyboard: [
       [{ text: "➕ 新增限定豆子", callback_data: "limited_wizard_add:x" }],
       [{ text: "✨ 限定豆子列表 / 編輯", callback_data: "limited_list:all" }],
-      [{ text: "👤 查詢會員", callback_data: "member_list:active:0" }]
+      [{ text: "👤 查詢會員", callback_data: "member_list:active:0" }],
+      [{ text: "🛠 系統維護", callback_data: "maint_status:x" }]
     ]
   };
 }
@@ -3902,7 +3909,7 @@ async function handleMemberAdminEditActionV211(env, cq, data) {
       env,
       chatId,
       messageId,
-      "🎂 更改會員生日\n\n請直接傳送生日日期，格式：YYYY-MM-DD\n例如：1990-08-18\n\n此操作只限店方在 Telegram 後台修改。",
+      "🎂 更改會員生日\n\n請直接傳送生日日期。\n可接受格式：\n1990-08-18\n1990/08/18\n1990.08.18\n1990年8月18日\n\n此操作只限店方在 Telegram 後台修改。",
       { inline_keyboard: [[{ text: "取消", callback_data: "member_edit_cancel:" + phone }]] }
     );
     return stop(env, cq, "請輸入生日日期");
@@ -4134,4 +4141,218 @@ function dedupeMembersForListV217(members) {
     }
   });
   return Array.from(map.values());
+}
+
+
+/* V218: Maintenance mode + robust Telegram birthday input + member list dedupe. */
+const MAINTENANCE_KEY_V218 = "sky31:maintenance:v1";
+
+function memberDedupeKeyV218(member) {
+  const p = normalizePhone((member && member.phone) || "");
+  return p.length >= 8 ? p.slice(-8) : p;
+}
+
+function memberRecordTimeV218(member) {
+  return Math.max(
+    new Date((member && member.manualTierUpdatedAt) || 0).getTime() || 0,
+    new Date((member && member.birthdayUpdatedAt) || 0).getTime() || 0,
+    new Date((member && member.updatedAt) || 0).getTime() || 0,
+    new Date((member && member.createdAt) || 0).getTime() || 0
+  );
+}
+
+function dedupeMembersForListV218(members) {
+  const map = new Map();
+  (Array.isArray(members) ? members : []).forEach(member => {
+    if (!member) return;
+    const key = memberDedupeKeyV218(member);
+    if (!key) return;
+    const existing = map.get(key);
+    if (!existing || memberRecordTimeV218(member) >= memberRecordTimeV218(existing)) {
+      map.set(key, member);
+    }
+  });
+  return Array.from(map.values());
+}
+
+function normalizeBirthdayInputV218(input) {
+  let s = String(input || "").trim();
+  if (!s) return "";
+  s = s.replace(/[．。]/g, ".")
+       .replace(/[\/\.]/g, "-")
+       .replace(/年/g, "-")
+       .replace(/月/g, "-")
+       .replace(/日/g, "")
+       .replace(/\s+/g, "");
+  const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (!m) return "";
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  if (y < 1900 || y > 2100 || mo < 1 || mo > 12 || d < 1 || d > 31) return "";
+  const date = new Date(Date.UTC(y, mo - 1, d));
+  if (
+    date.getUTCFullYear() !== y ||
+    date.getUTCMonth() + 1 !== mo ||
+    date.getUTCDate() !== d
+  ) return "";
+  return String(y).padStart(4, "0") + "-" + String(mo).padStart(2, "0") + "-" + String(d).padStart(2, "0");
+}
+
+birthdayValidV211 = function(value) {
+  return !!normalizeBirthdayInputV218(value);
+};
+
+saveMemberEditDraftV211 = async function(env, chatId, draft) {
+  const payload = JSON.stringify(draft || {});
+  await env.ORDERS.put(memberEditDraftKeyV211(chatId), payload, { expirationTtl: MEMBER_EDIT_DRAFT_TTL_V211 });
+  await env.ORDERS.put("member_edit_draft:last:" + String(chatId || ""), payload, { expirationTtl: MEMBER_EDIT_DRAFT_TTL_V211 });
+};
+
+getMemberEditDraftV211 = async function(env, chatId) {
+  const keys = [
+    memberEditDraftKeyV211(chatId),
+    "member_edit_draft:last:" + String(chatId || "")
+  ];
+  for (const key of keys) {
+    const raw = await env.ORDERS.get(key);
+    if (!raw) continue;
+    try { return JSON.parse(raw); } catch (_) {}
+  }
+  return null;
+};
+
+clearMemberEditDraftV211 = async function(env, chatId) {
+  await env.ORDERS.delete(memberEditDraftKeyV211(chatId));
+  await env.ORDERS.delete("member_edit_draft:last:" + String(chatId || ""));
+};
+
+handleMemberEditDraftTextV211 = async function(env, message, text, draft) {
+  const chatId = message.chat && message.chat.id ? message.chat.id : env.TELEGRAM_CHAT_ID;
+  if (!isAuthorizedTelegramChat(env, chatId)) {
+    await clearMemberEditDraftV211(env, chatId);
+    return json({ ok: true });
+  }
+
+  const raw = String(text || "").trim();
+  if (raw === "取消") {
+    await clearMemberEditDraftV211(env, chatId);
+    await sendTelegramMessage(env, chatId, "已取消會員資料修改。", buildCommandMenuMarkupV183 ? buildCommandMenuMarkupV183() : null);
+    return json({ ok: true });
+  }
+
+  if (draft && draft.type === "birthday") {
+    const birthday = normalizeBirthdayInputV218(raw);
+    if (!birthday) {
+      await sendTelegramMessage(
+        env,
+        chatId,
+        "生日格式不正確，請重新輸入。\n\n可接受格式：\n1990-08-18\n1990/08/18\n1990.08.18\n1990年8月18日\n\n輸入「取消」可取消操作。",
+        null
+      );
+      return json({ ok: true });
+    }
+
+    const loaded = await loadActiveMemberForEditV211(env, draft.phone);
+    if (!loaded.member) {
+      await clearMemberEditDraftV211(env, chatId);
+      await sendTelegramMessage(env, chatId, "找不到會員資料，已取消。", null);
+      return json({ ok: true });
+    }
+
+    const member = loaded.member;
+    member.birthday = birthday;
+    member.birthdayUpdatedAt = new Date().toISOString();
+    member.birthdayUpdatedBy = "telegram";
+    member.updatedAt = member.birthdayUpdatedAt;
+
+    await saveActiveMemberForEditV211(env, loaded);
+    await clearMemberEditDraftV211(env, chatId);
+
+    const enriched = await enrichMemberStatsForTelegram(env, member);
+    const birthdayMonthNowV218 = Number(birthday.split("-")[1]) === (new Date().getUTCMonth() + 1);
+    await sendTelegramMessage(
+      env,
+      chatId,
+      "✅ 已更新會員生日：" + birthday +
+      (birthdayMonthNowV218 ? "\n🎂 生日月優惠已觸發，客人在會員中心會看到生日祝福和生日月飲品券。" : "") +
+      "\n\n" + buildMemberDetailText(enriched, false),
+      buildMemberDetailReplyMarkup(enriched, false)
+    );
+    return json({ ok: true });
+  }
+
+  await clearMemberEditDraftV211(env, chatId);
+  await sendTelegramMessage(env, chatId, "未找到正在編輯的會員資料，請重新進入會員詳細頁操作。", buildCommandMenuMarkupV183 ? buildCommandMenuMarkupV183() : null);
+  return json({ ok: true });
+};
+
+async function getMaintenanceConfigV218(env) {
+  try {
+    const raw = await env.ORDERS.get(MAINTENANCE_KEY_V218);
+    if (!raw) return { active: false, message: "", updatedAt: "", updatedBy: "" };
+    const config = JSON.parse(raw);
+    return {
+      active: config && config.active === true,
+      message: String((config && config.message) || "系統維護，暫停使用。"),
+      updatedAt: String((config && config.updatedAt) || ""),
+      updatedBy: String((config && config.updatedBy) || "")
+    };
+  } catch (_) {
+    return { active: false, message: "", updatedAt: "", updatedBy: "" };
+  }
+}
+
+async function setMaintenanceConfigV218(env, active, by) {
+  const config = {
+    active: active === true,
+    message: active === true ? "系統維護，暫停使用。" : "",
+    updatedAt: new Date().toISOString(),
+    updatedBy: String(by || "telegram")
+  };
+  await env.ORDERS.put(MAINTENANCE_KEY_V218, JSON.stringify(config));
+  return config;
+}
+
+function buildMaintenanceTextV218(config) {
+  config = config || {};
+  return [
+    "🛠 Sky31 系統維護",
+    "",
+    "目前狀態：" + (config.active ? "維護中，網站暫停使用" : "正常開放"),
+    config.updatedAt ? "更新時間：" + formatDateTime(config.updatedAt) : "",
+    "",
+    config.active
+      ? "客人打開網站時會停留在維護視窗，直到你按「取消維護」。"
+      : "按「啟用維護」後，網站會即時彈出維護視窗並暫停所有操作。"
+  ].filter(Boolean).join("\n");
+}
+
+function buildMaintenanceMarkupV218(config) {
+  const rows = [];
+  if (config && config.active) {
+    rows.push([{ text: "✅ 取消維護，恢復使用", callback_data: "maint_off:x" }]);
+  } else {
+    rows.push([{ text: "🛠 啟用維護，暫停使用", callback_data: "maint_on:x" }]);
+  }
+  rows.push([{ text: "🔄 重新整理狀態", callback_data: "maint_status:x" }]);
+  rows.push([{ text: "返回功能列表", callback_data: "limited_cmd_menu:x" }]);
+  return { inline_keyboard: rows };
+}
+
+async function handleMaintenanceActionV218(env, cq, data) {
+  const chatId = cq.message && cq.message.chat ? cq.message.chat.id : env.TELEGRAM_CHAT_ID;
+  const messageId = cq.message ? cq.message.message_id : null;
+  if (!isAuthorizedTelegramChat(env, chatId)) return stop(env, cq, "沒有權限");
+
+  let config = await getMaintenanceConfigV218(env);
+
+  if (String(data || "").startsWith("maint_on:")) {
+    config = await setMaintenanceConfigV218(env, true, "telegram");
+  } else if (String(data || "").startsWith("maint_off:")) {
+    config = await setMaintenanceConfigV218(env, false, "telegram");
+  }
+
+  await editTelegramMessage(env, chatId, messageId, buildMaintenanceTextV218(config), buildMaintenanceMarkupV218(config));
+  return stop(env, cq, config.active ? "維護模式已啟用" : "維護模式已取消");
 }

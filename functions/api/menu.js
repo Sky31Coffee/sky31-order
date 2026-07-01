@@ -1,5 +1,6 @@
 
 const MENU_KEY = "sky31:limited_menu:v1";
+const MAINTENANCE_KEY_V218 = "sky31:maintenance:v1";
 
 const DEFAULT_LIMITED_MENU = {
   updatedAt: "",
@@ -19,18 +20,37 @@ export async function onRequest(context) {
   try {
     const config = await getLimitedMenuConfig(context.env);
     const visible = publicLimitedItemsV187(config);
+    const maintenanceV218 = await getMaintenanceConfigV218(context.env);
     return json({
       ok: true,
-      version: "V217",
+      version: "V218",
       limitedItems: visible,
       currentLimitedBeanId: visible[0] ? visible[0].id : "",
       currentLimitedBeanIds: visible.map(item => item.id),
       allLimitedItems: publicAllLimitedItemsV187(config),
       updatedAt: config.updatedAt || "",
-      updatedBy: config.updatedBy || ""
+      updatedBy: config.updatedBy || "",
+      maintenance: maintenanceV218
     });
   } catch (e) {
     return json({ ok: false, error: e.message || "menu load failed" }, 500);
+  }
+}
+
+
+async function getMaintenanceConfigV218(env) {
+  try {
+    const raw = await env.ORDERS.get(MAINTENANCE_KEY_V218);
+    if (!raw) return { active: false, message: "", updatedAt: "", updatedBy: "" };
+    const config = JSON.parse(raw);
+    return {
+      active: config && config.active === true,
+      message: String((config && config.message) || ""),
+      updatedAt: String((config && config.updatedAt) || ""),
+      updatedBy: String((config && config.updatedBy) || "")
+    };
+  } catch (_) {
+    return { active: false, message: "", updatedAt: "", updatedBy: "" };
   }
 }
 
