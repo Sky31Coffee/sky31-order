@@ -10251,8 +10251,8 @@ window.addEventListener("load", function() {
 
     var nextTierText = t.next ? ("距離下一等級還差 " + Math.max(0, Number(t.next) - cups) + " 杯") : "已達最高等級";
     var rewardText = available > 0
-      ? ("你目前有 " + available + " 次免費兌換，可於確認訂單時自動扣減。兌換後不會扣減總累計杯數。")
-      : ("距離下一次免費兌換還差 " + remain + " 杯。免單只扣可用次數，不扣總累計杯數。");
+      ? ("你目前有 " + available + " 次免費兌換，可於確認訂單時自動扣減。兌換後不會扣減總累計杯數；歷史完成訂單會自動補回。")
+      : ("距離下一次免費兌換還差 " + remain + " 杯。免單只扣可用次數，不扣總累計杯數；歷史完成訂單會自動補回。");
 
     return '' +
       '<div class="member-reward-card member-reward-card-v196">' +
