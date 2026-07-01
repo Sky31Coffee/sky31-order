@@ -6639,6 +6639,94 @@ body:has(#orderApp.hidden) #sky31PersistentCart.sky31-cart-body-level{
   }
 }
 
+
+/* V192: Membership reward and tier icons */
+.sky31-reward-card-v192{
+  margin:12px 0;
+  padding:14px;
+  border-radius:22px;
+  background:linear-gradient(135deg,rgba(255,255,255,.82),rgba(232,243,255,.58));
+  border:1px solid rgba(255,255,255,.76);
+  box-shadow:0 14px 32px rgba(35,72,110,.10), inset 0 1px 0 rgba(255,255,255,.86);
+  color:rgba(31,43,60,.88);
+}
+.sky31-tier-row-v192{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+}
+.sky31-tier-icon-v192{
+  width:48px;
+  height:48px;
+  border-radius:17px;
+  display:grid;
+  place-items:center;
+  font-size:25px;
+  background:linear-gradient(135deg,rgba(255,255,255,.94),rgba(255,238,190,.64));
+  box-shadow:0 10px 24px rgba(128,91,21,.13), inset 0 1px 0 rgba(255,255,255,.86);
+}
+.sky31-tier-name-v192{
+  font-size:15px;
+  font-weight:950;
+  letter-spacing:-.02em;
+}
+.sky31-tier-sub-v192{
+  margin-top:3px;
+  font-size:11.5px;
+  font-weight:760;
+  color:rgba(54,67,88,.58);
+}
+.sky31-reward-grid-v192{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:8px;
+  margin-top:12px;
+}
+.sky31-reward-pill-v192{
+  padding:10px 8px;
+  border-radius:16px;
+  background:rgba(255,255,255,.62);
+  border:1px solid rgba(255,255,255,.72);
+  text-align:center;
+}
+.sky31-reward-pill-v192 b{
+  display:block;
+  font-size:17px;
+  font-weight:950;
+}
+.sky31-reward-pill-v192 span{
+  display:block;
+  margin-top:3px;
+  font-size:10.5px;
+  font-weight:780;
+  color:rgba(53,67,88,.56);
+}
+.sky31-reward-line-v192,
+.v192-reward-confirm-line{
+  margin-top:8px;
+  padding:10px 12px;
+  border-radius:16px;
+  background:rgba(255,250,235,.76);
+  border:1px solid rgba(236,190,95,.42);
+  color:rgba(128,78,8,.90);
+  font-size:12px;
+  font-weight:880;
+}
+.v192-tier-register-hint{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  margin-left:6px;
+  padding:4px 8px;
+  border-radius:999px;
+  background:rgba(255,255,255,.62);
+  border:1px solid rgba(255,255,255,.74);
+  font-size:11px;
+  font-weight:850;
+  color:rgba(45,66,98,.66);
+}
+
 </style>
 
 <style>
@@ -14913,6 +15001,203 @@ window.addEventListener("load", function() {
       updateLimitedPriceLine191();
     }
   }, 1600);
+})();
+</script>
+
+
+<script>
+/* V192: Member rewards, free-drink redemption, and tier icons. */
+(function(){
+  const REWARD_CUPS = 10;
+
+  function money192(n){ return "MOP " + Math.max(0, Number(n || 0)).toFixed(0); }
+
+  function tier192(cups){
+    cups = Number(cups || 0);
+    if(cups >= 100) return {key:"vip", name:"黑金會員", icon:"👑", next:null};
+    if(cups >= 50) return {key:"diamond", name:"鑽石會員", icon:"💎", next:100};
+    if(cups >= 25) return {key:"gold", name:"金卡會員", icon:"🥇", next:50};
+    if(cups >= 10) return {key:"silver", name:"銀卡會員", icon:"🥈", next:25};
+    return {key:"bronze", name:"青銅會員", icon:"☕", next:10};
+  }
+
+  function rewardsFromMember192(member){
+    member = member || {};
+    const cups = Number(member.totalCups || member.cups || member.totalItems || member.orderCups || 0);
+    const redeemed = Number(member.rewardRedeemed || member.rewardsRedeemed || 0);
+    const earned = Math.floor(cups / REWARD_CUPS);
+    const available = Math.max(0, earned - redeemed);
+    const t = tier192(cups);
+    const remain = REWARD_CUPS - (cups % REWARD_CUPS || REWARD_CUPS);
+    return { cups, redeemed, earned, available, tier:t, remain };
+  }
+
+  function currentMember192(){
+    try{
+      return window.currentMember || window.memberData || window.SKY31_MEMBER || JSON.parse(localStorage.getItem("sky31_member") || localStorage.getItem("member") || "null") || null;
+    }catch(e){ return window.currentMember || window.memberData || window.SKY31_MEMBER || null; }
+  }
+
+  function cartItems192(){
+    try{
+      if(Array.isArray(window.cart)) return window.cart;
+      if(Array.isArray(cart)) return cart;
+    }catch(e){}
+    return [];
+  }
+
+  function unitPrice192(item){
+    return Number(item.unitPrice || item.price || item.finalPrice || 0);
+  }
+
+  function rewardCalc192(){
+    const member = currentMember192();
+    const rewards = rewardsFromMember192(member);
+    const expanded = [];
+    cartItems192().forEach(function(item){
+      const qty = Math.max(0, Number(item.qty || 1));
+      const unit = unitPrice192(item);
+      for(let i=0;i<qty;i++) expanded.push({ title:item.title || item.name || "飲品", unit });
+    });
+    expanded.sort((a,b) => b.unit - a.unit);
+    const use = Math.min(rewards.available, expanded.length);
+    const freeItems = expanded.slice(0, use);
+    const discount = freeItems.reduce((s,x) => s + Number(x.unit || 0), 0);
+    return { rewards, use, freeItems, discount };
+  }
+
+  function rewardCardHtml192(){
+    const member = currentMember192() || {};
+    const r = rewardsFromMember192(member);
+    const nextText = r.tier.next ? "距離下一等級：" + Math.max(0, r.tier.next - r.cups) + " 杯" : "已達最高等級";
+    return '' +
+      '<div class="sky31-reward-card-v192" id="sky31RewardCardV192">' +
+        '<div class="sky31-tier-row-v192">' +
+          '<div>' +
+            '<div class="sky31-tier-name-v192">' + r.tier.icon + ' ' + r.tier.name + '</div>' +
+            '<div class="sky31-tier-sub-v192">每累計 10 杯，可免費兌換任何 1 杯</div>' +
+          '</div>' +
+          '<div class="sky31-tier-icon-v192">' + r.tier.icon + '</div>' +
+        '</div>' +
+        '<div class="sky31-reward-grid-v192">' +
+          '<div class="sky31-reward-pill-v192"><b>' + r.cups + '</b><span>累計杯數</span></div>' +
+          '<div class="sky31-reward-pill-v192"><b>' + r.available + '</b><span>可換次數</span></div>' +
+          '<div class="sky31-reward-pill-v192"><b>' + (r.remain || 0) + '</b><span>距離下次</span></div>' +
+        '</div>' +
+        '<div class="sky31-tier-sub-v192" style="margin-top:10px">' + nextText + '</div>' +
+      '</div>';
+  }
+
+  function injectRewardCard192(){
+    const html = rewardCardHtml192();
+    const old = document.getElementById("sky31RewardCardV192");
+    if(old){ old.outerHTML = html; return; }
+
+    const targets = [
+      document.querySelector("#memberPanel"),
+      document.querySelector("#memberModal .modal-body"),
+      document.querySelector(".member-profile"),
+      document.querySelector(".profile-panel"),
+      document.querySelector("#memberInfo"),
+      document.querySelector("#memberCenter")
+    ].filter(Boolean);
+
+    if(targets[0]) targets[0].insertAdjacentHTML("afterbegin", html);
+  }
+
+  function patchRegisterTierHint192(){
+    document.querySelectorAll('button, .btn, h2, h3, .modal-title').forEach(function(el){
+      const txt = (el.textContent || "").trim();
+      if((txt.includes("登記") || txt.includes("註冊") || txt.includes("會員")) && !el.querySelector(".v192-tier-register-hint")){
+        const span = document.createElement("span");
+        span.className = "v192-tier-register-hint";
+        span.textContent = "☕ 青銅起步";
+        try{ el.appendChild(span); }catch(e){}
+      }
+    });
+  }
+
+  function updateConfirmReward192(){
+    const calc = rewardCalc192();
+
+    const confirmTargets = [
+      document.querySelector("#confirmTotal"),
+      document.querySelector(".confirm-total"),
+      document.querySelector("#cartTotal"),
+      document.querySelector(".cart-total"),
+      document.querySelector("#orderSummary"),
+      document.querySelector(".order-summary")
+    ].filter(Boolean);
+
+    document.querySelectorAll(".v192-reward-confirm-line").forEach(el => el.remove());
+
+    if(calc.use > 0 && calc.discount > 0){
+      const line = document.createElement("div");
+      line.className = "v192-reward-confirm-line";
+      const names = calc.freeItems.map(x => x.title).slice(0,2).join("、");
+      line.textContent = "會員獎賞兌換 ×" + calc.use + "｜免費：" + names + "｜-" + money192(calc.discount);
+      if(confirmTargets[0]) confirmTargets[0].insertAdjacentElement("beforebegin", line);
+    }
+
+    // Patch visible total text if possible without damaging original calculation.
+    confirmTargets.forEach(function(el){
+      const raw = (el.textContent || "");
+      const m = raw.match(/MOP\s*([0-9]+)/i);
+      if(m && calc.discount > 0 && !el.dataset.v192BaseText){
+        el.dataset.v192BaseText = raw;
+      }
+      const baseText = el.dataset.v192BaseText || raw;
+      const mm = baseText.match(/MOP\s*([0-9]+)/i);
+      if(mm && calc.discount > 0){
+        const original = Number(mm[1] || 0);
+        const discounted = Math.max(0, original - calc.discount);
+        el.textContent = baseText.replace(/MOP\s*[0-9]+/i, "MOP " + discounted);
+      }
+    });
+
+    window.SKY31_REWARD_APPLY_V192 = {
+      useRewards: calc.use,
+      rewardDiscount: calc.discount,
+      freeItems: calc.freeItems
+    };
+  }
+
+  // Add reward fields to submitted order body
+  const oldFetch192 = window.fetch;
+  if(oldFetch192 && !window.__SKY31_V192_FETCH_PATCHED){
+    window.__SKY31_V192_FETCH_PATCHED = true;
+    window.fetch = function(input, init){
+      try{
+        const url = typeof input === "string" ? input : (input && input.url) || "";
+        if(url.indexOf("/api/order") >= 0 && init && init.body && typeof init.body === "string"){
+          const body = JSON.parse(init.body);
+          const calc = rewardCalc192();
+          body.rewardUseRequested = calc.use;
+          body.rewardDiscountPreview = calc.discount;
+          body.rewardFreeItemsPreview = calc.freeItems;
+          init.body = JSON.stringify(body);
+        }
+      }catch(e){}
+      return oldFetch192.apply(this, arguments);
+    };
+  }
+
+  ["click","change","input"].forEach(function(evt){
+    document.addEventListener(evt, function(){
+      setTimeout(injectRewardCard192, 80);
+      setTimeout(updateConfirmReward192, 100);
+      setTimeout(patchRegisterTierHint192, 120);
+    });
+  });
+
+  document.addEventListener("DOMContentLoaded", function(){
+    setTimeout(injectRewardCard192, 600);
+    setTimeout(patchRegisterTierHint192, 700);
+    setInterval(function(){
+      injectRewardCard192();
+      updateConfirmReward192();
+    }, 2500);
+  });
 })();
 </script>
 
