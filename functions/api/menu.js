@@ -35,7 +35,7 @@ export async function onRequest(context) {
     const config = await getLimitedMenuConfig(context.env);
     return json({
       ok: true,
-      version: "V184",
+      version: "V186",
       limitedItems: sanitizePublicItems(config.limitedItems || []),
       updatedAt: config.updatedAt || "",
       updatedBy: config.updatedBy || ""

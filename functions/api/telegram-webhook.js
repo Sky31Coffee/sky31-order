@@ -7,7 +7,7 @@ export async function onRequest(context) {
     return json({
       ok: true,
       endpoint: "telegram-webhook",
-      version: "V184",
+      version: "V186",
       method,
       message: "Webhook endpoint reachable. Telegram sends POST updates here."
     });
@@ -532,10 +532,12 @@ function buildLimitedListText(config) {
 function limitedItemLine(item) {
   const status = item.active === false ? "停用" : "啟用";
   const surcharge = Number(item.surcharge || item.limitedSurcharge || 5) || 5;
-  return "• [" + status + "] " + (item.bean || item.name || "-") + "
-  編號：" + cleanLimitedId(item.id) + "｜限定豆子 +MOP " + surcharge + "
-  風味：" + (item.flavor || "-") + (item.note || item.desc ? "
-  備註：" + (item.note || item.desc) : "");
+  return [
+    "• [" + status + "] " + (item.bean || item.name || "-"),
+    "  編號：" + cleanLimitedId(item.id) + "｜限定豆子 +MOP " + surcharge,
+    "  風味：" + (item.flavor || "-"),
+    (item.note || item.desc) ? "  備註：" + (item.note || item.desc) : ""
+  ].filter(Boolean).join("\n");
 }
 
 function buildLimitedListMarkup(config) {
@@ -1441,7 +1443,7 @@ function json(data, status = 200) {
 /* V182: interactive Limited Bean input templates and edit templates.
    These overrides keep Limited Beans as bean options only, not standalone drinks. */
 
-function isLimitedMenuCommand(text) {
+isLimitedMenuCommand = function(text) {
   const t = String(text || "").trim().toLowerCase();
   return (
     t === "/limited" ||
@@ -1485,7 +1487,7 @@ function isLimitedMenuCommand(text) {
   );
 }
 
-async function handleLimitedMenuTextCommand(env, message, text) {
+handleLimitedMenuTextCommand = async function(env, message, text) {
   const chatId = message.chat && message.chat.id ? message.chat.id : env.TELEGRAM_CHAT_ID;
 
   if (!isAuthorizedTelegramChat(env, chatId)) {
@@ -1624,7 +1626,7 @@ async function handleLimitedMenuTextCommand(env, message, text) {
   return json({ ok: true });
 }
 
-async function handleLimitedMenuAction(env, cq, data) {
+handleLimitedMenuAction = async function(env, cq, data) {
   const chatId = cq.message && cq.message.chat ? cq.message.chat.id : env.TELEGRAM_CHAT_ID;
   const messageId = cq.message ? cq.message.message_id : null;
 
@@ -1750,7 +1752,7 @@ function buildLimitedEditTemplateText(item) {
   ].join("\n");
 }
 
-function buildLimitedHelpText() {
+buildLimitedHelpText = function() {
   return [
     "✨ SKY31 限定豆子管理",
     "",
@@ -1775,7 +1777,7 @@ function buildLimitedHelpText() {
   ].join("\n");
 }
 
-function buildLimitedListText(config) {
+buildLimitedListText = function(config) {
   const items = Array.isArray(config && config.limitedItems) ? config.limitedItems : [];
   const lines = [];
   lines.push("✨ SKY31 限定豆子管理");
@@ -1794,7 +1796,7 @@ function buildLimitedListText(config) {
   return lines.join("\n").trim();
 }
 
-function limitedItemLine(item) {
+limitedItemLine = function(item) {
   const status = item.active === false ? "停用" : "啟用";
   const surcharge = Number(item.surcharge || item.limitedSurcharge || 5) || 5;
   return [
@@ -1807,7 +1809,7 @@ function limitedItemLine(item) {
   ].filter(Boolean).join("\n");
 }
 
-function buildLimitedListMarkup(config) {
+buildLimitedListMarkup = function(config) {
   const rows = [];
   const items = Array.isArray(config && config.limitedItems) ? config.limitedItems : [];
 
@@ -1845,7 +1847,7 @@ function buildLimitedForceReplyMarkupV182(placeholder) {
   };
 }
 
-function buildLimitedItemFromFields(fields, editMode) {
+buildLimitedItemFromFields = function(fields, editMode) {
   const rawName = field(fields, ["名稱", "名称", "名字", "name", "Name", "豆子", "豆", "bean", "beans"]);
   const beanName = String(rawName || "").trim();
   const cn = field(fields, ["中文", "cn", "CN", "zh"], beanName || "期間限定豆子");
@@ -1945,7 +1947,7 @@ function isBotCommandListV183(text) {
   );
 }
 
-function isLimitedMenuCommand(text) {
+isLimitedMenuCommand = function(text) {
   const t = String(text || "").trim().toLowerCase();
   return (
     isBotCommandListV183(t) ||
@@ -1983,7 +1985,7 @@ function isLimitedMenuCommand(text) {
   );
 }
 
-async function handleTelegramTextCommand(env, message) {
+handleTelegramTextCommand = async function(env, message) {
   const text = String(message.text || "").trim();
   const chatId = message.chat && message.chat.id ? message.chat.id : env.TELEGRAM_CHAT_ID;
 
@@ -2027,7 +2029,7 @@ function isHardLimitedCommandV183(text) {
   );
 }
 
-async function handleLimitedMenuTextCommand(env, message, text) {
+handleLimitedMenuTextCommand = async function(env, message, text) {
   const chatId = message.chat && message.chat.id ? message.chat.id : env.TELEGRAM_CHAT_ID;
 
   if (!isAuthorizedTelegramChat(env, chatId)) {
@@ -2110,7 +2112,7 @@ async function handleLimitedMenuTextCommand(env, message, text) {
   return json({ ok: true });
 }
 
-async function handleLimitedMenuAction(env, cq, data) {
+handleLimitedMenuAction = async function(env, cq, data) {
   const chatId = cq.message && cq.message.chat ? cq.message.chat.id : env.TELEGRAM_CHAT_ID;
   const messageId = cq.message ? cq.message.message_id : null;
 
@@ -2402,7 +2404,7 @@ function buildCommandMenuMarkupV183() {
   };
 }
 
-function buildLimitedListText(config) {
+buildLimitedListText = function(config) {
   const items = Array.isArray(config && config.limitedItems) ? config.limitedItems : [];
   const lines = [];
   lines.push("✨ Sky31 限定豆子列表");
@@ -2421,7 +2423,7 @@ function buildLimitedListText(config) {
   return lines.join("\n").trim();
 }
 
-function buildLimitedListMarkup(config) {
+buildLimitedListMarkup = function(config) {
   const rows = [];
   const items = Array.isArray(config && config.limitedItems) ? config.limitedItems : [];
 
@@ -2440,7 +2442,7 @@ function buildLimitedListMarkup(config) {
   return { inline_keyboard: rows };
 }
 
-function limitedItemLine(item) {
+limitedItemLine = function(item) {
   const status = item.active === false ? "停用" : "啟用";
   const surcharge = Number(item.surcharge || item.limitedSurcharge || 5) || 5;
   return [
@@ -2503,7 +2505,7 @@ async function normalizeLimitedCurrentV184(env, config) {
   return config;
 }
 
-function isBotCommandListV183(text) {
+isBotCommandListV183 = function(text) {
   const t = String(text || "").trim().toLowerCase();
   return (
     t === "/start" ||
@@ -2519,7 +2521,7 @@ function isBotCommandListV183(text) {
   );
 }
 
-function isLimitedMenuCommand(text) {
+isLimitedMenuCommand = function(text) {
   const t = String(text || "").trim().toLowerCase();
   return (
     isBotCommandListV183(t) ||
@@ -2553,7 +2555,7 @@ function isLimitedMenuCommand(text) {
   );
 }
 
-async function handleTelegramTextCommand(env, message) {
+handleTelegramTextCommand = async function(env, message) {
   const text = String(message.text || "").trim();
   const chatId = message.chat && message.chat.id ? message.chat.id : env.TELEGRAM_CHAT_ID;
 
@@ -2580,7 +2582,7 @@ async function handleTelegramTextCommand(env, message) {
   return json({ ok: true });
 }
 
-function isHardLimitedCommandV183(text) {
+isHardLimitedCommandV183 = function(text) {
   const t = String(text || "").trim().toLowerCase();
   return (
     t === "取消" ||
@@ -2601,7 +2603,7 @@ function isHardLimitedCommandV183(text) {
   );
 }
 
-async function handleLimitedMenuTextCommand(env, message, text) {
+handleLimitedMenuTextCommand = async function(env, message, text) {
   const chatId = message.chat && message.chat.id ? message.chat.id : env.TELEGRAM_CHAT_ID;
 
   if (!isAuthorizedTelegramChat(env, chatId)) {
@@ -2700,7 +2702,7 @@ async function handleLimitedMenuTextCommand(env, message, text) {
   return json({ ok: true });
 }
 
-async function handleLimitedMenuAction(env, cq, data) {
+handleLimitedMenuAction = async function(env, cq, data) {
   const chatId = cq.message && cq.message.chat ? cq.message.chat.id : env.TELEGRAM_CHAT_ID;
   const messageId = cq.message ? cq.message.message_id : null;
 
@@ -2825,7 +2827,7 @@ async function handleLimitedMenuAction(env, cq, data) {
   return stop(env, cq, "未知限定操作");
 }
 
-async function saveLimitedDraftToMenuV183(env, chatId, draft) {
+saveLimitedDraftToMenuV183 = async function(env, chatId, draft) {
   const data = (draft && draft.data) || {};
   const name = String(data.name || "").trim();
   const item = {
@@ -2864,7 +2866,7 @@ async function saveLimitedDraftToMenuV183(env, chatId, draft) {
   return item;
 }
 
-function buildCommandMenuTextV183() {
+buildCommandMenuTextV183 = function() {
   return [
     "Sky31 Bot 功能",
     "",
@@ -2877,7 +2879,7 @@ function buildCommandMenuTextV183() {
   ].join("\n");
 }
 
-function buildCommandMenuMarkupV183() {
+buildCommandMenuMarkupV183 = function() {
   return {
     inline_keyboard: [
       [{ text: "✨ 限定豆子管理", callback_data: "limited_list:all" }],
@@ -2887,7 +2889,7 @@ function buildCommandMenuMarkupV183() {
   };
 }
 
-function buildLimitedListText(config) {
+buildLimitedListText = function(config) {
   const items = Array.isArray(config && config.limitedItems) ? config.limitedItems : [];
   const current = currentLimitedBeanV184(config);
   const currentId = current ? cleanLimitedId(current.id) : "";
@@ -2921,7 +2923,7 @@ function limitedItemLineWithCurrentV184(item, currentId) {
   ].filter(Boolean).join("\n");
 }
 
-function buildLimitedListMarkup(config) {
+buildLimitedListMarkup = function(config) {
   const rows = [];
   const items = Array.isArray(config && config.limitedItems) ? config.limitedItems : [];
   const current = currentLimitedBeanV184(config);
@@ -2942,4 +2944,55 @@ function buildLimitedListMarkup(config) {
 
   rows.push([{ text: "返回功能列表", callback_data: "limited_cmd_menu:x" }]);
   return { inline_keyboard: rows };
+}
+
+
+/* V185: type "list" to show full clickable function list. */
+isBotCommandListV183 = function(text) {
+  const t = String(text || "").trim().toLowerCase();
+  return (
+    t === "list" ||
+    t === "/list" ||
+    t === "/start" ||
+    t === "/help" ||
+    t === "help" ||
+    t === "指令" ||
+    t === "功能" ||
+    t === "功能列表" ||
+    t === "菜單" ||
+    t === "菜单" ||
+    t === "bot" ||
+    t === "管理"
+  );
+}
+
+buildCommandMenuTextV183 = function() {
+  return [
+    "Sky31 Bot 功能列表",
+    "",
+    "輸入 list 可以再次打開這個列表。",
+    "",
+    "✨ 限定豆子",
+    "新增、查看、編輯、刪除，並設定目前顯示中的限定豆子。",
+    "",
+    "👤 會員",
+    "查詢會員列表與會員資料。",
+    "",
+    "📦 訂單",
+    "訂單訊息內會提供完成訂單 / 已領取等按鈕。",
+    "",
+    "目前網站規則：",
+    "Landing page 和點餐頁面只會顯示一款目前上架的限定豆子；客人選擇限定豆子自動 +MOP 5。"
+  ].join("\n");
+}
+
+buildCommandMenuMarkupV183 = function() {
+  return {
+    inline_keyboard: [
+      [{ text: "✨ 限定豆子管理", callback_data: "limited_list:all" }],
+      [{ text: "➕ 新增限定豆子", callback_data: "limited_wizard_add:x" }],
+      [{ text: "👤 查詢會員", callback_data: "member_list:active:0" }],
+      [{ text: "🔄 重新顯示功能列表", callback_data: "limited_cmd_menu:x" }]
+    ]
+  };
 }
