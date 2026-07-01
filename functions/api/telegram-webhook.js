@@ -7,7 +7,7 @@ export async function onRequest(context) {
     return json({
       ok: true,
       endpoint: "telegram-webhook",
-      version: "V218",
+      version: "V219",
       method,
       message: "Webhook endpoint reachable. Telegram sends POST updates here."
     });
@@ -46,6 +46,13 @@ async function handleTelegramPost(context) {
 
   if (data.startsWith("limited_")) {
     return handleLimitedMenuAction(env, cq, data);
+  }
+
+  if (
+    data.startsWith("member_merge_duplicates:") ||
+    data.startsWith("member_merge_confirm:")
+  ) {
+    return handleMemberDuplicateMergeActionV219(env, cq, data);
   }
 
   if (
@@ -661,11 +668,11 @@ async function listTelegramMembers(env) {
   const deleted = await listMembersByPrefix(env, "member_deleted:", true);
 
   let members = active.concat(deleted);
-  members = dedupeMembersForListV218(members);
+  members = dedupeMembersForListV219(members);
 
   members.sort((a, b) => {
     if (a._deleted !== b._deleted) return a._deleted ? 1 : -1;
-    return memberRecordTimeV218(b) - memberRecordTimeV218(a);
+    return memberRecordTimeV219(b) - memberRecordTimeV219(a);
   });
 
   return members;
@@ -688,6 +695,7 @@ async function listMembersByPrefix(env, prefix, deleted) {
         const member = JSON.parse(raw);
         if (!member || !member.phone) continue;
         member._deleted = !!deleted;
+        member._kvKey = key.name;
         out.push(member);
         if (out.length >= V128_MEMBER_LIST_LIMIT) return out;
       } catch (_) {}
@@ -710,6 +718,12 @@ function buildMemberListText(members) {
   lines.push("有效會員：" + activeCount);
   lines.push("已刪除會員：" + deletedCount);
   lines.push("");
+  const duplicateHidden = members.reduce((sum, m) => sum + Math.max(0, Number(m._duplicateCount || 1) - 1), 0);
+  if (duplicateHidden > 0) {
+    lines.push("已自動合併顯示重複電話會員：" + duplicateHidden + " 個 alias");
+    lines.push("可在功能表按「合併重複會員」清理多餘 alias。");
+    lines.push("");
+  }
   if (!members.length) {
     lines.push("目前未有會員資料。");
   } else {
@@ -723,7 +737,8 @@ function buildMemberListMarkup(members) {
   const rows = [];
 
   members.slice(0, 80).forEach(member => {
-    const phone = normalizePhone(member.phone);
+    const rawPhone = normalizePhone(member.phone);
+    const phone = rawPhone.length === 8 ? "853" + rawPhone : rawPhone;
     const name = member.name || "未命名";
     const deleted = !!member._deleted;
     const label = (deleted ? "🗑️ " : "👤 ") + name + "｜" + phone + (deleted ? "｜已刪除" : "");
@@ -741,17 +756,44 @@ function buildMemberListMarkup(members) {
 }
 
 async function getMemberForTelegramView(env, phone, deleted) {
-  const key = deleted ? "member_deleted:" + phone : "member:" + phone;
-  const raw = await env.ORDERS.get(key);
-  if (!raw) return null;
+  phone = normalizePhone(phone);
+  const prefix = deleted ? "member_deleted:" : "member:";
+  const candidates = memberPhoneCandidates(phone).map(p => prefix + p);
+  if (phone.length === 8) candidates.unshift(prefix + "853" + phone);
 
-  try {
-    const member = JSON.parse(raw);
-    member._deleted = !!deleted;
-    return member;
-  } catch (_) {
-    return null;
+  for (const key of Array.from(new Set(candidates))) {
+    const raw = await env.ORDERS.get(key);
+    if (!raw) continue;
+    try {
+      const member = JSON.parse(raw);
+      member._deleted = !!deleted;
+      member._kvKey = key;
+      return member;
+    } catch (_) {}
   }
+
+  // Fallback scan by last 8 digits in case the canonical key was changed.
+  let cursor = undefined;
+  do {
+    const page = await env.ORDERS.list({ prefix, cursor });
+    for (const key of (page.keys || [])) {
+      const raw = await env.ORDERS.get(key.name);
+      if (!raw) continue;
+      try {
+        const member = JSON.parse(raw);
+        const p = normalizePhone(member.phone || key.name.replace(prefix, ""));
+        if (samePhoneForMemberLookup(p, phone) || p.slice(-8) === phone.slice(-8)) {
+          member._deleted = !!deleted;
+          member._kvKey = key.name;
+          return member;
+        }
+      } catch (_) {}
+    }
+    cursor = page.cursor;
+    if (page.list_complete !== false) break;
+  } while (cursor);
+
+  return null;
 }
 
 async function enrichMemberStatsForTelegram(env, member) {
@@ -2429,6 +2471,7 @@ function buildCommandMenuMarkupV183() {
       [{ text: "➕ 新增限定豆子", callback_data: "limited_wizard_add:x" }],
       [{ text: "✨ 限定豆子列表 / 編輯", callback_data: "limited_list:all" }],
       [{ text: "👤 查詢會員", callback_data: "member_list:active:0" }],
+      [{ text: "🧹 合併重複會員", callback_data: "member_merge_duplicates:x" }],
       [{ text: "🛠 系統維護", callback_data: "maint_status:x" }]
     ]
   };
@@ -4355,4 +4398,253 @@ async function handleMaintenanceActionV218(env, cq, data) {
 
   await editTelegramMessage(env, chatId, messageId, buildMaintenanceTextV218(config), buildMaintenanceMarkupV218(config));
   return stop(env, cq, config.active ? "維護模式已啟用" : "維護模式已取消");
+}
+
+
+/* V219: Safe duplicate member merge cleanup.
+   Deletes only duplicate member:* alias keys after merging data into a canonical member:853xxxx key.
+   It does NOT delete order:* records, phone:* indexes, rewards, history, birthday, or tier fields. */
+function memberDedupeKeyV219(member) {
+  const p = normalizePhone((member && member.phone) || "");
+  if (p.length >= 8) return p.slice(-8);
+  return p;
+}
+
+function memberRecordTimeV219(member) {
+  return Math.max(
+    new Date((member && member.manualTierUpdatedAt) || 0).getTime() || 0,
+    new Date((member && member.birthdayUpdatedAt) || 0).getTime() || 0,
+    new Date((member && member.updatedAt) || 0).getTime() || 0,
+    new Date((member && member.createdAt) || 0).getTime() || 0
+  );
+}
+
+function memberCompletenessScoreV219(member) {
+  member = member || {};
+  let score = 0;
+  if (member.name) score += 10;
+  if (member.birthday) score += 8;
+  if (member.manualTierKey || member.memberTierOverrideKey || member.memberTierManualKey) score += 8;
+  score += Math.min(20, Number(member.totalOrders || 0));
+  score += Math.min(80, Number(member.totalCups || 0));
+  score += Math.min(80, Number(member.totalSpent || 0) / 10);
+  score += Math.min(20, Array.isArray(member.recentOrderNos) ? member.recentOrderNos.length : 0);
+  score += Math.min(10, Array.isArray(member.recentOrders) ? member.recentOrders.length : 0);
+  score += memberRecordTimeV219(member) / 10000000000000;
+  return score;
+}
+
+function mergeMemberRecordsV219(records) {
+  records = Array.isArray(records) ? records.filter(Boolean) : [];
+  records.sort((a, b) => memberCompletenessScoreV219(b.member || b) - memberCompletenessScoreV219(a.member || a));
+
+  const winnerEntry = records[0] || { key: "", member: {} };
+  const out = { ...(winnerEntry.member || winnerEntry || {}) };
+
+  function takeNewer(field, timeField) {
+    let best = out[field] || "";
+    let bestTime = new Date(out[timeField] || out.updatedAt || 0).getTime() || 0;
+    records.forEach(entry => {
+      const m = entry.member || entry || {};
+      if (!m[field]) return;
+      const t = new Date(m[timeField] || m.updatedAt || 0).getTime() || 0;
+      if (!best || t >= bestTime) {
+        best = m[field];
+        bestTime = t;
+      }
+    });
+    out[field] = best || "";
+  }
+
+  takeNewer("birthday", "birthdayUpdatedAt");
+  takeNewer("manualTierKey", "manualTierUpdatedAt");
+  takeNewer("manualTierName", "manualTierUpdatedAt");
+  takeNewer("manualTierIcon", "manualTierUpdatedAt");
+  takeNewer("memberTierOverrideKey", "manualTierUpdatedAt");
+  takeNewer("memberTierOverrideName", "manualTierUpdatedAt");
+  takeNewer("memberTierOverrideIcon", "manualTierUpdatedAt");
+
+  const allOrderNos = new Set();
+  records.forEach(entry => {
+    const m = entry.member || entry || {};
+    (Array.isArray(m.recentOrderNos) ? m.recentOrderNos : []).forEach(no => { if (no) allOrderNos.add(String(no)); });
+    out.totalOrders = Math.max(Number(out.totalOrders || 0), Number(m.totalOrders || 0));
+    out.totalCups = Math.max(Number(out.totalCups || 0), Number(m.totalCups || 0));
+    out.totalSpent = Math.max(Number(out.totalSpent || 0), Number(m.totalSpent || 0));
+    out.rewardRedeemed = Math.max(Number(out.rewardRedeemed || out.rewardsRedeemed || 0), Number(m.rewardRedeemed || m.rewardsRedeemed || 0));
+    out.rewardsRedeemed = out.rewardRedeemed;
+    if (!out.name && m.name) out.name = m.name;
+    if (!out.note && m.note) out.note = m.note;
+    if (!out.createdAt || (m.createdAt && String(m.createdAt) < String(out.createdAt))) out.createdAt = m.createdAt;
+  });
+
+  out.recentOrderNos = Array.from(allOrderNos).slice(0, 2000);
+  out.phone = normalizePhone(out.phone || "");
+  if (out.phone.length === 8) out.phone = "853" + out.phone;
+  if (out.phone.length > 8 && !out.phone.startsWith("853")) out.phone = out.phone.slice(-8);
+  out.updatedAt = new Date().toISOString();
+  out.mergedDuplicateAt = out.updatedAt;
+  out.mergedDuplicateCount = records.length;
+
+  // Keep manual tier progression fields if any duplicate had them.
+  records.forEach(entry => {
+    const m = entry.member || entry || {};
+    if (out.manualTierKey && (m.manualTierKey || m.memberTierOverrideKey || m.memberTierManualKey)) {
+      out.manualTierStartCups = Number(out.manualTierStartCups || m.manualTierStartCups || m.manualTierSetAtCups || m.manualTierOriginalCups || m.totalCups || 0);
+      out.manualTierBaseCups = Number(out.manualTierBaseCups || m.manualTierBaseCups || 0);
+      out.manualTierUpdatedAt = out.manualTierUpdatedAt || m.manualTierUpdatedAt || m.updatedAt || "";
+      out.manualTierUpdatedBy = out.manualTierUpdatedBy || m.manualTierUpdatedBy || "";
+    }
+  });
+
+  return { winnerKey: winnerEntry.key || "", member: out };
+}
+
+function dedupeMembersForListV219(members) {
+  const groups = new Map();
+  (Array.isArray(members) ? members : []).forEach(member => {
+    const key = memberDedupeKeyV219(member);
+    if (!key) return;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push({ key: member._kvKey || "", member });
+  });
+
+  const out = [];
+  groups.forEach(records => {
+    const merged = mergeMemberRecordsV219(records).member;
+    merged._deleted = records.some(r => r.member && r.member._deleted) && !records.some(r => r.member && !r.member._deleted);
+    merged._duplicateCount = records.length;
+    out.push(merged);
+  });
+  return out;
+}
+
+async function scanDuplicateMembersV219(env) {
+  let cursor = undefined;
+  const groups = new Map();
+  let totalKeys = 0;
+
+  do {
+    const page = await env.ORDERS.list({ prefix: "member:", cursor });
+    for (const key of (page.keys || [])) {
+      const raw = await env.ORDERS.get(key.name);
+      if (!raw) continue;
+      try {
+        const member = JSON.parse(raw);
+        if (!member || member.deletedAt) continue;
+        const p = normalizePhone(member.phone || key.name.replace("member:", ""));
+        const groupKey = p.length >= 8 ? p.slice(-8) : p;
+        if (!groupKey) continue;
+        totalKeys += 1;
+        member.phone = p;
+        if (!groups.has(groupKey)) groups.set(groupKey, []);
+        groups.get(groupKey).push({ key: key.name, member });
+      } catch (_) {}
+    }
+    cursor = page.cursor;
+    if (page.list_complete !== false) break;
+  } while (cursor);
+
+  const duplicateGroups = [];
+  groups.forEach((records, key) => {
+    if (records.length > 1) duplicateGroups.push({ key, records });
+  });
+
+  return { totalKeys, groups, duplicateGroups };
+}
+
+async function mergeDuplicateMembersV219(env, dryRun = true) {
+  const scan = await scanDuplicateMembersV219(env);
+  let groupsMerged = 0;
+  let keysDeleted = 0;
+  const details = [];
+
+  for (const group of scan.duplicateGroups) {
+    const merged = mergeMemberRecordsV219(group.records);
+    let canonicalPhone = normalizePhone(merged.member.phone || "");
+    if (canonicalPhone.length === 8) canonicalPhone = "853" + canonicalPhone;
+    if (!canonicalPhone.startsWith("853") && canonicalPhone.length > 8) canonicalPhone = "853" + canonicalPhone.slice(-8);
+    if (!canonicalPhone) canonicalPhone = "853" + group.key;
+
+    merged.member.phone = canonicalPhone;
+    const canonicalKey = "member:" + canonicalPhone;
+
+    const duplicateKeys = group.records.map(r => r.key).filter(k => k && k !== canonicalKey);
+
+    details.push({
+      phone: canonicalPhone,
+      count: group.records.length,
+      keep: canonicalKey,
+      remove: duplicateKeys
+    });
+
+    if (!dryRun) {
+      await env.ORDERS.put(canonicalKey, JSON.stringify(merged.member), { expirationTtl: 60 * 60 * 24 * 3650 });
+      for (const key of duplicateKeys) {
+        await env.ORDERS.delete(key);
+        keysDeleted += 1;
+      }
+      groupsMerged += 1;
+    }
+  }
+
+  return {
+    totalMemberKeys: scan.totalKeys,
+    duplicateGroups: scan.duplicateGroups.length,
+    groupsMerged,
+    keysDeleted,
+    details
+  };
+}
+
+function buildMemberDuplicateMergeTextV219(result, confirm = false) {
+  const lines = [];
+  lines.push("🧹 合併重複會員");
+  lines.push("");
+  lines.push("會員 KV 數量：" + Number(result.totalMemberKeys || 0));
+  lines.push("重複會員組數：" + Number(result.duplicateGroups || 0));
+  if (result.groupsMerged) lines.push("已合併組數：" + Number(result.groupsMerged || 0));
+  if (result.keysDeleted) lines.push("已刪除多餘 alias：" + Number(result.keysDeleted || 0));
+  lines.push("");
+  if (!result.duplicateGroups) {
+    lines.push("目前沒有需要合併的重複會員。");
+  } else {
+    lines.push(confirm ? "以下重複會員將會合併：" : "偵測到以下重複會員：");
+    (result.details || []).slice(0, 12).forEach(d => {
+      lines.push("• " + d.phone + "｜保留 " + d.keep + "｜刪除 " + d.remove.length + " 個 alias");
+    });
+    if ((result.details || []).length > 12) lines.push("……其餘已省略");
+  }
+  lines.push("");
+  lines.push("安全說明：只刪除多餘 member:* alias，不會刪除 order:* 訂單、phone:* 訂單索引、累計杯數或會員優惠資料。");
+  return lines.join("\n").trim();
+}
+
+function buildMemberDuplicateMergeMarkupV219(result, confirm = false) {
+  const rows = [];
+  if (result && result.duplicateGroups && !confirm) {
+    rows.push([{ text: "⚠️ 確認合併並刪除多餘 alias", callback_data: "member_merge_confirm:x" }]);
+  }
+  rows.push([{ text: "🔄 重新掃描", callback_data: "member_merge_duplicates:x" }]);
+  rows.push([{ text: "返回功能列表", callback_data: "limited_cmd_menu:x" }]);
+  return { inline_keyboard: rows };
+}
+
+async function handleMemberDuplicateMergeActionV219(env, cq, data) {
+  const chatId = cq.message && cq.message.chat ? cq.message.chat.id : env.TELEGRAM_CHAT_ID;
+  const messageId = cq.message ? cq.message.message_id : null;
+  if (!isAuthorizedTelegramChat(env, chatId)) return stop(env, cq, "沒有權限");
+
+  const confirm = String(data || "").startsWith("member_merge_confirm:");
+  const result = await mergeDuplicateMembersV219(env, !confirm);
+
+  await editTelegramMessage(
+    env,
+    chatId,
+    messageId,
+    buildMemberDuplicateMergeTextV219(result, false),
+    buildMemberDuplicateMergeMarkupV219(result, false)
+  );
+
+  return stop(env, cq, confirm ? "已完成合併重複會員" : "已完成掃描");
 }
