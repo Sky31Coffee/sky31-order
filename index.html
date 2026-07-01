@@ -6340,6 +6340,16 @@ body:has(#orderApp.hidden) #sky31PersistentCart.sky31-cart-body-level{
   color:rgba(150,92,12,.92)!important;
 }
 
+
+/* V184: Website shows only one currently selected Limited Bean */
+.limited-bean-preview-v177 > div:not(:first-child),
+.v176-limited-mini-grid .limited-bean-mini:not(:first-child){
+  display:none !important;
+}
+.bean-chip.limited-bean-option:not(:first-of-type){
+  display:none !important;
+}
+
 </style>
 
 <style>
@@ -13896,6 +13906,54 @@ window.addEventListener("load", function() {
       setTimeout(function(){ if(window.sky31UpdateDetailPrice) window.sky31UpdateDetailPrice(); }, 80);
     };
   }
+})();
+</script>
+
+
+<script>
+/* V184: enforce single Limited Bean on Landing page and bean options. */
+(function(){
+  function keepOneLimitedBeanV184(){
+    document.querySelectorAll(".limited-bean-preview-v177").forEach(function(box){
+      var items = Array.from(box.children).filter(function(el){ return el && el.nodeType === 1; });
+      items.forEach(function(el, i){ if(i > 0) el.remove(); });
+    });
+
+    document.querySelectorAll(".v176-limited-mini-grid").forEach(function(box){
+      var items = Array.from(box.children).filter(function(el){ return el && el.nodeType === 1; });
+      items.forEach(function(el, i){ if(i > 0) el.remove(); });
+    });
+
+    var chips = Array.from(document.querySelectorAll(".bean-chip.limited-bean-option"));
+    chips.forEach(function(el, i){ if(i > 0) el.remove(); });
+  }
+
+  var oldRefreshLimitedBeans = window.SKY31_REFRESH_LIMITED_BEANS;
+  window.SKY31_REFRESH_LIMITED_BEANS = async function(force){
+    var res;
+    if(oldRefreshLimitedBeans) res = await oldRefreshLimitedBeans(force);
+    setTimeout(keepOneLimitedBeanV184, 50);
+    setTimeout(keepOneLimitedBeanV184, 350);
+    return res;
+  };
+
+  var oldRefreshLimited = window.SKY31_REFRESH_LIMITED;
+  if(oldRefreshLimited){
+    window.SKY31_REFRESH_LIMITED = async function(){
+      var res = await oldRefreshLimited();
+      setTimeout(keepOneLimitedBeanV184, 50);
+      setTimeout(keepOneLimitedBeanV184, 350);
+      return res;
+    };
+  }
+
+  document.addEventListener("DOMContentLoaded", function(){
+    setTimeout(keepOneLimitedBeanV184, 200);
+    setTimeout(keepOneLimitedBeanV184, 900);
+  });
+  document.addEventListener("click", function(){
+    setTimeout(keepOneLimitedBeanV184, 80);
+  });
 })();
 </script>
 
