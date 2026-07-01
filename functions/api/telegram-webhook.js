@@ -7,7 +7,7 @@ export async function onRequest(context) {
     return json({
       ok: true,
       endpoint: "telegram-webhook",
-      version: "V216",
+      version: "V217",
       method,
       message: "Webhook endpoint reachable. Telegram sends POST updates here."
     });
@@ -3997,7 +3997,8 @@ async function handleMemberEditDraftTextV211(env, message, text, draft) {
     await clearMemberEditDraftV211(env, chatId);
 
     const enriched = await enrichMemberStatsForTelegram(env, member);
-    await sendTelegramMessage(env, chatId, "✅ 已更新會員生日\n\n" + buildMemberDetailText(enriched, false), buildMemberDetailReplyMarkup(enriched, false));
+    const birthdayMonthNowV217 = birthdayValidV211(birthday) && Number(String(birthday).split("-")[1]) === (new Date().getUTCMonth() + 1);
+    await sendTelegramMessage(env, chatId, "✅ 已更新會員生日" + (birthdayMonthNowV217 ? "\n🎂 生日月優惠已觸發，客人在會員中心會看到生日祝福和生日月飲品券。" : "") + "\n\n" + buildMemberDetailText(enriched, false), buildMemberDetailReplyMarkup(enriched, false));
     return json({ ok: true });
   }
 
@@ -4103,3 +4104,34 @@ buildMemberTelegramText = function(member, deleted = false, confirmingDelete = f
 
   return lines.join("\n").trim();
 };
+
+
+/* V217: Dedupe member list display. The KV may intentionally keep 853 / non-853 aliases, but Telegram list should show one account. */
+function memberDedupeKeyV217(member) {
+  const p = normalizePhone((member && member.phone) || "");
+  if (p.length >= 8) return p.slice(-8);
+  return p;
+}
+
+function memberRecordTimeV217(member) {
+  return Math.max(
+    new Date((member && member.manualTierUpdatedAt) || 0).getTime() || 0,
+    new Date((member && member.birthdayUpdatedAt) || 0).getTime() || 0,
+    new Date((member && member.updatedAt) || 0).getTime() || 0,
+    new Date((member && member.createdAt) || 0).getTime() || 0
+  );
+}
+
+function dedupeMembersForListV217(members) {
+  const map = new Map();
+  (Array.isArray(members) ? members : []).forEach(member => {
+    if (!member) return;
+    const key = memberDedupeKeyV217(member);
+    if (!key) return;
+    const existing = map.get(key);
+    if (!existing || memberRecordTimeV217(member) >= memberRecordTimeV217(existing)) {
+      map.set(key, member);
+    }
+  });
+  return Array.from(map.values());
+}

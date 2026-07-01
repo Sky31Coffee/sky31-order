@@ -22,7 +22,8 @@ export async function onRequestPost(context) {
     
     const sky31MemberForRewardV192 = await sky31LoadMemberForRewardV192(context.env || env, body.phone || body.customerPhone || (body.member && body.member.phone));
     const sky31RewardInfoV192 = sky31RewardsFromMemberV192(sky31MemberForRewardV192 || {});
-    const sky31RewardCalcV192 = sky31RewardDiscountForItemsV192(cart, sky31RewardInfoV192.availableRewards);
+    const birthdayVoucherCountV217 = sky31BirthdayVoucherCountOrderV217(activeMember || sky31MemberForRewardV192 || {});
+    const sky31RewardCalcV192 = sky31RewardDiscountForItemsV192(cart, Number(sky31RewardInfoV192.availableRewards || 0) + birthdayVoucherCountV217);
     const sky31RewardAppliedV192 = sky31RewardCalcV192.useRewards > 0;
 if (!cart.length && !String(body.orderText || "").trim()) {
       return json({ ok: false, error: "請先選擇飲品" }, 400);
@@ -58,6 +59,7 @@ if (!cart.length && !String(body.orderText || "").trim()) {
       rewardUse: rewardUseV199,
       rewardDiscount: rewardDiscountV199,
       rewardFreeItems: rewardFreeItemsV199,
+      birthdayVoucherCount: birthdayVoucherCountV217 || 0,
       memberTierKey: tierDiscountCalcV213.tier.key,
       memberTierName: tierDiscountCalcV213.tier.name,
       memberTierIcon: tierDiscountCalcV213.tier.icon,
@@ -274,6 +276,15 @@ function calcUnitPrice(item) {
 
 
 /* V213: final member tier discount calculation, based on backend member record. */
+
+function sky31BirthdayVoucherCountOrderV217(member) {
+  const birthday = String((member && member.birthday) || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(birthday)) return 0;
+  const month = Number(birthday.split("-")[1] || 0);
+  const now = new Date();
+  return month === now.getUTCMonth() + 1 ? 1 : 0;
+}
+
 function sky31OrderTierByKeyV213(key) {
   key = String(key || "").toLowerCase();
   if (key === "vip") key = "blackgold";
@@ -422,6 +433,7 @@ function buildTelegramText(order) {
   }
 
   lines.push("────────────");
+  if (Number(order.birthdayVoucherCount || 0) > 0) lines.push("生日月飲品券：" + Number(order.birthdayVoucherCount || 0) + " 張");
   if (Number(order.rewardDiscount || 0) > 0) lines.push("會員免單扣減：-" + money(order.rewardDiscount));
   if (Number(order.tierDiscount || 0) > 0) {
     const tierName = order.memberTierName || "會員等級";

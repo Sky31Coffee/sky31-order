@@ -687,7 +687,9 @@ function sky31DecorateMemberV196(member) {
     memberTierManualBase: displayTier.manualBase ? displayTier.manualBase.name : "",
     memberTierEffectiveCups: displayTier.effectiveCups,
     memberTierCupsToNext: displayTier.cupsToNext,
-    memberTierGainedSinceManual: displayTier.gainedSinceManualTier || 0
+    memberTierGainedSinceManual: displayTier.gainedSinceManualTier || 0,
+    birthdayVoucherCount: sky31BirthdayVoucherCountV217(member),
+    drinkVoucherCount: Number(rewards.availableRewards || 0) + sky31BirthdayVoucherCountV217(member)
   };
 }
 
@@ -794,4 +796,13 @@ function sky31DisplayTierV216(member, naturalTier) {
     effectiveCups,
     cupsToNext: next == null ? 0 : Math.max(0, next - effectiveCups)
   };
+}
+
+
+function sky31BirthdayVoucherCountV217(member) {
+  const birthday = String((member && member.birthday) || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(birthday)) return 0;
+  const month = Number(birthday.split("-")[1] || 0);
+  const now = new Date();
+  return month === now.getUTCMonth() + 1 ? 1 : 0;
 }
