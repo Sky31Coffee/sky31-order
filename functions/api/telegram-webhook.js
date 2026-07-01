@@ -7,7 +7,7 @@ export async function onRequest(context) {
     return json({
       ok: true,
       endpoint: "telegram-webhook",
-      version: "V220",
+      version: "V221",
       method,
       message: "Webhook endpoint reachable. Telegram sends POST updates here."
     });
@@ -643,9 +643,19 @@ async function handleMemberQueryAction(env, cq, data) {
     const deleted = action === "member_view_deleted";
     let member = await getMemberForTelegramView(env, phone, deleted);
 
-    if (!member) return stop(env, cq, "找不到會員資料");
+    // V221: after duplicate merge, the user may click a button generated before cleanup.
+    // Retry both active/deleted pools by last 8 digits before failing.
+    if (!member && !deleted) member = await getMemberForTelegramView(env, phone, true);
+    if (!member && deleted) member = await getMemberForTelegramView(env, phone, false);
 
-    if (!deleted) {
+    if (!member) {
+      const members = await listTelegramMembers(env);
+      await editTelegramMessage(env, chatId, messageId, buildMemberListText(members), buildMemberListMarkup(members));
+      return stop(env, cq, "舊按鈕已失效，已重新整理會員列表，請再點一次");
+    }
+
+    const actualDeleted = !!member._deleted;
+    if (!actualDeleted) {
       member = await enrichMemberStatsForTelegram(env, member);
     }
 
@@ -653,8 +663,8 @@ async function handleMemberQueryAction(env, cq, data) {
       env,
       chatId,
       messageId,
-      buildMemberDetailText(member, deleted),
-      buildMemberDetailReplyMarkup(member, deleted)
+      buildMemberDetailText(member, !!member._deleted),
+      buildMemberDetailReplyMarkup(member, !!member._deleted)
     );
 
     return stop(env, cq, "已載入會員資料");
@@ -738,13 +748,14 @@ function buildMemberListMarkup(members) {
 
   members.slice(0, 80).forEach(member => {
     const rawPhone = normalizePhone(member.phone);
-    const phone = rawPhone.length === 8 ? "853" + rawPhone : rawPhone;
+    const lookupPhone = memberLookupPhoneV221(member);
+    const displayPhone = rawPhone.length === 8 ? "853" + rawPhone : rawPhone;
     const name = member.name || "未命名";
     const deleted = !!member._deleted;
-    const label = (deleted ? "🗑️ " : "👤 ") + name + "｜" + phone + (deleted ? "｜已刪除" : "");
+    const label = (deleted ? "🗑️ " : "👤 ") + name + "｜" + displayPhone + (deleted ? "｜已刪除" : "");
     rows.push([{
       text: label.slice(0, 60),
-      callback_data: (deleted ? "member_view_deleted:" : "member_view_active:") + phone
+      callback_data: (deleted ? "member_view_deleted:" : "member_view_active:") + lookupPhone
     }]);
   });
 
@@ -757,41 +768,77 @@ function buildMemberListMarkup(members) {
 
 async function getMemberForTelegramView(env, phone, deleted) {
   phone = normalizePhone(phone);
-  const prefix = deleted ? "member_deleted:" : "member:";
-  const candidates = memberPhoneCandidates(phone).map(p => prefix + p);
-  if (phone.length === 8) candidates.unshift(prefix + "853" + phone);
+  if (!phone) return null;
 
-  for (const key of Array.from(new Set(candidates))) {
-    const raw = await env.ORDERS.get(key);
-    if (!raw) continue;
-    try {
-      const member = JSON.parse(raw);
-      member._deleted = !!deleted;
-      member._kvKey = key;
-      return member;
-    } catch (_) {}
+  const lookup8 = phone.length >= 8 ? phone.slice(-8) : phone;
+  const primaryPrefix = deleted ? "member_deleted:" : "member:";
+  const fallbackPrefixes = deleted ? ["member_deleted:", "member:"] : ["member:", "member_deleted:"];
+
+  function candidatePhonesFromV221(p) {
+    const s = normalizePhone(p);
+    const last8 = s.length >= 8 ? s.slice(-8) : s;
+    const out = [];
+    if (s) out.push(s);
+    if (last8) {
+      out.push(last8);
+      out.push("853" + last8);
+    }
+    return Array.from(new Set(out.filter(Boolean)));
   }
 
-  // Fallback scan by last 8 digits in case the canonical key was changed.
-  let cursor = undefined;
-  do {
-    const page = await env.ORDERS.list({ prefix, cursor });
-    for (const key of (page.keys || [])) {
-      const raw = await env.ORDERS.get(key.name);
+  // 1) Try direct keys first.
+  for (const prefix of fallbackPrefixes) {
+    for (const p of candidatePhonesFromV221(phone)) {
+      const key = prefix + p;
+      const raw = await env.ORDERS.get(key);
       if (!raw) continue;
       try {
         const member = JSON.parse(raw);
-        const p = normalizePhone(member.phone || key.name.replace(prefix, ""));
-        if (samePhoneForMemberLookup(p, phone) || p.slice(-8) === phone.slice(-8)) {
-          member._deleted = !!deleted;
-          member._kvKey = key.name;
+        const storedPhone = normalizePhone(member.phone || p);
+        if (
+          samePhoneForMemberLookup(storedPhone, phone) ||
+          storedPhone.slice(-8) === lookup8 ||
+          normalizePhone(p).slice(-8) === lookup8
+        ) {
+          member._deleted = prefix === "member_deleted:";
+          member._kvKey = key;
           return member;
         }
       } catch (_) {}
     }
-    cursor = page.cursor;
-    if (page.list_complete !== false) break;
-  } while (cursor);
+  }
+
+  // 2) Full scan fallback by last 8 digits. This is essential after merge cleanup
+  // where member:xxxx alias may be deleted and only member:853xxxx remains.
+  for (const prefix of fallbackPrefixes) {
+    let cursor = undefined;
+    do {
+      const page = await env.ORDERS.list({ prefix, cursor });
+      for (const key of (page.keys || [])) {
+        const keyPhone = normalizePhone(key.name.replace(prefix, ""));
+        const raw = await env.ORDERS.get(key.name);
+        if (!raw) continue;
+        try {
+          const member = JSON.parse(raw);
+          const storedPhone = normalizePhone(member.phone || keyPhone);
+          if (
+            storedPhone.slice(-8) === lookup8 ||
+            keyPhone.slice(-8) === lookup8 ||
+            samePhoneForMemberLookup(storedPhone, phone) ||
+            samePhoneForMemberLookup(keyPhone, phone)
+          ) {
+            member.phone = storedPhone || keyPhone || phone;
+            member._deleted = prefix === "member_deleted:";
+            member._kvKey = key.name;
+            return member;
+          }
+        } catch (_) {}
+      }
+
+      cursor = page.cursor;
+      if (page.list_complete !== false) break;
+    } while (cursor);
+  }
 
   return null;
 }
@@ -4625,6 +4672,7 @@ function buildMemberDuplicateMergeMarkupV219(result, confirm = false) {
   if (result && result.duplicateGroups && !confirm) {
     rows.push([{ text: "⚠️ 確認合併並刪除多餘 alias", callback_data: "member_merge_confirm:x" }]);
   }
+  rows.push([{ text: "📋 查看會員列表", callback_data: "member_list:all" }]);
   rows.push([{ text: "🔄 重新掃描", callback_data: "member_merge_duplicates:x" }]);
   rows.push([{ text: "返回功能列表", callback_data: "limited_cmd_menu:x" }]);
   return { inline_keyboard: rows };
