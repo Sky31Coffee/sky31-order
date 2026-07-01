@@ -7315,6 +7315,22 @@ body:has(#orderApp.hidden) #sky31PersistentCart.sky31-cart-body-level{
   }
 }
 
+
+/* V199: clearer member rewards stats and landing Limited Beans label cleanup */
+.member-reward-stat-v196 span{
+  min-height:30px !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  line-height:1.22 !important;
+}
+.member-reward-sub-v196{
+  line-height:1.45 !important;
+}
+#limitedBeanPreview.v198-limited-grid .landing-bean-topline span{
+  letter-spacing:.12em !important;
+}
+
 </style>
 
 <style>
@@ -10106,30 +10122,31 @@ window.addEventListener("load", function() {
       if(c >= 100) return { key:"diamond", name:"鑽石會員", icon:"💎", next:180 };
       if(c >= 60) return { key:"gold", name:"金卡會員", icon:"🥇", next:100 };
       if(c >= 30) return { key:"silver", name:"銀卡會員", icon:"🥈", next:60 };
-      return { key:"regular", name:"普通會員", icon:"🪪", next:30 };
+      return { key:"regular", name:"普通會員", icon:"👤", next:30 };
     }
 
     var t = (member.rewards && member.rewards.tier) || { name: member.memberTier, icon: member.memberTierIcon } || tier(cups);
-    if(!t.name || t.name === "普通會員") t = tier(cups);
+    if(!t.name || t.name === "青銅會員" || t.name === "普通會員") t = tier(cups);
+
     var nextTierText = t.next ? ("距離下一等級還差 " + Math.max(0, Number(t.next) - cups) + " 杯") : "已達最高等級";
     var rewardText = available > 0
-      ? ("你目前有 " + available + " 次免費兌換，可於確認訂單時自動扣減。")
-      : ("距離下一次免費兌換還差 " + remain + " 杯。");
+      ? ("你目前有 " + available + " 次免費兌換，可於確認訂單時自動扣減。只計算已領取、成功交易的訂單。")
+      : ("距離下一次免費兌換還差 " + remain + " 杯。只計算已領取、成功交易的訂單。");
 
     return '' +
       '<div class="member-reward-card member-reward-card-v196">' +
         '<div class="member-reward-head-v196">' +
           '<div>' +
-            '<div class="member-reward-title-v196">' + esc(t.icon || "🪪") + ' ' + esc(t.name || "普通會員") + '</div>' +
-            '<div class="member-reward-sub-v196">每累計 10 杯，可免費兌換任何 1 杯飲品</div>' +
+            '<div class="member-reward-title-v196">' + esc(t.icon || "👤") + ' ' + esc(t.name || "普通會員") + '</div>' +
+            '<div class="member-reward-sub-v196">成功領取累計 10 杯，可免費兌換任何 1 杯飲品</div>' +
           '</div>' +
-          '<div class="member-reward-icon-v196">' + esc(t.icon || "🪪") + '</div>' +
+          '<div class="member-reward-icon-v196">' + esc(t.icon || "👤") + '</div>' +
         '</div>' +
         '<div class="member-reward-grid-v196">' +
-          '<div class="member-reward-stat-v196"><b>' + cups + '</b><span>累計杯數</span></div>' +
-          '<div class="member-reward-stat-v196"><b>' + earned + '</b><span>累計獎賞</span></div>' +
-          '<div class="member-reward-stat-v196"><b>' + redeemed + '</b><span>已兌換</span></div>' +
-          '<div class="member-reward-stat-v196"><b>' + available + '</b><span>可換次數</span></div>' +
+          '<div class="member-reward-stat-v196"><b>' + cups + '</b><span>已領取<br>累計杯數</span></div>' +
+          '<div class="member-reward-stat-v196"><b>' + earned + '</b><span>累計獎賞<br>次數</span></div>' +
+          '<div class="member-reward-stat-v196"><b>' + redeemed + '</b><span>已成功兌換<br>免費杯數</span></div>' +
+          '<div class="member-reward-stat-v196"><b>' + available + '</b><span>目前可用<br>免單次數</span></div>' +
         '</div>' +
         '<div class="member-reward-bar-v196"><i style="width:' + pct + '%"></i></div>' +
         '<div class="member-reward-line-v196">🎁 ' + esc(rewardText) + '<br>' + esc(nextTierText) + '</div>' +
@@ -14236,7 +14253,7 @@ window.addEventListener("load", function() {
       return '<div class="landing-bean-panel v198-limited-panel">' +
         '<div class="landing-bean-icon">✨</div>' +
         '<div class="landing-bean-copy">' +
-          '<div class="landing-bean-topline"><span>Limited +MOP 5</span><b>' + safe(name) + '</b></div>' +
+          '<div class="landing-bean-topline"><span>Limited Beans</span><b>' + safe(name) + '</b></div>' +
           '<div class="landing-bean-flavor">' + safe(flavor) + '</div>' +
         '</div>' +
       '</div>';
@@ -14928,7 +14945,7 @@ window.addEventListener("load", function() {
     if(cups >= 100) return {key:"diamond", name:"鑽石會員", icon:"💎", next:180};
     if(cups >= 60) return {key:"gold", name:"金卡會員", icon:"🥇", next:100};
     if(cups >= 30) return {key:"silver", name:"銀卡會員", icon:"🥈", next:60};
-    return {key:"regular", name:"普通會員", icon:"🪪", next:30};
+    return {key:"regular", name:"普通會員", icon:"👤", next:30};
   }
 
   function rewardsFromMember192(member){
@@ -15021,7 +15038,7 @@ window.addEventListener("load", function() {
       if((txt.includes("登記") || txt.includes("註冊") || txt.includes("會員")) && !el.querySelector(".v192-tier-register-hint")){
         const span = document.createElement("span");
         span.className = "v192-tier-register-hint";
-        span.textContent = "🪪 普通會員";
+        span.textContent = "👤 普通會員";
         try{ el.appendChild(span); }catch(e){}
       }
     });
@@ -15124,12 +15141,12 @@ window.addEventListener("load", function() {
       if(el.childNodes && el.childNodes.length){
         el.childNodes.forEach(function(node){
           if(node.nodeType === 3){
-            node.nodeValue = node.nodeValue.replace(/普通會員/g, "普通會員").replace(/☕/g, "🪪");
+            node.nodeValue = node.nodeValue.replace(/普通會員/g, "普通會員").replace(/☕/g, "👤");
           }
         });
       }
       if(el.innerHTML){
-        el.innerHTML = el.innerHTML.replace(/普通會員/g, "普通會員").replace(/☕/g, "🪪");
+        el.innerHTML = el.innerHTML.replace(/普通會員/g, "普通會員").replace(/☕/g, "👤");
       }
     });
   }
@@ -15146,7 +15163,7 @@ window.addEventListener("load", function() {
     if(cups >= 100) return {key:"diamond", name:"鑽石會員", icon:"💎", next:180};
     if(cups >= 60) return {key:"gold", name:"金卡會員", icon:"🥇", next:100};
     if(cups >= 30) return {key:"silver", name:"銀卡會員", icon:"🥈", next:60};
-    return {key:"regular", name:"普通會員", icon:"🪪", next:30};
+    return {key:"regular", name:"普通會員", icon:"👤", next:30};
   };
 
   document.addEventListener("DOMContentLoaded", function(){
@@ -15305,7 +15322,7 @@ window.addEventListener("load", function() {
           '<div class="landing-bean-icon">✨</div>' +
           '<div class="landing-bean-copy">' +
             '<div class="landing-bean-topline">' +
-              '<span>Limited +MOP ' + bean.surcharge + '</span>' +
+              '<span>Limited Beans</span>' +
               '<b title="' + esc198(bean.label) + '">' + esc198(bean.label) + '</b>' +
             '</div>' +
             '<div class="landing-bean-flavor">' + esc198(bean.flavor) + '</div>' +
