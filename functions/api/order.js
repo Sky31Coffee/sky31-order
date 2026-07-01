@@ -514,11 +514,11 @@ function json(data, status = 200) {
 /* V192: rewards redemption helpers */
 function sky31RewardTierV192(totalCups) {
   totalCups = Number(totalCups || 0);
-  if (totalCups >= 100) return { key: "vip", name: "黑金會員", icon: "👑", next: null };
-  if (totalCups >= 50) return { key: "diamond", name: "鑽石會員", icon: "💎", next: 100 };
-  if (totalCups >= 25) return { key: "gold", name: "金卡會員", icon: "🥇", next: 50 };
-  if (totalCups >= 10) return { key: "silver", name: "銀卡會員", icon: "🥈", next: 25 };
-  return { key: "bronze", name: "青銅會員", icon: "☕", next: 10 };
+  if (totalCups >= 180) return { key: "vip", name: "黑金會員", icon: "👑", next: null };
+  if (totalCups >= 100) return { key: "diamond", name: "鑽石會員", icon: "💎", next: 180 };
+  if (totalCups >= 60) return { key: "gold", name: "金卡會員", icon: "🥇", next: 100 };
+  if (totalCups >= 30) return { key: "silver", name: "銀卡會員", icon: "🥈", next: 60 };
+  return { key: "bronze", name: "青銅會員", icon: "☕", next: 30 };
 }
 
 function sky31RewardsFromMemberV192(member) {
