@@ -532,7 +532,7 @@ function sky31RewardTierV192(totalCups) {
   if (totalCups >= 100) return { key: "diamond", name: "鑽石會員", icon: "💎", next: 180 };
   if (totalCups >= 60) return { key: "gold", name: "金卡會員", icon: "🥇", next: 100 };
   if (totalCups >= 30) return { key: "silver", name: "銀卡會員", icon: "🥈", next: 60 };
-  return { key: "regular", name: "普通會員", icon: "👤", next: 30 };
+  return { key: "regular", name: "普通會員", icon: "🌱", next: 30 };
 }
 
 function sky31RewardsFromMemberV192(member) {
