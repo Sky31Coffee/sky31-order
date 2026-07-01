@@ -6772,6 +6772,131 @@ body:has(#orderApp.hidden) #sky31PersistentCart.sky31-cart-body-level{
   }
 }
 
+
+/* V194: Compact Landing Limited Bean card, less blank space, one-line name */
+.landing-limited-beans-card .limited-bean-preview-v177,
+.landing-limited-beans-card .v176-limited-mini-grid{
+  gap:8px !important;
+}
+
+.landing-limited-beans-card .limited-bean-preview-v177 > div,
+.landing-limited-beans-card .v176-limited-mini-grid > div,
+.landing-limited-beans-card .limited-bean-mini{
+  min-height:68px !important;
+  padding:9px 12px !important;
+  display:flex !important;
+  flex-direction:column !important;
+  justify-content:center !important;
+  gap:4px !important;
+  border-radius:18px !important;
+}
+
+.landing-limited-beans-card .limited-bean-preview-v177 b,
+.landing-limited-beans-card .v176-limited-mini-grid b,
+.landing-limited-beans-card .origin-bean-topline b,
+.limited-bean-mini b{
+  display:block !important;
+  white-space:nowrap !important;
+  overflow:visible !important;
+  text-overflow:clip !important;
+  max-width:100% !important;
+  width:100% !important;
+  line-height:1.18 !important;
+  margin:0 !important;
+  letter-spacing:-.045em !important;
+}
+
+.landing-limited-beans-card .limited-bean-preview-v177 span,
+.landing-limited-beans-card .v176-limited-mini-grid span,
+.landing-limited-beans-card .limited-bean-mini span{
+  display:block !important;
+  line-height:1.34 !important;
+  margin:0 !important;
+}
+
+.v194-limited-landing-meta{
+  display:flex !important;
+  align-items:center !important;
+  justify-content:space-between !important;
+  gap:8px !important;
+  margin-top:2px !important;
+  font-size:10.5px !important;
+  line-height:1.2 !important;
+  color:rgba(48,64,90,.58) !important;
+  font-weight:820 !important;
+  white-space:nowrap !important;
+}
+
+.v194-limited-landing-meta .v194-flavor{
+  min-width:0 !important;
+  overflow:hidden !important;
+  text-overflow:ellipsis !important;
+}
+
+.v194-limited-landing-meta .v194-price{
+  flex:0 0 auto !important;
+  padding:3px 7px !important;
+  border-radius:999px !important;
+  background:rgba(255,255,255,.62) !important;
+  border:1px solid rgba(255,255,255,.76) !important;
+  color:rgba(129,82,12,.86) !important;
+  font-weight:930 !important;
+}
+
+@media(min-width:721px){
+  .landing-limited-beans-card .limited-bean-preview-v177 > div,
+  .landing-limited-beans-card .v176-limited-mini-grid > div,
+  .landing-limited-beans-card .limited-bean-mini{
+    min-height:64px !important;
+    padding-top:8px !important;
+    padding-bottom:8px !important;
+  }
+
+  .landing-limited-beans-card .limited-bean-preview-v177 b,
+  .landing-limited-beans-card .v176-limited-mini-grid b,
+  .landing-limited-beans-card .origin-bean-topline b,
+  .limited-bean-mini b{
+    font-size:clamp(12px, 1.08vw, 15px) !important;
+  }
+}
+
+@media(max-width:520px){
+  .landing-limited-beans-card .limited-bean-preview-v177,
+  .landing-limited-beans-card .v176-limited-mini-grid{
+    gap:7px !important;
+  }
+
+  .landing-limited-beans-card .limited-bean-preview-v177 > div,
+  .landing-limited-beans-card .v176-limited-mini-grid > div,
+  .landing-limited-beans-card .limited-bean-mini{
+    min-height:72px !important;
+    padding:9px 10px !important;
+    justify-content:center !important;
+  }
+
+  .landing-limited-beans-card .limited-bean-preview-v177 b,
+  .landing-limited-beans-card .v176-limited-mini-grid b,
+  .landing-limited-beans-card .origin-bean-topline b,
+  .limited-bean-mini b{
+    font-size:clamp(11px, 3.35vw, 14.5px) !important;
+    line-height:1.18 !important;
+  }
+
+  .v194-limited-landing-meta{
+    font-size:10px !important;
+    gap:6px !important;
+  }
+}
+
+
+/* V195: remove duplicated registration tier hints; only member reward card shows the tier */
+.v192-tier-register-hint{
+  display:none !important;
+}
+.sky31-reward-card-v192 .sky31-tier-icon-v192{
+  font-size:24px !important;
+}
+
 </style>
 
 <style>
@@ -15063,7 +15188,7 @@ window.addEventListener("load", function() {
     if(cups >= 100) return {key:"diamond", name:"鑽石會員", icon:"💎", next:180};
     if(cups >= 60) return {key:"gold", name:"金卡會員", icon:"🥇", next:100};
     if(cups >= 30) return {key:"silver", name:"銀卡會員", icon:"🥈", next:60};
-    return {key:"bronze", name:"青銅會員", icon:"☕", next:30};
+    return {key:"regular", name:"普通會員", icon:"🪪", next:30};
   }
 
   function rewardsFromMember192(member){
@@ -15156,7 +15281,7 @@ window.addEventListener("load", function() {
       if((txt.includes("登記") || txt.includes("註冊") || txt.includes("會員")) && !el.querySelector(".v192-tier-register-hint")){
         const span = document.createElement("span");
         span.className = "v192-tier-register-hint";
-        span.textContent = "☕ 青銅起步";
+        span.textContent = "🪪 普通會員";
         try{ el.appendChild(span); }catch(e){}
       }
     });
@@ -15302,6 +15427,156 @@ window.addEventListener("load", function() {
       return r;
     };
   }
+})();
+</script>
+
+
+<script>
+/* V194: compact Landing Limited Bean cards with useful meta info. */
+(function(){
+  function compactLandingLimitedCards194(){
+    const cards = Array.from(document.querySelectorAll(
+      ".landing-limited-beans-card .limited-bean-preview-v177 > div," +
+      ".landing-limited-beans-card .v176-limited-mini-grid > div," +
+      ".landing-limited-beans-card .limited-bean-mini"
+    ));
+
+    cards.forEach(function(card){
+      card.style.minHeight = window.innerWidth <= 520 ? "72px" : "64px";
+      card.style.paddingTop = window.innerWidth <= 520 ? "9px" : "8px";
+      card.style.paddingBottom = window.innerWidth <= 520 ? "9px" : "8px";
+      card.style.display = "flex";
+      card.style.flexDirection = "column";
+      card.style.justifyContent = "center";
+      card.style.gap = "4px";
+
+      const title = card.querySelector("b");
+      if(title){
+        title.style.whiteSpace = "nowrap";
+        title.style.overflow = "visible";
+        title.style.textOverflow = "clip";
+        title.style.maxWidth = "100%";
+        title.style.margin = "0";
+        title.style.lineHeight = "1.18";
+
+        // Fit to one line, but avoid becoming too tiny.
+        let base = window.innerWidth <= 520 ? 14.5 : 15;
+        title.style.fontSize = base + "px";
+        const max = Math.max(120, card.clientWidth - 8);
+        while(title.scrollWidth > max && base > 10.8){
+          base -= 0.35;
+          title.style.fontSize = base + "px";
+        }
+        title.title = title.textContent || "";
+      }
+
+      // Add compact meta row when missing: flavor summary + +MOP5.
+      if(!card.querySelector(".v194-limited-landing-meta")){
+        const text = (card.textContent || "").replace(/\s+/g, " ").trim();
+        let flavor = "";
+        const span = card.querySelector("span");
+        if(span) flavor = (span.textContent || "").replace(/\s+/g, " ").trim();
+        if(!flavor) flavor = "限時供應";
+
+        // Shorten only meta line; bean name remains complete.
+        flavor = flavor.replace(/^限定豆子[:：]?\s*/,"").replace(/^風味[:：]?\s*/,"");
+        if(flavor.length > 18) flavor = flavor.slice(0, 18) + "…";
+
+        const meta = document.createElement("div");
+        meta.className = "v194-limited-landing-meta";
+        meta.innerHTML = '<span class="v194-flavor">' + flavor + '</span><span class="v194-price">+MOP 5</span>';
+        card.appendChild(meta);
+      }
+
+      const oldSpan = card.querySelector("span:not(.v194-flavor):not(.v194-price)");
+      if(oldSpan){
+        oldSpan.style.display = "none";
+      }
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", function(){
+    setTimeout(compactLandingLimitedCards194, 250);
+    setTimeout(compactLandingLimitedCards194, 800);
+  });
+
+  window.addEventListener("resize", function(){
+    setTimeout(compactLandingLimitedCards194, 120);
+  });
+
+  document.addEventListener("visibilitychange", function(){
+    if(!document.hidden) setTimeout(compactLandingLimitedCards194, 120);
+  });
+
+  document.addEventListener("click", function(){
+    setTimeout(compactLandingLimitedCards194, 180);
+  });
+
+  const oldRefresh194 = window.SKY31_REFRESH_LIMITED;
+  if(oldRefresh194 && !window.__SKY31_V194_LANDING_PATCHED){
+    window.__SKY31_V194_LANDING_PATCHED = true;
+    window.SKY31_REFRESH_LIMITED = async function(){
+      const r = await oldRefresh194.apply(this, arguments);
+      setTimeout(compactLandingLimitedCards194, 80);
+      setTimeout(compactLandingLimitedCards194, 300);
+      return r;
+    };
+  }
+})();
+</script>
+
+
+<script>
+/* V195: clean duplicated member tier hint badges and rename lowest tier to 普通會員. */
+(function(){
+  function cleanupTierHints195(){
+    document.querySelectorAll(".v192-tier-register-hint").forEach(function(el){
+      el.remove();
+    });
+
+    document.querySelectorAll(".sky31-tier-name-v192,.sky31-tier-icon-v192,.sky31-reward-card-v192").forEach(function(el){
+      if(el.childNodes && el.childNodes.length){
+        el.childNodes.forEach(function(node){
+          if(node.nodeType === 3){
+            node.nodeValue = node.nodeValue.replace(/青銅會員/g, "普通會員").replace(/☕/g, "🪪");
+          }
+        });
+      }
+      if(el.innerHTML){
+        el.innerHTML = el.innerHTML.replace(/青銅會員/g, "普通會員").replace(/☕/g, "🪪");
+      }
+    });
+  }
+
+  // Disable old V192 behavior that appended "青銅起步" to many buttons/titles.
+  window.patchRegisterTierHint192 = function(){
+    cleanupTierHints195();
+  };
+
+  // Replace tier helper if it exists globally.
+  window.tier192 = function(cups){
+    cups = Number(cups || 0);
+    if(cups >= 180) return {key:"vip", name:"黑金會員", icon:"👑", next:null};
+    if(cups >= 100) return {key:"diamond", name:"鑽石會員", icon:"💎", next:180};
+    if(cups >= 60) return {key:"gold", name:"金卡會員", icon:"🥇", next:100};
+    if(cups >= 30) return {key:"silver", name:"銀卡會員", icon:"🥈", next:60};
+    return {key:"regular", name:"普通會員", icon:"🪪", next:30};
+  };
+
+  document.addEventListener("DOMContentLoaded", function(){
+    cleanupTierHints195();
+    setTimeout(cleanupTierHints195, 300);
+    setTimeout(cleanupTierHints195, 900);
+  });
+
+  ["click","change","input"].forEach(function(evt){
+    document.addEventListener(evt, function(){
+      setTimeout(cleanupTierHints195, 60);
+      setTimeout(cleanupTierHints195, 220);
+    });
+  });
+
+  setInterval(cleanupTierHints195, 1800);
 })();
 </script>
 
