@@ -663,13 +663,14 @@ async function sky31RecomputeMemberForRewardV199(env, member, phone) {
     rewardRedeemed += Math.max(0, Number(order.rewardUse || order.rewardUseRequested || 0));
   }
 
+  const scannedTotalSpent = Math.round(totalSpent * 100) / 100;
   return {
     ...(member || {}),
     phone,
-    totalOrders,
-    totalCups,
-    totalSpent: Math.round(totalSpent * 100) / 100,
-    rewardRedeemed,
-    rewardsRedeemed: rewardRedeemed
+    totalOrders: Math.max(Number(member && member.totalOrders || 0), totalOrders),
+    totalCups: Math.max(Number(member && member.totalCups || 0), totalCups),
+    totalSpent: Math.max(Number(member && member.totalSpent || 0), scannedTotalSpent),
+    rewardRedeemed: Math.max(Number(member && (member.rewardRedeemed || member.rewardsRedeemed) || 0), rewardRedeemed),
+    rewardsRedeemed: Math.max(Number(member && (member.rewardRedeemed || member.rewardsRedeemed) || 0), rewardRedeemed)
   };
 }

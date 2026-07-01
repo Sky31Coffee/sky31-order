@@ -200,12 +200,17 @@ async function enrichMemberWithOrders(env, member) {
 
   const sortedOrders = sortOrdersForMember(allOrders);
 
-  // V199: lifetime reward stats must reflect successful transactions only.
-  // Pending, cancelled, completed-but-not-picked-up orders do not count.
-  const finalTotalOrders = totalOrders;
-  const finalTotalCups = totalCups;
-  const finalTotalSpent = Math.round(totalSpent * 100) / 100;
-  const finalRewardRedeemed = redeemedRewards;
+  // V201: preserve existing lifetime counters so older valid totals never disappear.
+  // Newly created orders are still counted only after picked_up / successful transaction.
+  const scannedTotalOrders = totalOrders;
+  const scannedTotalCups = totalCups;
+  const scannedTotalSpent = Math.round(totalSpent * 100) / 100;
+  const scannedRewardRedeemed = redeemedRewards;
+
+  const finalTotalOrders = Math.max(Number(member.totalOrders || 0), scannedTotalOrders);
+  const finalTotalCups = Math.max(Number(member.totalCups || 0), scannedTotalCups);
+  const finalTotalSpent = Math.max(Number(member.totalSpent || 0), scannedTotalSpent);
+  const finalRewardRedeemed = Math.max(Number(member.rewardRedeemed || member.rewardsRedeemed || 0), scannedRewardRedeemed);
 
   const fixedMember = {
     ...member,
