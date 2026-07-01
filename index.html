@@ -7452,6 +7452,131 @@ body:has(#orderApp.hidden) #sky31PersistentCart.sky31-cart-body-level{
   background:linear-gradient(135deg,rgba(255,255,255,.96),rgba(255,236,174,.72)) !important;
 }
 
+
+/* V204: order query content wrapping + member history pagination */
+#statusResult,
+#statusResult .status-card,
+#statusResult .bb-status-card,
+#statusResult .status-order-text,
+#statusResult .status-product-meta,
+#statusResult .bb-meta{
+  max-width:100% !important;
+  overflow:hidden !important;
+  overflow-wrap:anywhere !important;
+  word-break:break-word !important;
+}
+
+#statusResult .status-product-row{
+  grid-template-columns:58px minmax(0,1fr) auto !important;
+  align-items:start !important;
+}
+
+#statusResult .bb-item{
+  grid-template-columns:58px minmax(0,1fr) auto !important;
+  align-items:start !important;
+}
+
+#statusResult .status-product-price,
+#statusResult .bb-item-price,
+#statusResult .status-price-line,
+#statusResult .bb-price-line,
+#statusResult .status-total-line,
+#statusResult .bb-total-line{
+  white-space:normal !important;
+  overflow-wrap:anywhere !important;
+  word-break:break-word !important;
+  max-width:100% !important;
+}
+
+#statusResult .status-total-line,
+#statusResult .bb-total-line{
+  display:flex !important;
+  flex-wrap:wrap !important;
+  align-items:center !important;
+}
+
+.member-history-topline-v204{
+  display:flex !important;
+  justify-content:space-between !important;
+  gap:10px !important;
+  align-items:center !important;
+  margin:10px 0 8px !important;
+  color:rgba(47,42,36,.56) !important;
+  font-size:12px !important;
+  font-weight:780 !important;
+}
+
+.member-history-pagination-v204{
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  flex-wrap:wrap !important;
+  gap:7px !important;
+  margin:14px 0 4px !important;
+}
+
+.member-history-pagination-v204 button{
+  border:1px solid rgba(47,42,36,.12) !important;
+  background:rgba(255,255,255,.62) !important;
+  color:#2f2a24 !important;
+  border-radius:999px !important;
+  padding:8px 11px !important;
+  font-size:13px !important;
+  font-weight:850 !important;
+  cursor:pointer !important;
+}
+
+.member-history-pagination-v204 button.active{
+  background:#1f1d1a !important;
+  color:#fff !important;
+  border-color:#1f1d1a !important;
+}
+
+.member-history-pagination-v204 button:disabled{
+  opacity:.38 !important;
+  cursor:not-allowed !important;
+}
+
+.member-history-pagination-v204 .ellipsis{
+  padding:0 2px !important;
+  color:rgba(47,42,36,.48) !important;
+  font-weight:900 !important;
+}
+
+.member-order-item small,
+.member-order-meta{
+  overflow-wrap:anywhere !important;
+  word-break:break-word !important;
+}
+
+.member-order-item strong{
+  white-space:normal !important;
+  text-align:right !important;
+  overflow-wrap:anywhere !important;
+}
+
+@media(max-width:430px){
+  #statusResult .status-product-row,
+  #statusResult .bb-item{
+    grid-template-columns:50px minmax(0,1fr) !important;
+  }
+
+  #statusResult .status-product-price,
+  #statusResult .bb-item-price{
+    grid-column:2 !important;
+    text-align:left !important;
+    margin-top:4px !important;
+  }
+
+  .member-order-summary{
+    grid-template-columns:1fr !important;
+  }
+
+  .member-order-total{
+    text-align:left !important;
+  }
+}
+
 </style>
 
 <style>
@@ -7994,7 +8119,7 @@ function sky31OrderStatusCard(o){
     items = o.cart.map(function(item){
       const name = item.name || item.cn || "-";
       const meta = [
-        item.bean ? String(item.bean).split("|")[0].split("｜")[0].trim() : "",
+        item.bean ? sky31BeanDisplayV204(item.bean) : "",
         item.temp || "",
         item.ice && item.ice !== "不適用" ? item.ice : "",
         item.milk || "",
@@ -8099,6 +8224,20 @@ function escapeHtml(value) {
   });
 }
 
+function sky31BeanDisplayV204(bean) {
+  const s = String(bean || "").trim();
+  if (!s) return "";
+  if (s.indexOf("Limited｜") === 0 || s.indexOf("Limited|") === 0) {
+    const parts = s.indexOf("｜") >= 0 ? s.split("｜") : s.split("|");
+    const name = String(parts[1] || "期間限定豆子").trim();
+    const flavorRaw = parts.slice(2).join("｜").replace(/^風味[:：]?\s*/,"").trim();
+    return name + (flavorRaw ? "（限定豆子｜" + flavorRaw + "）" : "（限定豆子）");
+  }
+  return s.split("|")[0].split("｜")[0].trim();
+}
+window.sky31BeanDisplayV204 = sky31BeanDisplayV204;
+
+
 function toggleStatusOrder(id) {
   const body = document.getElementById(id);
   const btn = document.querySelector('[data-toggle-target="' + id + '"]');
@@ -8115,7 +8254,7 @@ function renderCartItems(cart, orderText) {
       const qty = escapeHtml(item.qty || item.quantity || 1);
 
       const rows = [];
-      if (item.bean) rows.push("豆子：" + escapeHtml(String(item.bean).split("｜")[0]));
+      if (item.bean) rows.push("豆子：" + escapeHtml(sky31BeanDisplayV204(item.bean)));
       if (item.flavor) rows.push("風味：" + escapeHtml(item.flavor));
       if (item.temp) rows.push("冷熱：" + escapeHtml(item.temp));
       if (item.ice && item.ice !== "不適用") rows.push("冰量：" + escapeHtml(item.ice));
@@ -9022,7 +9161,7 @@ function bbOrderCard(o){
     itemHtml = o.cart.map(function(item){
       const name = item.name || item.cn || "-";
       const meta = [
-        item.bean ? String(item.bean).split("|")[0].split("｜")[0].trim() : "",
+        item.bean ? sky31BeanDisplayV204(item.bean) : "",
         item.temp || "",
         item.ice && item.ice !== "不適用" ? item.ice : "",
         item.milk || "",
@@ -9681,7 +9820,7 @@ window.addEventListener("load", function() {
     cart.forEach(function(raw,i){
       var x = enrichedItem(raw);
       cart[i] = Object.assign(cart[i], x);
-      var beanText = x.bean ? esc(String(x.bean).split("｜")[0]) + "・" : "";
+      var beanText = x.bean ? esc(sky31BeanDisplayV204(x.bean)) + "・" : "";
       var info = esc(x.cn) + "<br>" + beanText + esc(x.temp) + "・" + esc(x.pickup) +
         '<span class="cart-price-line">' + money(x.unitPrice) + ' × ' + (x.qty || 1) + ' = ' + money(x.subtotal) + '</span>';
       var controls =
@@ -9728,7 +9867,7 @@ window.addEventListener("load", function() {
     c.forEach(function(x){
       var iceText = x.ice === "不適用" ? "" : "・" + x.ice;
       rows += '<div class="row"><div><strong>' + esc(x.name) + ' × ' + x.qty + '</strong><br><small>' +
-        esc(x.cn) + (x.bean ? '｜' + esc(String(x.bean).split("｜")[0]) : '') + '｜' + esc(x.temp) + iceText + '｜' + esc(x.pickup) +
+        esc(x.cn) + (x.bean ? '｜' + esc(sky31BeanDisplayV204(x.bean)) : '') + '｜' + esc(x.temp) + iceText + '｜' + esc(x.pickup) +
         '<span class="cart-price-line">' + money(x.unitPrice) + ' × ' + x.qty + ' = ' + money(x.subtotal) + '</span>' +
         '</small></div></div>';
     });
@@ -9868,7 +10007,7 @@ window.addEventListener("load", function() {
           total += o.totalAmount ? 0 : Number(item.subtotal || 0);
           var name = item.name || item.cn || "-";
           var meta = [
-            item.bean ? String(item.bean).split("|")[0].split("｜")[0].trim() : "",
+            item.bean ? sky31BeanDisplayV204(item.bean) : "",
             item.temp || "",
             item.ice && item.ice !== "不適用" ? item.ice : "",
             item.milk || "",
@@ -9928,7 +10067,7 @@ window.addEventListener("load", function() {
           total += o.totalAmount ? 0 : Number(item.subtotal || 0);
           var name = item.name || item.cn || "-";
           var meta = [
-            item.bean ? String(item.bean).split("|")[0].split("｜")[0].trim() : "",
+            item.bean ? sky31BeanDisplayV204(item.bean) : "",
             item.temp || "",
             item.ice && item.ice !== "不適用" ? item.ice : "",
             item.milk || "",
@@ -10339,17 +10478,66 @@ window.addEventListener("load", function() {
         '<div class="member-stat"><b>' + money(member.totalSpent || 0).replace("MOP ","") + '</b><span>總消費<br>MOP</span></div>' +
       '</div>' + sky31MemberRewardHtml(member);
 
-    var orders = Array.isArray(member.recentOrders) ? member.recentOrders : [];
+    var orders = [];
+    if(Array.isArray(member.historyOrders)) orders = member.historyOrders;
+    else if(Array.isArray(member.recentOrders)) orders = member.recentOrders;
+    else if(Array.isArray(member.orders)) orders = member.orders;
+
+    orders = orders.slice().sort(function(a,b){
+      var at = new Date(a.updatedAt || a.statusUpdatedAt || a.createdAt || 0).getTime() || 0;
+      var bt = new Date(b.updatedAt || b.statusUpdatedAt || b.createdAt || 0).getTime() || 0;
+      if(bt !== at) return bt - at;
+      return String(b.orderNo || "").localeCompare(String(a.orderNo || ""));
+    });
+
     if(!orders.length){
       list.innerHTML = '<div class="member-empty">暫時沒有歷史訂單</div>';
       return;
     }
 
-    list.innerHTML = orders.map(function(o, idx){
+    var pageSize = 10;
+    var totalPages = Math.max(1, Math.ceil(orders.length / pageSize));
+    var page = Math.max(1, Math.min(totalPages, Number(window.SKY31_MEMBER_HISTORY_PAGE_V204 || 1)));
+    window.SKY31_MEMBER_HISTORY_PAGE_V204 = page;
+    var start = (page - 1) * pageSize;
+    var pageOrders = orders.slice(start, start + pageSize);
+
+    function displayBean(bean){
+      return window.sky31BeanDisplayV204 ? window.sky31BeanDisplayV204(bean) : String(bean || "").split("|")[0].split("｜")[0].trim();
+    }
+
+    function pageBtn(p){
+      return '<button type="button" class="' + (p === page ? 'active' : '') + '" onclick="memberHistoryPageV204(' + p + ')">' + p + '</button>';
+    }
+
+    function paginationHtml(){
+      if(totalPages <= 1) return "";
+      var html = '<div class="member-history-pagination-v204">';
+      html += '<button type="button" ' + (page <= 1 ? 'disabled' : '') + ' onclick="memberHistoryPageV204(' + (page - 1) + ')">上一頁</button>';
+
+      var lastWasEllipsis = false;
+      for(var p=1; p<=totalPages; p++){
+        var visible = totalPages <= 7 || p === 1 || p === totalPages || Math.abs(p - page) <= 1;
+        if(visible){
+          html += pageBtn(p);
+          lastWasEllipsis = false;
+        }else if(!lastWasEllipsis){
+          html += '<span class="ellipsis">…</span>';
+          lastWasEllipsis = true;
+        }
+      }
+
+      html += '<button type="button" ' + (page >= totalPages ? 'disabled' : '') + ' onclick="memberHistoryPageV204(' + (page + 1) + ')">下一頁</button>';
+      html += '</div>';
+      return html;
+    }
+
+    var cards = pageOrders.map(function(o, idx){
+      var globalIdx = start + idx;
       var items = Array.isArray(o.cart) ? o.cart : [];
       var itemHtml = items.length ? items.map(function(item){
         var meta = [
-          item.bean ? String(item.bean).split("|")[0].split("｜")[0].trim() : "",
+          item.bean ? displayBean(item.bean) : "",
           item.temp || "",
           item.ice && item.ice !== "不適用" ? item.ice : "",
           item.milk || "",
@@ -10359,13 +10547,13 @@ window.addEventListener("load", function() {
         return '<div class="member-order-item"><div><b>' + esc(item.name || item.cn || "-") + ' × ' + Number(item.qty || 1) + '</b><small>' + esc(meta) + '</small></div><strong>' + money(subtotal) + '</strong></div>';
       }).join("") : '<div class="member-order-meta">沒有保存餐品明細</div>';
 
-      return '<div class="member-order" id="memberOrder' + idx + '">' +
+      return '<div class="member-order" id="memberOrder' + globalIdx + '">' +
         '<div class="member-order-summary">' +
           '<div><div class="member-order-no">#' + esc(o.orderNo || "") + '</div>' +
           '<div class="member-order-meta">' + esc(dateText(o.createdAt)) + '｜' + esc(statusText(o.status)) + '｜' + Number(o.totalCups || 0) + ' 杯</div></div>' +
           '<div class="member-order-total">' + money(o.totalAmount || 0) + '</div>' +
         '</div>' +
-        '<button class="member-order-toggle" type="button" onclick="memberToggleOrder(' + idx + ')">查看詳情 ▼</button>' +
+        '<button class="member-order-toggle" type="button" onclick="memberToggleOrder(' + globalIdx + ')">查看詳情 ▼</button>' +
         '<div class="member-order-detail">' +
           '<div class="member-row"><span>取餐時間</span><strong>' + esc(o.pickupTime || "-") + '</strong></div>' +
           '<div class="member-row"><span>狀態</span><strong>' + esc(statusText(o.status)) + '</strong></div>' +
@@ -10373,7 +10561,17 @@ window.addEventListener("load", function() {
         '</div>' +
       '</div>';
     }).join("");
+
+    list.innerHTML =
+      '<div class="member-history-topline-v204"><span>每頁最多 10 張訂單</span><span>第 ' + page + ' / ' + totalPages + ' 頁｜共 ' + orders.length + ' 張</span></div>' +
+      cards +
+      paginationHtml();
   }
+
+  window.memberHistoryPageV204 = function(page){
+    window.SKY31_MEMBER_HISTORY_PAGE_V204 = Number(page || 1);
+    renderHistoryPage();
+  };
 
   window.memberToggleOrder = function(idx){
     var card = $("memberOrder" + idx);
@@ -14560,7 +14758,7 @@ window.addEventListener("load", function() {
       var parts = String(bean).split("｜");
       return "✨ " + (parts[1] || "Limited Beans");
     }
-    return originalShortBean ? originalShortBean(bean) : (bean ? String(bean).split("｜")[0] : "未選豆");
+    return originalShortBean ? originalShortBean(bean) : (bean ? sky31BeanDisplayV204(bean) : "未選豆");
   };
 
   async function loadLimitedBeanChoices(force){
@@ -15020,7 +15218,7 @@ window.addEventListener("load", function() {
       const p = parseLimitedParts(bean);
       return "✨ " + p.label + " +MOP 5";
     }
-    return oldShortBean ? oldShortBean(bean) : (bean ? String(bean).split("｜")[0] : "未選豆");
+    return oldShortBean ? oldShortBean(bean) : (bean ? sky31BeanDisplayV204(bean) : "未選豆");
   };
 
   // Re-enrich cart on qty changes after existing handler runs.
