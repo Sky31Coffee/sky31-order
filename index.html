@@ -8133,6 +8133,82 @@ body:has(#orderApp.hidden) #sky31PersistentCart.sky31-cart-body-level{
   cursor:pointer !important;
 }
 
+
+/* V218: landing limited bean name auto-fit + maintenance overlay */
+#limitedBeanPreview.v198-limited-grid .landing-bean-topline{
+  align-items:start !important;
+}
+#limitedBeanPreview.v198-limited-grid .landing-bean-topline b{
+  white-space:normal !important;
+  overflow:visible !important;
+  text-overflow:clip !important;
+  word-break:break-word !important;
+  overflow-wrap:anywhere !important;
+  line-height:1.12 !important;
+  min-height:1.12em !important;
+  max-height:none !important;
+  display:block !important;
+}
+#limitedBeanPreview.v198-limited-grid .landing-bean-card,
+#limitedBeanPreview.v198-limited-grid .landing-bean-card *{
+  box-sizing:border-box !important;
+}
+.sky31-maintenance-lock-v218{
+  position:fixed !important;
+  inset:0 !important;
+  z-index:2147483647 !important;
+  display:none !important;
+  align-items:center !important;
+  justify-content:center !important;
+  padding:24px !important;
+  background:radial-gradient(circle at top, rgba(255,255,255,.78), rgba(210,225,244,.72)), rgba(245,248,252,.86) !important;
+  backdrop-filter:blur(22px) !important;
+  pointer-events:auto !important;
+}
+.sky31-maintenance-lock-v218.show{
+  display:flex !important;
+}
+.sky31-maintenance-card-v218{
+  width:min(390px,100%) !important;
+  border-radius:30px !important;
+  padding:26px 22px !important;
+  text-align:center !important;
+  color:#20242c !important;
+  background:rgba(255,255,255,.72) !important;
+  border:1px solid rgba(255,255,255,.82) !important;
+  box-shadow:0 28px 80px rgba(36,54,82,.20), inset 0 1px 0 rgba(255,255,255,.92) !important;
+}
+.sky31-maintenance-card-v218 .icon{
+  width:64px !important;
+  height:64px !important;
+  margin:0 auto 14px !important;
+  border-radius:24px !important;
+  display:grid !important;
+  place-items:center !important;
+  background:rgba(255,255,255,.72) !important;
+  font-size:34px !important;
+}
+.sky31-maintenance-card-v218 h2{
+  margin:0 0 8px !important;
+  font-size:22px !important;
+  font-weight:950 !important;
+}
+.sky31-maintenance-card-v218 p{
+  margin:0 !important;
+  font-size:13.5px !important;
+  line-height:1.65 !important;
+  color:rgba(32,36,44,.66) !important;
+  font-weight:760 !important;
+}
+.sky31-maintenance-card-v218 .small{
+  margin-top:14px !important;
+  font-size:11.5px !important;
+  color:rgba(32,36,44,.46) !important;
+}
+body.sky31-maintenance-active-v218{
+  overflow:hidden !important;
+}
+
 </style>
 
 <style>
@@ -16864,6 +16940,102 @@ window.addEventListener("load", function() {
   window.addEventListener("focus", function(){
     setTimeout(function(){ rerenderV217(stored()); }, 300);
   });
+})();
+</script>
+
+
+<script>
+/* V218: maintenance lock + adaptive Landing Limited Bean name. */
+(function(){
+  function ensureMaintenanceDom218(){
+    let el = document.getElementById("sky31MaintenanceLockV218");
+    if(el) return el;
+    el = document.createElement("div");
+    el.id = "sky31MaintenanceLockV218";
+    el.className = "sky31-maintenance-lock-v218";
+    el.innerHTML =
+      '<div class="sky31-maintenance-card-v218">' +
+        '<div class="icon">🛠️</div>' +
+        '<h2>系統維護，暫停使用</h2>' +
+        '<p id="sky31MaintenanceMsgV218">網站正在進行系統維護，暫時未能下單或查詢會員資料。</p>' +
+        '<div class="small">請稍後再試，維護完成後會自動恢復。</div>' +
+      '</div>';
+    document.body.appendChild(el);
+    return el;
+  }
+
+  function setMaintenance218(active, msg){
+    const el = ensureMaintenanceDom218();
+    const p = document.getElementById("sky31MaintenanceMsgV218");
+    if(p) p.textContent = msg || "網站正在進行系統維護，暫時未能下單或查詢會員資料。";
+    el.classList.toggle("show", !!active);
+    document.body.classList.toggle("sky31-maintenance-active-v218", !!active);
+  }
+
+  async function checkMaintenance218(){
+    try{
+      const res = await fetch("/api/menu?_maintenance=1&t=" + Date.now(), {cache:"no-store", headers:{"Cache-Control":"no-cache"}});
+      const data = await res.json().catch(() => ({}));
+      const m = data && data.maintenance;
+      setMaintenance218(!!(m && m.active), (m && m.message) || "系統維護，暫停使用。");
+    }catch(e){
+      // Do not lock the website if the status check fails.
+    }
+  }
+
+  function fitLandingLimitedBeanNames218(){
+    const nodes = document.querySelectorAll('#limitedBeanPreview.v198-limited-grid .landing-bean-topline b');
+    nodes.forEach(function(el){
+      const text = (el.textContent || "").trim();
+      if(!text) return;
+
+      el.style.whiteSpace = "normal";
+      el.style.overflow = "visible";
+      el.style.textOverflow = "clip";
+      el.style.wordBreak = "break-word";
+      el.style.overflowWrap = "anywhere";
+      el.style.lineHeight = "1.12";
+
+      // Auto-fit font size down only when the name is very long.
+      let size = 12.8;
+      if(text.length >= 12) size = 12.1;
+      if(text.length >= 16) size = 11.4;
+      if(text.length >= 20) size = 10.8;
+      if(text.length >= 26) size = 10.2;
+      el.style.fontSize = size + "px";
+
+      // If still too tall for its card, shrink a little more.
+      const card = el.closest(".landing-bean-card") || el.parentElement;
+      let guard = 0;
+      while(card && el.scrollHeight > card.clientHeight * 0.46 && size > 9.2 && guard < 8){
+        size -= 0.35;
+        el.style.fontSize = size + "px";
+        guard++;
+      }
+    });
+  }
+
+  window.SKY31_CHECK_MAINTENANCE_V218 = checkMaintenance218;
+  window.SKY31_FIT_LIMITED_BEAN_NAMES_V218 = fitLandingLimitedBeanNames218;
+
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", function(){
+      checkMaintenance218();
+      fitLandingLimitedBeanNames218();
+      setInterval(checkMaintenance218, 5000);
+      setInterval(fitLandingLimitedBeanNames218, 1000);
+    });
+  }else{
+    checkMaintenance218();
+    fitLandingLimitedBeanNames218();
+    setInterval(checkMaintenance218, 5000);
+    setInterval(fitLandingLimitedBeanNames218, 1000);
+  }
+
+  const obs = new MutationObserver(function(){
+    setTimeout(fitLandingLimitedBeanNames218, 60);
+  });
+  try{ obs.observe(document.body, {childList:true, subtree:true, characterData:true}); }catch(e){}
 })();
 </script>
 
