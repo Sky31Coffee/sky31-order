@@ -6454,6 +6454,104 @@ body:has(#orderApp.hidden) #sky31PersistentCart.sky31-cart-body-level{
   display:flex !important;
 }
 
+
+/* V190: Limited Bean selected state readability fix */
+#beanChips .bean-chip.limited-bean-option,
+#beanChips .bean-chip.limited-bean-option.v188-limited-bean-option,
+#beanChips .bean-chip.limited-bean-option.v189-limited-bean-option{
+  min-height:auto !important;
+  overflow:visible !important;
+}
+
+#beanChips .bean-chip.limited-bean-option.active,
+#beanChips .bean-chip.limited-bean-option.v188-limited-bean-option.active,
+#beanChips .bean-chip.limited-bean-option.v189-limited-bean-option.active{
+  color:rgba(30,42,60,.94) !important;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.96), rgba(255,244,215,.84)) !important;
+  border:1.5px solid rgba(204,138,31,.56) !important;
+  box-shadow:
+    0 0 0 3px rgba(204,138,31,.12),
+    0 14px 32px rgba(116,76,16,.14),
+    inset 0 1px 0 rgba(255,255,255,.86) !important;
+  transform:none !important;
+  filter:none !important;
+}
+
+#beanChips .bean-chip.limited-bean-option.active::before,
+#beanChips .bean-chip.limited-bean-option.v188-limited-bean-option.active::before,
+#beanChips .bean-chip.limited-bean-option.v189-limited-bean-option.active::before{
+  opacity:.16 !important;
+  filter:none !important;
+}
+
+#beanChips .bean-chip.limited-bean-option.active::after,
+#beanChips .bean-chip.limited-bean-option.v188-limited-bean-option.active::after,
+#beanChips .bean-chip.limited-bean-option.v189-limited-bean-option.active::after{
+  color:rgba(128,80,8,.92) !important;
+  background:rgba(255,255,255,.72) !important;
+  border:1px solid rgba(255,255,255,.82) !important;
+  box-shadow:0 5px 13px rgba(128,80,8,.10) !important;
+}
+
+#beanChips .bean-chip.limited-bean-option.active b,
+#beanChips .bean-chip.limited-bean-option.v188-limited-bean-option.active b,
+#beanChips .bean-chip.limited-bean-option.v189-limited-bean-option.active b{
+  color:rgba(22,35,54,.96) !important;
+  text-shadow:none !important;
+  opacity:1 !important;
+}
+
+#beanChips .bean-chip.limited-bean-option.active .flavor,
+#beanChips .bean-chip.limited-bean-option.v188-limited-bean-option.active .flavor,
+#beanChips .bean-chip.limited-bean-option.v189-limited-bean-option.active .flavor{
+  color:rgba(45,56,72,.72) !important;
+  text-shadow:none !important;
+  opacity:1 !important;
+}
+
+#beanChips .bean-chip.limited-bean-option.active .limited-surcharge-badge,
+#beanChips .bean-chip.limited-bean-option.v188-limited-bean-option.active .limited-surcharge-badge,
+#beanChips .bean-chip.limited-bean-option.v189-limited-bean-option.active .limited-surcharge-badge{
+  color:rgba(128,80,8,.96) !important;
+  background:rgba(255,255,255,.70) !important;
+  border:1px solid rgba(255,255,255,.82) !important;
+}
+
+#beanChips .bean-chip.limited-bean-option.active .flavor br,
+#beanChips .bean-chip.limited-bean-option.v189-limited-bean-option.active .flavor br{
+  display:block !important;
+}
+
+#beanChips .bean-chip.limited-bean-option.v189-limited-bean-option b{
+  line-height:1.35 !important;
+  padding-right:0 !important;
+}
+
+#beanChips .bean-chip.limited-bean-option.v189-limited-bean-option .flavor{
+  line-height:1.52 !important;
+  margin-top:8px !important;
+}
+
+@media(max-width:520px){
+  #beanChips .bean-chip.limited-bean-option.v189-limited-bean-option{
+    padding:42px 14px 14px !important;
+  }
+  #beanChips .bean-chip.limited-bean-option.v189-limited-bean-option b{
+    white-space:normal !important;
+    overflow:visible !important;
+    text-overflow:clip !important;
+    display:block !important;
+    max-height:none !important;
+  }
+  #beanChips .bean-chip.limited-bean-option.v189-limited-bean-option .flavor{
+    display:block !important;
+    white-space:normal !important;
+    overflow:visible !important;
+    text-overflow:clip !important;
+  }
+}
+
 </style>
 
 <style>
@@ -14431,6 +14529,54 @@ window.addEventListener("load", function() {
       });
     }
   }, 1500);
+})();
+</script>
+
+
+<script>
+/* V190: keep Limited Bean text visible after customer selects it. */
+(function(){
+  function fixLimitedActiveReadable190(){
+    document.querySelectorAll("#beanChips .bean-chip.limited-bean-option").forEach(function(el){
+      el.style.setProperty("visibility", "visible", "important");
+      el.style.setProperty("opacity", "1", "important");
+      el.style.setProperty("overflow", "visible", "important");
+
+      if(el.classList.contains("active")){
+        el.style.setProperty("color", "rgba(30,42,60,.94)", "important");
+        el.style.setProperty("background", "linear-gradient(135deg, rgba(255,255,255,.96), rgba(255,244,215,.84))", "important");
+        el.style.setProperty("border", "1.5px solid rgba(204,138,31,.56)", "important");
+        el.querySelectorAll("b,.flavor,.limited-surcharge-badge").forEach(function(child){
+          child.style.setProperty("opacity", "1", "important");
+          child.style.setProperty("text-shadow", "none", "important");
+        });
+        const b = el.querySelector("b");
+        if(b) b.style.setProperty("color", "rgba(22,35,54,.96)", "important");
+        const flavor = el.querySelector(".flavor");
+        if(flavor) flavor.style.setProperty("color", "rgba(45,56,72,.72)", "important");
+      }
+    });
+  }
+
+  document.addEventListener("click", function(){
+    setTimeout(fixLimitedActiveReadable190, 0);
+    setTimeout(fixLimitedActiveReadable190, 120);
+  });
+
+  const oldRefresh190 = window.SKY31_REFRESH_LIMITED_BEANS;
+  if(oldRefresh190 && !window.__SKY31_V190_REFRESH_PATCHED){
+    window.__SKY31_V190_REFRESH_PATCHED = true;
+    window.SKY31_REFRESH_LIMITED_BEANS = async function(force){
+      const r = await oldRefresh190(force);
+      setTimeout(fixLimitedActiveReadable190, 60);
+      setTimeout(fixLimitedActiveReadable190, 240);
+      return r;
+    };
+  }
+
+  document.addEventListener("DOMContentLoaded", function(){
+    setTimeout(fixLimitedActiveReadable190, 500);
+  });
 })();
 </script>
 
