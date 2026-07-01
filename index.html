@@ -6552,6 +6552,93 @@ body:has(#orderApp.hidden) #sky31PersistentCart.sky31-cart-body-level{
   }
 }
 
+
+/* V191: two Limited Beans, no sync button, stable price detail, landing name fit */
+#beanChips .v188-limited-sync-line,
+#beanChips .v189-limited-sync-line,
+#beanChips .bean-refresh-line{
+  display:none !important;
+}
+
+#beanChips .bean-chip.limited-bean-option.v191-limited-bean-option{
+  display:block !important;
+  visibility:visible !important;
+  opacity:1 !important;
+  margin-top:10px !important;
+  padding:42px 14px 14px !important;
+  border-color:rgba(214,151,49,.38)!important;
+  background:linear-gradient(135deg,rgba(255,255,255,.94),rgba(255,248,229,.76))!important;
+  box-shadow:0 12px 28px rgba(120,82,20,.10), inset 0 1px 0 rgba(255,255,255,.78)!important;
+  overflow:visible !important;
+}
+
+#beanChips .bean-chip.limited-bean-option.v191-limited-bean-option::after{
+  display:block !important;
+  content:"LIMITED" !important;
+  position:absolute !important;
+  top:12px !important;
+  left:14px !important;
+  right:auto !important;
+  z-index:2 !important;
+  pointer-events:none !important;
+  color:rgba(128,80,8,.92) !important;
+  background:rgba(255,255,255,.72) !important;
+  border:1px solid rgba(255,255,255,.82) !important;
+  box-shadow:0 5px 13px rgba(128,80,8,.10) !important;
+}
+
+#beanChips .bean-chip.limited-bean-option.v191-limited-bean-option b{
+  display:block !important;
+  color:rgba(22,35,54,.96) !important;
+  line-height:1.35 !important;
+  overflow:visible !important;
+  text-overflow:clip !important;
+  white-space:normal !important;
+  text-shadow:none !important;
+}
+
+#beanChips .bean-chip.limited-bean-option.v191-limited-bean-option .flavor{
+  display:block !important;
+  color:rgba(45,56,72,.72) !important;
+  line-height:1.52 !important;
+  margin-top:8px !important;
+  white-space:normal !important;
+  overflow:visible !important;
+  text-overflow:clip !important;
+  text-shadow:none !important;
+}
+
+#beanChips .bean-chip.limited-bean-option.v191-limited-bean-option.active{
+  color:rgba(30,42,60,.94) !important;
+  background:linear-gradient(135deg, rgba(255,255,255,.96), rgba(255,244,215,.84)) !important;
+  border:1.5px solid rgba(204,138,31,.56) !important;
+  box-shadow:0 0 0 3px rgba(204,138,31,.12),0 14px 32px rgba(116,76,16,.14),inset 0 1px 0 rgba(255,255,255,.86) !important;
+  transform:none !important;
+  filter:none !important;
+}
+
+.landing-limited-beans-card .limited-bean-preview-v177 b,
+.landing-limited-beans-card .v176-limited-mini-grid b,
+.landing-limited-beans-card .origin-bean-topline b,
+.limited-bean-mini b{
+  white-space:nowrap !important;
+  overflow:visible !important;
+  text-overflow:clip !important;
+  max-width:none !important;
+  letter-spacing:-.03em !important;
+  line-height:1.22 !important;
+}
+
+@media(max-width:520px){
+  .landing-limited-beans-card .limited-bean-preview-v177 b,
+  .landing-limited-beans-card .v176-limited-mini-grid b,
+  .landing-limited-beans-card .origin-bean-topline b,
+  .limited-bean-mini b{
+    font-size:clamp(9px, 2.65vw, 13px) !important;
+    transform-origin:left center !important;
+  }
+}
+
 </style>
 
 <style>
@@ -14577,6 +14664,255 @@ window.addEventListener("load", function() {
   document.addEventListener("DOMContentLoaded", function(){
     setTimeout(fixLimitedActiveReadable190, 500);
   });
+})();
+</script>
+
+
+<script>
+/* V191: render up to two Limited Beans, remove sync row, keep +MOP5 detail line after temp switch. */
+(function(){
+  const SURCHARGE = 5;
+
+  function esc191(s){
+    if(typeof esc === "function") return esc(s);
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function(m){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m];
+    });
+  }
+
+  function normalize191(item){
+    item = item || {};
+    const name = String(item.bean || item.name || item.cn || "期間限定豆子").trim();
+    return {
+      id: String(item.id || name).replace(/[^a-zA-Z0-9_-]/g,"").slice(0,40),
+      active: item.active !== false && item.deleted !== true,
+      label: name,
+      cn: String(item.cn || name).trim(),
+      flavor: String(item.flavor || item.tasting || "").trim() || "期間限定",
+      note: String(item.note || item.desc || item.description || "").trim() || "限時供應，售完即止。",
+      surcharge: Number(item.surcharge || item.limitedSurcharge || SURCHARGE) || SURCHARGE
+    };
+  }
+
+  function productAccepts191(product){
+    if(!product || product.isLimited) return false;
+    const n = String(product.name || "");
+    if(n === "Classic Chocolate") return false;
+    return n === "Americano" || n === "Latte" || n === "Cappuccino" || n === "Mocha" || n.indexOf("Dirty") >= 0 || !!product.milk;
+  }
+
+  function currentProduct191(){
+    try{
+      if(typeof current !== "undefined" && current) return current;
+      if(window.current) return window.current;
+    }catch(e){}
+    return null;
+  }
+
+  async function fetchBeans191(){
+    try{
+      const res = await fetch("/api/menu?t=" + Date.now(), {cache:"no-store"});
+      const data = await res.json().catch(() => ({}));
+      const list = data && data.ok && Array.isArray(data.limitedItems) ? data.limitedItems : [];
+      const beans = list.map(normalize191).filter(x => x.active).slice(0, 2);
+      window.SKY31_CURRENT_LIMITED_BEANS_V191 = beans;
+      window.SKY31_CURRENT_LIMITED_BEAN_V189 = beans[0] || null;
+      window.SKY31_CURRENT_LIMITED_BEAN_V188 = beans[0] || null;
+      window.SKY31_LIMITED_BEAN_CHOICES_V181 = beans.slice();
+      window.SKY31_LIMITED_BEAN_CHOICES = beans.slice();
+      return beans;
+    }catch(e){
+      return window.SKY31_CURRENT_LIMITED_BEANS_V191 || [];
+    }
+  }
+
+  function limitedChip191(bean){
+    const val = "Limited｜" + bean.label + "｜風味：" + bean.flavor;
+    return '' +
+      '<div class="chip bean-chip limited-bean-option v191-limited-bean-option" data-value="' + esc191(val) + '" data-bean-label="' + esc191(bean.label) + '" data-bean-flavor="' + esc191(bean.flavor) + '" data-surcharge="' + bean.surcharge + '">' +
+        '<b>✨ ' + esc191(bean.label) + '<span class="limited-surcharge-badge">+MOP ' + bean.surcharge + '</span></b>' +
+        '<span class="flavor">限定豆子：' + esc191(bean.flavor) + '<br>' + esc191(bean.note) + '</span>' +
+      '</div>';
+  }
+
+  function emptyChip191(){
+    return '' +
+      '<div class="chip bean-chip limited-bean-selection-placeholder" data-value="">' +
+        '<b>✨ 期間限定豆子</b>' +
+        '<span class="flavor">期間限定豆子暫未上架。<br>下一支驚喜豆單正在準備中，敬請期待。</span>' +
+      '</div>';
+  }
+
+  function render191(){
+    const beanChips = document.getElementById("beanChips");
+    const beanBox = document.getElementById("beanBox");
+    const product = currentProduct191();
+    if(!beanChips || !beanBox || !productAccepts191(product)) return;
+
+    beanBox.classList.remove("hidden");
+    beanChips.querySelectorAll(".limited-bean-option,.limited-bean-selection-placeholder,.bean-refresh-line,.v188-limited-sync-line,.v189-limited-sync-line").forEach(function(el){
+      el.remove();
+    });
+
+    const beans = (window.SKY31_CURRENT_LIMITED_BEANS_V191 || []).slice(0,2);
+    if(beans.length){
+      beans.forEach(bean => beanChips.insertAdjacentHTML("beforeend", limitedChip191(bean)));
+    }else{
+      beanChips.insertAdjacentHTML("beforeend", emptyChip191());
+    }
+
+    beanChips.querySelectorAll(".limited-bean-option").forEach(function(el){
+      el.style.setProperty("display", "block", "important");
+      el.style.setProperty("visibility", "visible", "important");
+      el.style.setProperty("opacity", "1", "important");
+    });
+
+    if(typeof bindChips === "function") bindChips(beanBox);
+
+    beanChips.querySelectorAll(".limited-bean-selection-placeholder").forEach(function(el){
+      el.onclick = function(ev){ ev.preventDefault(); ev.stopPropagation(); };
+    });
+
+    beanChips.querySelectorAll(".bean-chip").forEach(function(el){
+      el.addEventListener("click", function(){
+        setTimeout(updateLimitedPriceLine191, 0);
+        setTimeout(updateLimitedPriceLine191, 80);
+      });
+    });
+
+    updateLimitedPriceLine191();
+  }
+
+  function selectedLimitedChip191(){
+    const selected = document.querySelector("#beanChips .bean-chip.limited-bean-option.active");
+    if(selected) return selected;
+    try{
+      if(typeof selectedOptions !== "undefined" && selectedOptions && String(selectedOptions.bean || "").indexOf("Limited｜") === 0){
+        const val = String(selectedOptions.bean || "");
+        return { dataset:{ surcharge: SURCHARGE, beanLabel: (val.split("｜")[1] || "限定豆子") } };
+      }
+    }catch(e){}
+    return null;
+  }
+
+  function updateLimitedPriceLine191(){
+    const chip = selectedLimitedChip191();
+    const isLimited = !!chip;
+    const surcharge = Number((chip && chip.dataset && chip.dataset.surcharge) || SURCHARGE) || SURCHARGE;
+
+    const detail = document.getElementById("detailPrice") || document.querySelector(".detail-price") || document.querySelector("#priceDetail");
+    if(!detail) return;
+
+    detail.querySelectorAll(".v191-limited-price-line,.limited-price-line,.bean-surcharge-line").forEach(el => el.remove());
+
+    if(isLimited){
+      const line = document.createElement("div");
+      line.className = "v191-limited-price-line";
+      line.style.cssText = "margin-top:6px;font-size:12px;font-weight:850;color:rgba(128,80,8,.82);";
+      line.textContent = "限定豆子 +MOP " + surcharge;
+      detail.appendChild(line);
+    }
+  }
+
+  const oldUpdatePrice191 = window.sky31UpdateDetailPrice;
+  if(oldUpdatePrice191 && !window.__SKY31_V191_PRICE_PATCHED){
+    window.__SKY31_V191_PRICE_PATCHED = true;
+    window.sky31UpdateDetailPrice = function(){
+      const r = oldUpdatePrice191.apply(this, arguments);
+      setTimeout(updateLimitedPriceLine191, 0);
+      setTimeout(updateLimitedPriceLine191, 80);
+      return r;
+    };
+  }
+
+  async function refresh191(force){
+    await fetchBeans191();
+    render191();
+
+    if(typeof window.SKY31_REFRESH_LIMITED === "function" && !window.__SKY31_V191_CALLING_LANDING){
+      try{
+        window.__SKY31_V191_CALLING_LANDING = true;
+        await window.SKY31_REFRESH_LIMITED();
+      }catch(e){}finally{
+        window.__SKY31_V191_CALLING_LANDING = false;
+      }
+    }
+
+    setTimeout(render191, 80);
+    setTimeout(render191, 300);
+    setTimeout(fitLandingNames191, 420);
+    return window.SKY31_CURRENT_LIMITED_BEANS_V191;
+  }
+
+  window.SKY31_REFRESH_LIMITED_BEANS = refresh191;
+
+  const oldOpenDetail191 = window.openDetail || (typeof openDetail === "function" ? openDetail : null);
+  if(oldOpenDetail191 && !window.__SKY31_V191_OPEN_PATCHED){
+    window.__SKY31_V191_OPEN_PATCHED = true;
+    window.openDetail = openDetail = function(i){
+      const r = oldOpenDetail191.apply(this, arguments);
+      refresh191(true);
+      setTimeout(render191, 120);
+      setTimeout(updateLimitedPriceLine191, 260);
+      return r;
+    };
+  }
+
+  const oldConfigureTemp191 = window.configureTemp || (typeof configureTemp === "function" ? configureTemp : null);
+  if(oldConfigureTemp191 && !window.__SKY31_V191_TEMP_PATCHED){
+    window.__SKY31_V191_TEMP_PATCHED = true;
+    window.configureTemp = configureTemp = function(){
+      const r = oldConfigureTemp191.apply(this, arguments);
+      setTimeout(render191, 0);
+      setTimeout(updateLimitedPriceLine191, 80);
+      setTimeout(updateLimitedPriceLine191, 220);
+      return r;
+    };
+  }
+
+  document.addEventListener("click", function(){
+    setTimeout(updateLimitedPriceLine191, 40);
+    setTimeout(function(){
+      document.querySelectorAll("#beanChips .v188-limited-sync-line,#beanChips .v189-limited-sync-line,#beanChips .bean-refresh-line").forEach(el => el.remove());
+    }, 60);
+  });
+
+  function fitLandingNames191(){
+    document.querySelectorAll(".landing-limited-beans-card b,.landing-limited-beans-card .origin-bean-topline b,.limited-bean-mini b").forEach(function(el){
+      el.style.whiteSpace = "nowrap";
+      el.style.overflow = "visible";
+      el.style.textOverflow = "clip";
+      el.style.transform = "";
+      el.style.fontSize = "";
+      const parent = el.parentElement;
+      if(!parent) return;
+      const max = Math.max(80, parent.clientWidth - 8);
+      let size = parseFloat(getComputedStyle(el).fontSize) || 13;
+      while(el.scrollWidth > max && size > 8.5){
+        size -= 0.5;
+        el.style.fontSize = size + "px";
+      }
+      el.title = el.textContent || "";
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", function(){
+    refresh191(true);
+    setTimeout(fitLandingNames191, 600);
+  });
+  window.addEventListener("resize", function(){ setTimeout(fitLandingNames191, 120); });
+  document.addEventListener("visibilitychange", function(){ if(!document.hidden) refresh191(true); });
+  window.addEventListener("focus", function(){ refresh191(true); });
+
+  setInterval(function(){
+    const beanChips = document.getElementById("beanChips");
+    const product = currentProduct191();
+    if(beanChips && productAccepts191(product)){
+      beanChips.querySelectorAll(".v188-limited-sync-line,.v189-limited-sync-line,.bean-refresh-line").forEach(el => el.remove());
+      if(!beanChips.querySelector(".limited-bean-option,.limited-bean-selection-placeholder")) render191();
+      updateLimitedPriceLine191();
+    }
+  }, 1600);
 })();
 </script>
 
