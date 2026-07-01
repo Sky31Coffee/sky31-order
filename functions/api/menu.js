@@ -21,9 +21,10 @@ export async function onRequest(context) {
     const visible = publicLimitedItemsV187(config);
     return json({
       ok: true,
-      version: "V189",
+      version: "V191",
       limitedItems: visible,
       currentLimitedBeanId: visible[0] ? visible[0].id : "",
+      currentLimitedBeanIds: visible.map(item => item.id),
       allLimitedItems: publicAllLimitedItemsV187(config),
       updatedAt: config.updatedAt || "",
       updatedBy: config.updatedBy || ""
@@ -37,9 +38,25 @@ function publicLimitedItemsV187(config) {
   const all = sanitizePublicItems(config && config.limitedItems ? config.limitedItems : []);
   const active = all.filter(item => item.active !== false && item.deleted !== true);
   if (!active.length) return [];
-  const currentId = safeId(config.currentLimitedBeanId || config.currentBeanId || "");
-  const current = currentId ? active.find(item => safeId(item.id) === currentId) : null;
-  return [current || active[0]];
+
+  let ids = [];
+  if (Array.isArray(config.currentLimitedBeanIds)) {
+    ids = config.currentLimitedBeanIds.map(safeId).filter(Boolean);
+  } else if (config.currentLimitedBeanId) {
+    ids = [safeId(config.currentLimitedBeanId)];
+  }
+
+  const selected = [];
+  ids.forEach(id => {
+    const item = active.find(x => safeId(x.id) === id);
+    if (item && !selected.find(x => safeId(x.id) === safeId(item.id))) selected.push(item);
+  });
+
+  active.forEach(item => {
+    if (selected.length < 2 && !selected.find(x => safeId(x.id) === safeId(item.id))) selected.push(item);
+  });
+
+  return selected.slice(0, 2);
 }
 
 function publicAllLimitedItemsV187(config) {
