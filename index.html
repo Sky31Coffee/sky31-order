@@ -8005,6 +8005,47 @@ body:has(#orderApp.hidden) #sky31PersistentCart.sky31-cart-body-level{
   font-weight:760 !important;
 }
 
+
+/* V214: manual tier refresh + visible discount verification */
+.v214-member-refresh-note{
+  margin-top:8px !important;
+  font-size:11px !important;
+  color:rgba(47,42,36,.50) !important;
+  font-weight:760 !important;
+}
+.v214-discount-verify{
+  margin:10px 0 12px !important;
+  padding:12px !important;
+  border-radius:18px !important;
+  background:linear-gradient(135deg,rgba(238,251,244,.90),rgba(255,255,255,.70)) !important;
+  border:1px solid rgba(97,168,119,.34) !important;
+  color:rgba(35,62,48,.86) !important;
+}
+.v214-discount-verify .title{
+  font-size:13px !important;
+  font-weight:950 !important;
+  margin-bottom:7px !important;
+  color:rgba(27,112,68,.94) !important;
+}
+.v214-discount-verify .line{
+  display:flex !important;
+  justify-content:space-between !important;
+  gap:10px !important;
+  padding:4px 0 !important;
+  font-size:12px !important;
+  font-weight:800 !important;
+}
+.v214-discount-verify .line strong{
+  white-space:nowrap !important;
+  color:rgba(18,93,72,.98) !important;
+}
+.v214-debug-line{
+  margin-top:7px !important;
+  font-size:11px !important;
+  color:rgba(47,42,36,.48) !important;
+  line-height:1.45 !important;
+}
+
 </style>
 
 <style>
@@ -16355,109 +16396,30 @@ window.addEventListener("load", function() {
 </script>
 
 
+
 <script>
-/* V213: member auth buttons, fresh manual tier sync, birthday fix, and tier benefits checkout preview. */
+/* V214: manual tier sync from backend, no-cache refresh, and visible tier discount verification. */
 (function(){
   const MEMBER_KEY = "sky31_member_v1";
 
-  function localMember213(){
-    try{
-      const raw = localStorage.getItem(MEMBER_KEY);
-      return raw ? JSON.parse(raw) : null;
-    }catch(e){ return null; }
+  function readMember214(){
+    try{ const raw = localStorage.getItem(MEMBER_KEY); return raw ? JSON.parse(raw) : null; }catch(e){ return null; }
   }
-
-  function saveMember213(member){
+  function saveMember214(member){
     try{ if(member && member.phone) localStorage.setItem(MEMBER_KEY, JSON.stringify(member)); }catch(e){}
   }
-
-  function phone213(member){
+  function phone214(member){
     return String((member && member.phone) || (document.getElementById("phone") && document.getElementById("phone").value) || "").replace(/\D/g,"");
   }
-
-  function updateAuthMenu213(){
-    const modal = document.getElementById("memberModal");
-    if(!modal) return;
-    const member = localMember213();
-    const logged = !!(member && member.phone);
-    modal.classList.toggle("member-logged-in-v213", logged);
-    modal.classList.toggle("member-logged-out-v213", !logged);
-  }
-
-  window.SKY31_UPDATE_MEMBER_AUTH_MENU_V213 = updateAuthMenu213;
-
-  async function refreshMember213(){
-    const current = localMember213();
-    const p = phone213(current);
-    if(!p) {
-      updateAuthMenu213();
-      return current || null;
-    }
-    try{
-      const res = await fetch("/api/member?phone=" + encodeURIComponent(p) + "&t=" + Date.now(), {cache:"no-store"});
-      const data = await res.json().catch(() => ({}));
-      const member = data && (data.member || data.data || data.profile);
-      if(data && data.ok && member && member.phone){
-        saveMember213(member);
-        try{ if(typeof applyMember === "function") applyMember(member); }catch(e){}
-        try{ if(typeof updateMemberProfileButton === "function") updateMemberProfileButton(member); }catch(e){}
-        try{ if(typeof renderHomeQuickCard === "function") renderHomeQuickCard(); }catch(e){}
-        try{ if(typeof renderLoggedPanel === "function") renderLoggedPanel(member); }catch(e){}
-        try{ if(typeof memberPage !== "undefined" && memberPage === "tier" && typeof renderMemberTierPageV210 === "function") renderMemberTierPageV210(); }catch(e){}
-        updateAuthMenu213();
-        return member;
-      }
-    }catch(e){}
-    updateAuthMenu213();
-    return current || null;
-  }
-
-  window.SKY31_REFRESH_MEMBER_V213 = refreshMember213;
-
-  function money213(n){
-    if(typeof sky31Money === "function") return sky31Money(n);
-    n = Number(n || 0);
-    return "MOP " + (Math.round(n * 100) / 100).toString();
-  }
-
-  function esc213(s){
+  function esc214(s){
     if(typeof esc === "function") return esc(s);
-    return String(s == null ? "" : s).replace(/[&<>"']/g,function(c){
-      return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];
-    });
+    return String(s == null ? "" : s).replace(/[&<>"']/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]; });
   }
-
-  function items213(){
-    try{
-      if(Array.isArray(window.cart)) return window.cart;
-      if(Array.isArray(cart)) return cart;
-    }catch(e){}
-    return [];
+  function money214(n){
+    if(typeof sky31Money === "function") return sky31Money(n);
+    return "MOP " + (Math.round(Number(n || 0) * 100) / 100).toString();
   }
-
-  function unit213(x){
-    const q = Math.max(1, Number(x.qty || x.quantity || 1));
-    const explicit = Number(x.unitPrice || x.price || x.finalPrice || 0);
-    if(explicit) return explicit;
-    const sub = Number(x.subtotal || 0);
-    return sub ? sub / q : 0;
-  }
-
-  function isLimitedBean213(bean){
-    const s = String(bean || "");
-    return s.indexOf("Limited｜") === 0 || s.indexOf("Limited|") === 0;
-  }
-
-  function tierByCups213(cups){
-    cups = Number(cups || 0);
-    if(cups >= 180) return { key:"blackgold", name:"黑金會員", icon:"👑" };
-    if(cups >= 100) return { key:"diamond", name:"鑽石會員", icon:"💎" };
-    if(cups >= 60) return { key:"gold", name:"金卡會員", icon:"🥇" };
-    if(cups >= 30) return { key:"silver", name:"銀卡會員", icon:"🥈" };
-    return { key:"regular", name:"普通會員", icon:"🌱" };
-  }
-
-  function tierByKey213(key){
+  function tierByKey214(key){
     key = String(key || "").toLowerCase();
     if(key === "vip") key = "blackgold";
     const map = {
@@ -16469,236 +16431,261 @@ window.addEventListener("load", function() {
     };
     return map[key] || null;
   }
-
-  function displayTier213(member){
+  function tierByCups214(cups){
+    cups = Number(cups || 0);
+    if(cups >= 180) return tierByKey214("blackgold");
+    if(cups >= 100) return tierByKey214("diamond");
+    if(cups >= 60) return tierByKey214("gold");
+    if(cups >= 30) return tierByKey214("silver");
+    return tierByKey214("regular");
+  }
+  function displayTier214(member){
     member = member || {};
-    const manual = tierByKey213(member.manualTierKey || member.memberTierOverrideKey || member.memberTierManualKey || "");
-    return Object.assign({}, manual || tierByKey213(member.memberTierKey || "") || tierByCups213(member.totalCups || member.cups || 0), { manual: !!manual });
+    const manual = tierByKey214(member.manualTierKey || member.memberTierOverrideKey || member.memberTierManualKey || "");
+    const tier = manual || tierByKey214(member.memberTierKey || "") || tierByCups214(member.totalCups || member.cups || 0);
+    return Object.assign({}, tier, {manual: !!manual});
+  }
+  function updateAuth214(){
+    const modal = document.getElementById("memberModal");
+    if(!modal) return;
+    const member = readMember214();
+    const logged = !!(member && member.phone);
+    modal.classList.toggle("member-logged-in-v213", logged);
+    modal.classList.toggle("member-logged-out-v213", !logged);
   }
 
-  function rewardCalc213(member){
-    member = member || localMember213() || {};
-    const cups = Number(member.totalCups || member.cups || member.totalItems || 0);
+  async function refreshMember214(reason){
+    const current = readMember214();
+    const p = phone214(current);
+    if(!p){ updateAuth214(); return current || null; }
+
+    try{
+      const res = await fetch("/api/member?phone=" + encodeURIComponent(p) + "&_v=214&_t=" + Date.now(), {
+        cache:"no-store",
+        headers: {"Cache-Control":"no-cache"}
+      });
+      const data = await res.json().catch(() => ({}));
+      const member = data && (data.member || data.data || data.profile);
+      if(data && data.ok && member && member.phone){
+        saveMember214(member);
+        try{ if(typeof applyMember === "function") applyMember(member); }catch(e){}
+        try{ if(typeof saveStoredMember === "function") saveStoredMember(member); }catch(e){}
+        try{ if(typeof updateMemberProfileButton === "function") updateMemberProfileButton(member); }catch(e){}
+        updateAuth214();
+        setTimeout(function(){
+          try{ if(typeof renderHomeQuickCard === "function") renderHomeQuickCard(); }catch(e){}
+          try{ if(typeof renderLoggedPanel === "function") renderLoggedPanel(member); }catch(e){}
+          try{ if(typeof memberPage !== "undefined" && memberPage === "tier" && typeof renderMemberTierPageV210 === "function") renderMemberTierPageV210(); }catch(e){}
+          injectMemberRefreshNote214(member, reason);
+        }, 20);
+        return member;
+      }
+    }catch(e){}
+    updateAuth214();
+    return current || null;
+  }
+
+  window.SKY31_REFRESH_MEMBER_V213 = refreshMember214;
+  window.SKY31_REFRESH_MEMBER_V214 = refreshMember214;
+  window.SKY31_UPDATE_MEMBER_AUTH_MENU_V213 = updateAuth214;
+
+  function injectMemberRefreshNote214(member, reason){
+    try{
+      const panel = document.getElementById("memberLoggedPanel") || document.getElementById("memberHomeCard") || document.querySelector(".member-reward-card-v196");
+      if(!panel) return;
+      panel.querySelectorAll(".v214-member-refresh-note").forEach(el => el.remove());
+      const t = displayTier214(member);
+      const div = document.createElement("div");
+      div.className = "v214-member-refresh-note";
+      div.textContent = "已同步最新會員資料｜目前等級：" + t.name + " " + t.icon + (t.manual ? "（店方設定）" : "");
+      panel.appendChild(div);
+    }catch(e){}
+  }
+
+  function cart214(){
+    try{ if(Array.isArray(window.cart)) return window.cart; if(Array.isArray(cart)) return cart; }catch(e){}
+    return [];
+  }
+  function unit214(item){
+    const q = Math.max(1, Number(item.qty || item.quantity || 1));
+    const explicit = Number(item.unitPrice || item.price || item.finalPrice || 0);
+    if(explicit) return explicit;
+    const sub = Number(item.subtotal || 0);
+    return sub ? sub / q : 0;
+  }
+  function isLimited214(bean){
+    const s = String(bean || "");
+    return s.indexOf("Limited｜") === 0 || s.indexOf("Limited|") === 0;
+  }
+  function limitedTotal214(){
+    return cart214().reduce(function(sum,item){
+      const q = Math.max(1, Number(item.qty || item.quantity || 1));
+      const s = Number(item.beanSurcharge || item.limitedSurcharge || (isLimited214(item.bean) ? 5 : 0) || 0);
+      return sum + s*q;
+    }, 0);
+  }
+  function subtotal214(){
+    return cart214().reduce(function(sum,item){
+      const q = Math.max(1, Number(item.qty || item.quantity || 1));
+      return sum + Number(item.subtotal || unit214(item)*q || 0);
+    }, 0);
+  }
+  function reward214(member){
+    member = member || readMember214() || {};
+    const cups = Number(member.totalCups || 0);
     const redeemed = Number(member.rewardRedeemed || member.rewardsRedeemed || (member.rewards && member.rewards.redeemedRewards) || 0);
-    const earned = Math.floor(cups / 10);
-    const available = Math.max(0, Number((member.rewards && member.rewards.availableRewards) || (earned - redeemed) || 0));
-
-    const expanded = [];
-    let subtotal = 0;
-    items213().forEach(function(x){
-      const q = Math.max(1, Number(x.qty || x.quantity || 1));
-      const u = unit213(x);
-      subtotal += Number(x.subtotal || (u*q) || 0);
-      for(let i=0;i<q;i++) expanded.push({title:x.name || x.title || "飲品", unit:u});
+    const available = Math.max(0, Number((member.rewards && member.rewards.availableRewards) || (Math.floor(cups/10)-redeemed) || 0));
+    const units = [];
+    cart214().forEach(function(item){
+      const q = Math.max(1, Number(item.qty || item.quantity || 1));
+      const u = unit214(item);
+      for(let i=0;i<q;i++) units.push(u);
     });
-    expanded.sort(function(a,b){return b.unit - a.unit;});
-    const use = Math.min(available, expanded.length);
-    const free = expanded.slice(0,use);
-    const rewardDiscount = free.reduce(function(s,x){return s + Number(x.unit || 0);}, 0);
-    return { subtotal, useRewards:use, rewardDiscount, freeItems:free, afterReward:Math.max(0, subtotal - rewardDiscount), cups, available };
+    units.sort(function(a,b){return b-a;});
+    const use = Math.min(available, units.length);
+    const discount = units.slice(0,use).reduce(function(s,x){return s+Number(x||0);},0);
+    return {use, discount};
   }
-
-  function tierDiscountCalc213(member, afterReward){
-    const tier = displayTier213(member);
-    const c = items213();
-    let limitedSurcharge = 0;
-    c.forEach(function(x){
-      const q = Math.max(1, Number(x.qty || x.quantity || 1));
-      const surcharge = Number(x.beanSurcharge || x.limitedSurcharge || (isLimitedBean213(x.bean) ? 5 : 0) || 0);
-      limitedSurcharge += surcharge * q;
-    });
-
-    let discount = 0;
-    const details = [];
+  function tierDiscount214(member, afterReward){
+    const tier = displayTier214(member || readMember214() || {});
+    const limited = limitedTotal214();
+    let discount = 0, details = [];
     if(tier.key === "silver"){
-      const d = Math.min(limitedSurcharge, 5);
-      if(d > 0){ discount += d; details.push("限定豆子加價豁免 ×1"); }
+      discount = Math.min(limited, 5); if(discount) details.push("限定豆子加價豁免 ×1");
     }else if(tier.key === "gold"){
-      const d = Math.min(limitedSurcharge, 10);
-      if(d > 0){ discount += d; details.push("限定豆子加價豁免 ×2"); }
+      discount = Math.min(limited, 10); if(discount) details.push("限定豆子加價豁免 ×2");
     }else if(tier.key === "diamond"){
-      const d = limitedSurcharge;
-      if(d > 0){ discount += d; details.push("限定豆子加價全數豁免"); }
+      discount = limited; if(discount) details.push("限定豆子加價全數豁免");
     }else if(tier.key === "blackgold"){
-      const d = Math.min(15, Math.max(0, Number(afterReward || 0)));
-      if(d > 0){ discount += d; details.push("黑金會員 MOP 15 優惠"); }
+      discount = Math.min(15, Math.max(0, Number(afterReward || 0))); if(discount) details.push("黑金會員 MOP 15 優惠");
     }
-
-    discount = Math.min(Math.max(0, Number(afterReward || 0)), Math.round(discount * 100) / 100);
-    return { tier, discount, details };
+    discount = Math.min(Math.max(0, Number(afterReward || 0)), Math.round(discount*100)/100);
+    return {tier, discount, details};
   }
 
-  function shortBean213(bean){
-    bean = String(bean || "");
-    if(window.sky31BeanDisplayV204) return window.sky31BeanDisplayV204(bean);
-    if(isLimitedBean213(bean)){
-      const parts = bean.indexOf("｜") >= 0 ? bean.split("｜") : bean.split("|");
-      return (parts[1] || "限定豆子") + "（限定豆子）";
-    }
-    return bean.split("｜")[0].split("|")[0];
-  }
-
-  function renderSummary213(member){
+  function renderDiscountVerify214(member){
     const summary = document.getElementById("summary");
-    if(!summary) return "";
-    const c = items213();
-    if(!c.length){
-      summary.innerHTML = "請先選擇餐品。";
-      return "";
-    }
+    if(!summary) return;
+    summary.querySelectorAll(".v214-discount-verify").forEach(el => el.remove());
 
-    member = member || localMember213();
-    const reward = rewardCalc213(member);
-    const tierCalc = tierDiscountCalc213(member, reward.afterReward);
-    const finalTotal = Math.max(0, reward.afterReward - tierCalc.discount);
-    const totalQty = c.reduce(function(s,x){return s + Number(x.qty || x.quantity || 1);}, 0);
+    member = member || readMember214() || {};
+    const sub = subtotal214();
+    const r = reward214(member);
+    const afterReward = Math.max(0, sub - r.discount);
+    const calc = tierDiscount214(member, afterReward);
+    const finalTotal = Math.max(0, afterReward - calc.discount);
 
-    let rows = "";
-    c.forEach(function(x){
-      const q = Number(x.qty || x.quantity || 1);
-      const u = unit213(x);
-      const sub = Number(x.subtotal || (u*q) || 0);
-      const iceText = x.ice && x.ice !== "不適用" ? "・" + x.ice : "";
-      rows += '<div class="row"><div><strong>' + esc213(x.name || "飲品") + ' × ' + q + '</strong><br><small>' +
-        esc213(x.cn || "") +
-        (x.bean ? '｜' + esc213(shortBean213(x.bean)) : '') +
-        (x.temp ? '｜' + esc213(x.temp) : '') + iceText +
-        '<span class="cart-price-line">' + money213(u) + ' × ' + q + ' = ' + money213(sub) + '</span>' +
-        '</small></div></div>';
-    });
+    const box = document.createElement("div");
+    box.className = "v214-discount-verify";
+    box.innerHTML =
+      '<div class="title">🏅 會員等級優惠檢查</div>' +
+      '<div class="line"><span>目前等級</span><strong>' + esc214(calc.tier.name) + ' ' + esc214(calc.tier.icon) + (calc.tier.manual ? '（店方設定）' : '') + '</strong></div>' +
+      '<div class="line"><span>等級優惠</span><strong>' + (calc.discount > 0 ? '-' + money214(calc.discount) : '暫無可套用') + '</strong></div>' +
+      (calc.details.length ? '<div class="line"><span>優惠內容</span><strong>' + esc214(calc.details.join("、")) + '</strong></div>' : '') +
+      '<div class="line"><span>預計應付</span><strong>' + money214(finalTotal) + '</strong></div>' +
+      '<div class="v214-debug-line">最終金額仍會由後端 /api/order 重新核算，Telegram 訂單會顯示實際扣減。</div>';
 
-    const tierBox = tierCalc.discount > 0
-      ? '<div class="v213-tier-benefit-box">' +
-          '<div class="title">🏅 已套用' + esc213(tierCalc.tier.name) + '優惠</div>' +
-          '<div class="line"><span>' + esc213(tierCalc.details.join("、") || "會員等級優惠") + '</span><strong>-' + money213(tierCalc.discount) + '</strong></div>' +
-          '<div class="note">等級優惠以會員中心最新等級計算；如店方在 Telegram 手動更改等級，重新打開購物車會自動更新。</div>' +
-        '</div>'
-      : '';
+    const finalLine = summary.querySelector(".v201-final-total") || summary.lastElementChild;
+    if(finalLine && finalLine.parentNode === summary) summary.insertBefore(box, finalLine.nextSibling);
+    else summary.appendChild(box);
 
-    summary.innerHTML =
-      '<div class="row"><strong>總杯數</strong><strong>' + totalQty + ' 杯</strong></div>' +
-      '<div class="row"><strong>原本總額</strong><strong>' + money213(reward.subtotal) + '</strong></div>' +
-      (reward.rewardDiscount > 0 ? '<div class="row"><strong>會員免單兌換 ×' + reward.useRewards + '</strong><strong>-' + money213(reward.rewardDiscount) + '</strong></div>' : '') +
-      (tierCalc.discount > 0 ? '<div class="row v213-tier-discount-line"><strong>' + esc213(tierCalc.tier.name) + '優惠</strong><strong>-' + money213(tierCalc.discount) + '</strong></div>' : '') +
-      '<div class="row v201-final-total"><strong>應付總額</strong><strong>' + money213(finalTotal) + '</strong></div>' +
-      tierBox +
-      rows;
-
-    window.SKY31_TIER_APPLY_V213 = tierCalc;
-    window.SKY31_REWARD_APPLY_V201 = Object.assign({}, reward, { finalTotal: finalTotal });
-    return summary.innerText;
+    window.SKY31_TIER_APPLY_V214 = calc;
   }
 
-  const oldMake213 = window.makeCustomerSummary;
-  window.makeCustomerSummary = makeCustomerSummary = function(){
-    return renderSummary213(localMember213());
-  };
-
-  const oldOpenCart213 = window.openCartModal;
-  if(typeof oldOpenCart213 === "function"){
-    window.openCartModal = openCartModal = async function(){
-      const result = oldOpenCart213.apply(this, arguments);
-      const m = await refreshMember213();
-      renderSummary213(m);
+  const oldOpenMember214 = window.openMemberModal;
+  if(typeof oldOpenMember214 === "function"){
+    window.openMemberModal = async function(){
+      const result = await oldOpenMember214.apply(this, arguments);
+      updateAuth214();
+      await refreshMember214("open-member");
       return result;
     };
   }
 
-  const oldUpdateAll213 = window.updateAll;
-  if(typeof oldUpdateAll213 === "function"){
-    window.updateAll = updateAll = function(){
-      const result = oldUpdateAll213.apply(this, arguments);
-      setTimeout(function(){ renderSummary213(localMember213()); }, 20);
+  const oldShowPage214 = window.showPage;
+  if(typeof oldShowPage214 === "function"){
+    window.showPage = async function(page){
+      const result = oldShowPage214.apply(this, arguments);
+      updateAuth214();
+      if(page === "home" || page === "tier" || page === "history"){
+        await refreshMember214("show-" + page);
+      }
       return result;
     };
   }
 
-  const oldFetch213 = window.fetch;
-  if(oldFetch213 && !window.__SKY31_V213_FETCH_PATCHED){
-    window.__SKY31_V213_FETCH_PATCHED = true;
+  const oldLogin214 = window.memberLoginLookup;
+  if(typeof oldLogin214 === "function"){
+    window.memberLoginLookup = async function(){
+      const result = await oldLogin214.apply(this, arguments);
+      await refreshMember214("login");
+      updateAuth214();
+      return result;
+    };
+  }
+
+  const oldLogout214 = window.memberLogout;
+  if(typeof oldLogout214 === "function"){
+    window.memberLogout = function(){
+      const result = oldLogout214.apply(this, arguments);
+      setTimeout(updateAuth214, 40);
+      setTimeout(updateAuth214, 300);
+      return result;
+    };
+  }
+
+  const oldOpenCart214 = window.openCartModal;
+  if(typeof oldOpenCart214 === "function"){
+    window.openCartModal = async function(){
+      const result = oldOpenCart214.apply(this, arguments);
+      const m = await refreshMember214("cart");
+      setTimeout(function(){ renderDiscountVerify214(m); }, 80);
+      setTimeout(function(){ renderDiscountVerify214(readMember214()); }, 500);
+      return result;
+    };
+  }
+
+  const oldUpdateAll214 = window.updateAll;
+  if(typeof oldUpdateAll214 === "function"){
+    window.updateAll = function(){
+      const result = oldUpdateAll214.apply(this, arguments);
+      setTimeout(function(){ renderDiscountVerify214(readMember214()); }, 80);
+      return result;
+    };
+  }
+
+  const oldFetch214 = window.fetch;
+  if(oldFetch214 && !window.__SKY31_V214_FETCH_PATCHED){
+    window.__SKY31_V214_FETCH_PATCHED = true;
     window.fetch = function(input, init){
       try{
         const url = typeof input === "string" ? input : (input && input.url) || "";
         if(url.indexOf("/api/order") >= 0 && init && init.body && typeof init.body === "string"){
+          const member = readMember214();
+          const r = reward214(member);
+          const after = Math.max(0, subtotal214() - r.discount);
+          const calc = tierDiscount214(member, after);
           const body = JSON.parse(init.body);
-          const reward = rewardCalc213(localMember213());
-          const tierCalc = tierDiscountCalc213(localMember213(), reward.afterReward);
-          body.memberTierKeyPreview = tierCalc.tier.key;
-          body.memberTierNamePreview = tierCalc.tier.name;
-          body.memberTierManualPreview = !!tierCalc.tier.manual;
-          body.tierDiscountPreview = tierCalc.discount;
-          body.tierDiscountDetailsPreview = tierCalc.details;
+          body.memberTierKeyPreview = calc.tier.key;
+          body.memberTierNamePreview = calc.tier.name;
+          body.memberTierManualPreview = !!calc.tier.manual;
+          body.tierDiscountPreview = calc.discount;
+          body.tierDiscountDetailsPreview = calc.details;
           init.body = JSON.stringify(body);
         }
       }catch(e){}
-      return oldFetch213.apply(this, arguments);
+      return oldFetch214.apply(this, arguments);
     };
   }
 
-  function patchMemberFlow213(){
-    updateAuthMenu213();
-
-    const oldOpen = window.openMemberModal;
-    if(typeof oldOpen === "function" && !window.__SKY31_V213_OPEN_MEMBER_PATCHED){
-      window.__SKY31_V213_OPEN_MEMBER_PATCHED = true;
-      window.openMemberModal = async function(){
-        const result = await oldOpen.apply(this, arguments);
-        updateAuthMenu213();
-        refreshMember213();
-        setTimeout(updateAuthMenu213, 200);
-        return result;
-      };
-    }
-
-    const oldLogin = window.memberLoginLookup;
-    if(typeof oldLogin === "function" && !window.__SKY31_V213_LOGIN_PATCHED){
-      window.__SKY31_V213_LOGIN_PATCHED = true;
-      window.memberLoginLookup = async function(){
-        const result = await oldLogin.apply(this, arguments);
-        await refreshMember213();
-        updateAuthMenu213();
-        return result;
-      };
-    }
-
-    const oldRegister = window.memberRegisterSave;
-    if(typeof oldRegister === "function" && !window.__SKY31_V213_REGISTER_PATCHED){
-      window.__SKY31_V213_REGISTER_PATCHED = true;
-      window.memberRegisterSave = async function(){
-        const result = await oldRegister.apply(this, arguments);
-        await refreshMember213();
-        updateAuthMenu213();
-        return result;
-      };
-    }
-
-    const oldLogout = window.memberLogout;
-    if(typeof oldLogout === "function" && !window.__SKY31_V213_LOGOUT_PATCHED){
-      window.__SKY31_V213_LOGOUT_PATCHED = true;
-      window.memberLogout = function(){
-        const result = oldLogout.apply(this, arguments);
-        setTimeout(updateAuthMenu213, 50);
-        setTimeout(updateAuthMenu213, 500);
-        return result;
-      };
-    }
-  }
-
-  if(document.readyState === "loading"){
-    document.addEventListener("DOMContentLoaded", function(){
-      patchMemberFlow213();
-      refreshMember213();
-    });
-  }else{
-    patchMemberFlow213();
-    refreshMember213();
-  }
-
-  setTimeout(patchMemberFlow213, 500);
-  setTimeout(updateAuthMenu213, 800);
-  document.addEventListener("click", function(){
-    setTimeout(updateAuthMenu213, 80);
-  }, true);
+  document.addEventListener("DOMContentLoaded", function(){
+    updateAuth214();
+    refreshMember214("dom");
+    setTimeout(function(){ renderDiscountVerify214(readMember214()); }, 1000);
+  });
+  window.addEventListener("focus", function(){ refreshMember214("focus"); });
+  document.addEventListener("visibilitychange", function(){ if(!document.hidden) refreshMember214("visible"); });
+  document.addEventListener("click", function(){ setTimeout(updateAuth214, 60); }, true);
 })();
 </script>
 
