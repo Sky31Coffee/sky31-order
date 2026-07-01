@@ -7577,6 +7577,55 @@ body:has(#orderApp.hidden) #sky31PersistentCart.sky31-cart-body-level{
   }
 }
 
+
+/* V205: latest 3 member history + upgrade reminder */
+.member-history-expand-v205{
+  margin:14px 0 6px !important;
+  display:flex !important;
+  justify-content:center !important;
+}
+
+.member-history-expand-v205 button{
+  width:100% !important;
+  max-width:360px !important;
+  border:1px solid rgba(47,42,36,.14) !important;
+  background:rgba(255,255,255,.68) !important;
+  color:#2f2a24 !important;
+  border-radius:999px !important;
+  padding:11px 14px !important;
+  font-size:13px !important;
+  font-weight:900 !important;
+  cursor:pointer !important;
+  box-shadow:0 10px 22px rgba(31,29,26,.06), inset 0 1px 0 rgba(255,255,255,.78) !important;
+}
+
+.member-history-expand-v205 button.primary{
+  background:#1f1d1a !important;
+  color:#fff !important;
+  border-color:#1f1d1a !important;
+}
+
+.member-history-hidden-note-v205{
+  margin:8px 0 0 !important;
+  text-align:center !important;
+  color:rgba(47,42,36,.54) !important;
+  font-size:12px !important;
+  font-weight:760 !important;
+  line-height:1.45 !important;
+}
+
+.member-tier-upgrade-v205{
+  margin-top:10px !important;
+  padding:10px 11px !important;
+  border-radius:16px !important;
+  background:rgba(255,255,255,.58) !important;
+  border:1px solid rgba(255,255,255,.72) !important;
+  color:rgba(43,57,82,.74) !important;
+  font-size:12px !important;
+  line-height:1.45 !important;
+  font-weight:820 !important;
+}
+
 </style>
 
 <style>
@@ -10341,6 +10390,8 @@ window.addEventListener("load", function() {
     }else if(memberPage === "history"){
       $("memberPageHistory").classList.add("active");
       title = "歷史訂單";
+      window.SKY31_MEMBER_HISTORY_EXPANDED_V205 = false;
+      window.SKY31_MEMBER_HISTORY_PAGE_V204 = 1;
       renderHistoryPage();
     }else{
       $("memberPageHome").classList.add("active");
@@ -10378,20 +10429,24 @@ window.addEventListener("load", function() {
 
     function tier(c){
       c = Number(c || 0);
-      if(c >= 180) return { key:"vip", name:"黑金會員", icon:"👑", next:null };
-      if(c >= 100) return { key:"diamond", name:"鑽石會員", icon:"💎", next:180 };
-      if(c >= 60) return { key:"gold", name:"金卡會員", icon:"🥇", next:100 };
-      if(c >= 30) return { key:"silver", name:"銀卡會員", icon:"🥈", next:60 };
-      return { key:"regular", name:"普通會員", icon:"🌱", next:30 };
+      if(c >= 180) return { key:"vip", name:"黑金會員", icon:"👑", next:null, nextName:null, nextIcon:null };
+      if(c >= 100) return { key:"diamond", name:"鑽石會員", icon:"💎", next:180, nextName:"黑金會員", nextIcon:"👑" };
+      if(c >= 60) return { key:"gold", name:"金卡會員", icon:"🥇", next:100, nextName:"鑽石會員", nextIcon:"💎" };
+      if(c >= 30) return { key:"silver", name:"銀卡會員", icon:"🥈", next:60, nextName:"金卡會員", nextIcon:"🥇" };
+      return { key:"regular", name:"普通會員", icon:"🌱", next:30, nextName:"銀卡會員", nextIcon:"🥈" };
     }
 
     var t = (member.rewards && member.rewards.tier) || { name: member.memberTier, icon: member.memberTierIcon } || tier(cups);
     if(!t.name || t.name === "青銅會員" || t.name === "普通會員") t = tier(cups);
+    if(!("next" in t)) t = tier(cups);
 
-    var nextTierText = t.next ? ("距離下一等級還差 " + Math.max(0, Number(t.next) - cups) + " 杯") : "已達最高等級";
+    var upgradeText = t.next
+      ? ("還差 " + Math.max(0, Number(t.next) - cups) + " 杯即可晉級成為 " + t.nextName + " " + t.nextIcon)
+      : "已達最高等級，感謝你的長期支持。";
+
     var rewardText = available > 0
-      ? ("你目前有 " + available + " 次免費兌換，可於確認訂單時自動扣減。兌換後不會扣減總累計杯數；歷史完成訂單會自動補回。")
-      : ("距離下一次免費兌換還差 " + remain + " 杯。免單只扣可用次數，不扣總累計杯數；歷史完成訂單會自動補回。");
+      ? ("你目前有 " + available + " 次免費兌換，可於確認訂單時自動扣減。兌換後不會扣減總累計杯數。")
+      : ("距離下一次免費兌換還差 " + remain + " 杯。免單只扣可用次數，不扣總累計杯數。");
 
     return '' +
       '<div class="member-reward-card member-reward-card-v196">' +
@@ -10409,7 +10464,8 @@ window.addEventListener("load", function() {
           '<div class="member-reward-stat-v196"><b>' + available + '</b><span>目前可用<br>免單次數</span></div>' +
         '</div>' +
         '<div class="member-reward-bar-v196"><i style="width:' + pct + '%"></i></div>' +
-        '<div class="member-reward-line-v196">🎁 ' + esc(rewardText) + '<br>' + esc(nextTierText) + '</div>' +
+        '<div class="member-reward-line-v196">🎁 ' + esc(rewardText) + '</div>' +
+        '<div class="member-tier-upgrade-v205">🚀 ' + esc(upgradeText) + '</div>' +
       '</div>';
   }
 
@@ -10495,12 +10551,15 @@ window.addEventListener("load", function() {
       return;
     }
 
+    var expanded = window.SKY31_MEMBER_HISTORY_EXPANDED_V205 === true;
     var pageSize = 10;
     var totalPages = Math.max(1, Math.ceil(orders.length / pageSize));
     var page = Math.max(1, Math.min(totalPages, Number(window.SKY31_MEMBER_HISTORY_PAGE_V204 || 1)));
+    if(!expanded) page = 1;
     window.SKY31_MEMBER_HISTORY_PAGE_V204 = page;
-    var start = (page - 1) * pageSize;
-    var pageOrders = orders.slice(start, start + pageSize);
+
+    var start = expanded ? (page - 1) * pageSize : 0;
+    var pageOrders = expanded ? orders.slice(start, start + pageSize) : orders.slice(0, 3);
 
     function displayBean(bean){
       return window.sky31BeanDisplayV204 ? window.sky31BeanDisplayV204(bean) : String(bean || "").split("|")[0].split("｜")[0].trim();
@@ -10511,7 +10570,7 @@ window.addEventListener("load", function() {
     }
 
     function paginationHtml(){
-      if(totalPages <= 1) return "";
+      if(!expanded || totalPages <= 1) return "";
       var html = '<div class="member-history-pagination-v204">';
       html += '<button type="button" ' + (page <= 1 ? 'disabled' : '') + ' onclick="memberHistoryPageV204(' + (page - 1) + ')">上一頁</button>';
 
@@ -10533,7 +10592,7 @@ window.addEventListener("load", function() {
     }
 
     var cards = pageOrders.map(function(o, idx){
-      var globalIdx = start + idx;
+      var globalIdx = expanded ? (start + idx) : idx;
       var items = Array.isArray(o.cart) ? o.cart : [];
       var itemHtml = items.length ? items.map(function(item){
         var meta = [
@@ -10562,14 +10621,42 @@ window.addEventListener("load", function() {
       '</div>';
     }).join("");
 
+    var topText = expanded
+      ? '<span>每頁最多 10 張訂單</span><span>第 ' + page + ' / ' + totalPages + ' 頁｜共 ' + orders.length + ' 張</span>'
+      : '<span>最新 3 張訂單</span><span>共 ' + orders.length + ' 張</span>';
+
+    var expandControl = "";
+    if(!expanded && orders.length > 3){
+      expandControl =
+        '<div class="member-history-hidden-note-v205">其餘 ' + (orders.length - 3) + ' 張訂單已自動隱藏。</div>' +
+        '<div class="member-history-expand-v205"><button class="primary" type="button" onclick="memberHistoryExpandV205()">查看全部歷史訂單 ▼</button></div>';
+    }else if(expanded && orders.length > 3){
+      expandControl =
+        '<div class="member-history-expand-v205"><button type="button" onclick="memberHistoryCollapseV205()">收起，只顯示最新 3 張 ▲</button></div>';
+    }
+
     list.innerHTML =
-      '<div class="member-history-topline-v204"><span>每頁最多 10 張訂單</span><span>第 ' + page + ' / ' + totalPages + ' 頁｜共 ' + orders.length + ' 張</span></div>' +
+      '<div class="member-history-topline-v204">' + topText + '</div>' +
       cards +
-      paginationHtml();
+      paginationHtml() +
+      expandControl;
   }
 
   window.memberHistoryPageV204 = function(page){
+    window.SKY31_MEMBER_HISTORY_EXPANDED_V205 = true;
     window.SKY31_MEMBER_HISTORY_PAGE_V204 = Number(page || 1);
+    renderHistoryPage();
+  };
+
+  window.memberHistoryExpandV205 = function(){
+    window.SKY31_MEMBER_HISTORY_EXPANDED_V205 = true;
+    window.SKY31_MEMBER_HISTORY_PAGE_V204 = 1;
+    renderHistoryPage();
+  };
+
+  window.memberHistoryCollapseV205 = function(){
+    window.SKY31_MEMBER_HISTORY_EXPANDED_V205 = false;
+    window.SKY31_MEMBER_HISTORY_PAGE_V204 = 1;
     renderHistoryPage();
   };
 
