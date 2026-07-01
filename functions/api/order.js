@@ -232,7 +232,7 @@ function money(n) {
 function cartTotal(cart) {
   return (Array.isArray(cart) ? cart : []).reduce((sum, item) => {
     const qty = Number(item.qty || item.quantity || 1);
-    const unit = Number(item.unitPrice || item.price || calcUnitPrice(item) || 0);
+    const unit = Number(calcUnitPrice(item) || item.unitPrice || item.price || 0);
     return sum + unit * qty;
   }, 0);
 }

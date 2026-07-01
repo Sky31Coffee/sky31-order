@@ -21,6 +21,31 @@ export async function onRequestPost(context) {
 
   try {
     const body = await request.json();
+
+    if (String(body.action || "") === "setBirthday") {
+      const phoneForBirthday = normalizePhone(body.phone || "");
+      const birthdayForMember = String(body.birthday || "").trim();
+
+      if (!phoneForBirthday) return json({ ok: false, error: "請先登入會員" }, 400);
+      if (!isValidBirthdayV211(birthdayForMember)) return json({ ok: false, error: "生日日期格式不正確" }, 400);
+
+      const member = await loadMember(env, phoneForBirthday);
+      if (!member) return json({ ok: false, error: "查詢不到會員資料" }, 404);
+      if (member.birthday) return json({ ok: false, error: "生日已設定，如需更改請聯絡店員。" }, 409);
+
+      const now = new Date().toISOString();
+      member.birthday = birthdayForMember;
+      member.birthdayLockedAt = now;
+      member.birthdayUpdatedAt = now;
+      member.birthdayUpdatedBy = "customer";
+      member.updatedAt = now;
+
+      await env.ORDERS.put("member:" + normalizePhone(member.phone || phoneForBirthday), JSON.stringify(member));
+
+      const withStats = await enrichMemberWithOrders(env, member);
+      return json({ ok: true, member: sky31DecorateMemberV196(withStats) });
+    }
+
     const phone = normalizePhone(body.phone || "");
     const name = String(body.name || body.customerName || "").trim();
     const birthday = String(body.birthday || "").trim();
@@ -573,6 +598,8 @@ function sky31RewardsFromMemberV196(member) {
 function sky31DecorateMemberV196(member) {
   if (!member || typeof member !== "object") return member;
   const rewards = sky31RewardsFromMemberV196(member);
+  const manualTier = sky31TierByKeyV211(member.manualTierKey || member.memberTierOverrideKey || member.memberTierManualKey || "");
+  const displayTier = manualTier || rewards.tier;
   return {
     ...member,
     rewardRedeemed: rewards.redeemedRewards,
@@ -581,9 +608,13 @@ function sky31DecorateMemberV196(member) {
     earnedRewards: rewards.earnedRewards,
     redeemedRewards: rewards.redeemedRewards,
     cupsToNextReward: rewards.cupsToNextReward,
-    memberTier: rewards.tier.name,
-    memberTierIcon: rewards.tier.icon,
-    memberTierKey: rewards.tier.key
+    naturalMemberTier: rewards.tier.name,
+    naturalMemberTierIcon: rewards.tier.icon,
+    naturalMemberTierKey: rewards.tier.key,
+    memberTier: displayTier.name,
+    memberTierIcon: displayTier.icon,
+    memberTierKey: displayTier.key,
+    memberTierManual: !!manualTier
   };
 }
 
@@ -620,4 +651,30 @@ function isMemberLifetimeSuccessfulOrderV202(order) {
   if (pay === "paid" || pay === "success" || pay === "successful") return true;
 
   return false;
+}
+
+
+/* V211: birthday validation and manual tier override for member API. */
+function isValidBirthdayV211(value) {
+  const s = String(value || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(s + "T00:00:00Z");
+  if (Number.isNaN(d.getTime())) return false;
+  const y = String(d.getUTCFullYear()).padStart(4, "0");
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return y + "-" + m + "-" + day === s;
+}
+
+function sky31TierByKeyV211(key) {
+  key = String(key || "").toLowerCase();
+  if (key === "vip") key = "blackgold";
+  const map = {
+    regular: { key: "regular", name: "普通會員", icon: "🌱", next: 30 },
+    silver: { key: "silver", name: "銀卡會員", icon: "🥈", next: 60 },
+    gold: { key: "gold", name: "金卡會員", icon: "🥇", next: 100 },
+    diamond: { key: "diamond", name: "鑽石會員", icon: "💎", next: 180 },
+    blackgold: { key: "blackgold", name: "黑金會員", icon: "👑", next: null }
+  };
+  return map[key] || null;
 }

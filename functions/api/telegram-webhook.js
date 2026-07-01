@@ -7,7 +7,7 @@ export async function onRequest(context) {
     return json({
       ok: true,
       endpoint: "telegram-webhook",
-      version: "V206",
+      version: "V211",
       method,
       message: "Webhook endpoint reachable. Telegram sends POST updates here."
     });
@@ -50,6 +50,15 @@ async function handleTelegramPost(context) {
     data.startsWith("member_view_deleted:")
   ) {
     return handleMemberQueryAction(env, cq, data);
+  }
+
+  if (
+    data.startsWith("member_edit_birthday:") ||
+    data.startsWith("member_edit_cancel:") ||
+    data.startsWith("member_tier_menu:") ||
+    data.startsWith("member_tier_set:")
+  ) {
+    return handleMemberAdminEditActionV211(env, cq, data);
   }
 
   if (
@@ -213,6 +222,11 @@ async function handleTelegramPost(context) {
 async function handleTelegramTextCommand(env, message) {
   const text = String(message.text || "").trim();
   const chatId = message.chat && message.chat.id ? message.chat.id : env.TELEGRAM_CHAT_ID;
+
+  const memberEditDraftV211 = await getMemberEditDraftV211(env, chatId);
+  if (memberEditDraftV211) {
+    return handleMemberEditDraftTextV211(env, message, text, memberEditDraftV211);
+  }
 
   if (isLimitedMenuCommand(text)) {
     return handleLimitedMenuTextCommand(env, message, text);
@@ -3719,3 +3733,313 @@ async function recalcMemberFromOrdersV199(env, changedOrder) {
   member.updatedAt = new Date().toISOString();
   await env.ORDERS.put(memberKey || ("member:" + phone), JSON.stringify(member), { expirationTtl: 60 * 60 * 24 * 3650 });
 }
+
+
+/* V211: Telegram member birthday edit + manual tier override. */
+const MEMBER_EDIT_DRAFT_TTL_V211 = 600;
+
+function memberTierListV211() {
+  return [
+    { key: "regular", name: "普通會員", icon: "🌱", cups: 0 },
+    { key: "silver", name: "銀卡會員", icon: "🥈", cups: 30 },
+    { key: "gold", name: "金卡會員", icon: "🥇", cups: 60 },
+    { key: "diamond", name: "鑽石會員", icon: "💎", cups: 100 },
+    { key: "blackgold", name: "黑金會員", icon: "👑", cups: 180 }
+  ];
+}
+
+function memberTierByKeyV211(key) {
+  key = String(key || "").toLowerCase();
+  if (key === "vip") key = "blackgold";
+  return memberTierListV211().find(t => t.key === key) || null;
+}
+
+function memberTierByCupsV211(cups) {
+  cups = Number(cups || 0);
+  let current = memberTierListV211()[0];
+  memberTierListV211().forEach(t => { if (cups >= t.cups) current = t; });
+  return current;
+}
+
+function memberDisplayTierV211(member) {
+  member = member || {};
+  const manual = memberTierByKeyV211(member.manualTierKey || member.memberTierOverrideKey || member.memberTierManualKey || "");
+  const natural = memberTierByCupsV211(member.totalCups || member.cups || member.totalItems || 0);
+  const tier = manual || natural;
+  return { ...tier, manual: !!manual };
+}
+
+function birthdayValidV211(value) {
+  const s = String(value || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(s + "T00:00:00Z");
+  if (Number.isNaN(d.getTime())) return false;
+  const y = String(d.getUTCFullYear()).padStart(4, "0");
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return y + "-" + m + "-" + day === s;
+}
+
+function memberEditDraftKeyV211(chatId) {
+  return "member_edit_draft:" + String(chatId || "");
+}
+
+async function getMemberEditDraftV211(env, chatId) {
+  if (!env || !env.ORDERS || !chatId) return null;
+  const raw = await env.ORDERS.get(memberEditDraftKeyV211(chatId));
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch (_) { return null; }
+}
+
+async function saveMemberEditDraftV211(env, chatId, draft) {
+  await env.ORDERS.put(memberEditDraftKeyV211(chatId), JSON.stringify(draft), { expirationTtl: MEMBER_EDIT_DRAFT_TTL_V211 });
+}
+
+async function clearMemberEditDraftV211(env, chatId) {
+  await env.ORDERS.delete(memberEditDraftKeyV211(chatId));
+}
+
+async function loadActiveMemberForEditV211(env, phone) {
+  phone = normalizePhone(phone);
+  const candidates = [phone];
+  if (phone.length === 8) candidates.push("853" + phone);
+  if (phone.length === 11 && phone.startsWith("853")) candidates.push(phone.slice(3));
+
+  for (const p of Array.from(new Set(candidates))) {
+    const raw = await env.ORDERS.get("member:" + p);
+    if (!raw) continue;
+    try {
+      const member = JSON.parse(raw);
+      if (member && !member.deletedAt) {
+        member.phone = normalizePhone(member.phone || p);
+        return { key: "member:" + p, member };
+      }
+    } catch (_) {}
+  }
+  return { key: "", member: null };
+}
+
+async function saveActiveMemberForEditV211(env, loaded) {
+  const member = loaded.member;
+  const key = loaded.key || ("member:" + normalizePhone(member.phone));
+  await env.ORDERS.put(key, JSON.stringify(member), { expirationTtl: 60 * 60 * 24 * 3650 });
+  const normalizedKey = "member:" + normalizePhone(member.phone);
+  if (key !== normalizedKey) await env.ORDERS.put(normalizedKey, JSON.stringify(member), { expirationTtl: 60 * 60 * 24 * 3650 });
+}
+
+async function handleMemberAdminEditActionV211(env, cq, data) {
+  const chatId = cq.message && cq.message.chat ? cq.message.chat.id : env.TELEGRAM_CHAT_ID;
+  const messageId = cq.message ? cq.message.message_id : null;
+  if (!isAuthorizedTelegramChat(env, chatId)) return stop(env, cq, "沒有權限");
+
+  const parts = String(data || "").split(":");
+  const action = parts[0];
+  const phone = normalizePhone(parts[1] || "");
+
+  if (!phone) return stop(env, cq, "找不到會員電話");
+
+  if (action === "member_edit_cancel") {
+    await clearMemberEditDraftV211(env, chatId);
+    const loaded = await loadActiveMemberForEditV211(env, phone);
+    if (!loaded.member) return stop(env, cq, "找不到會員資料");
+    const enriched = await enrichMemberStatsForTelegram(env, loaded.member);
+    await editTelegramMessage(env, chatId, messageId, buildMemberDetailText(enriched, false), buildMemberDetailReplyMarkup(enriched, false));
+    return stop(env, cq, "已取消");
+  }
+
+  if (action === "member_edit_birthday") {
+    await saveMemberEditDraftV211(env, chatId, { type: "birthday", phone, createdAt: new Date().toISOString() });
+    await editTelegramMessage(
+      env,
+      chatId,
+      messageId,
+      "🎂 更改會員生日\n\n請直接傳送生日日期，格式：YYYY-MM-DD\n例如：1990-08-18\n\n此操作只限店方在 Telegram 後台修改。",
+      { inline_keyboard: [[{ text: "取消", callback_data: "member_edit_cancel:" + phone }]] }
+    );
+    return stop(env, cq, "請輸入生日日期");
+  }
+
+  if (action === "member_tier_menu") {
+    const rows = memberTierListV211().map(t => ([{
+      text: t.icon + " " + t.name + "｜" + (t.cups === 0 ? "加入即成為會員" : "累計 " + t.cups + " 杯起"),
+      callback_data: "member_tier_set:" + phone + ":" + t.key
+    }]));
+    rows.push([{ text: "取消", callback_data: "member_edit_cancel:" + phone }]);
+    await editTelegramMessage(
+      env,
+      chatId,
+      messageId,
+      "🏅 更改會員等級\n\n此功能會無視杯量門檻，直接設定會員顯示等級。\n累計杯數、消費、免單次數不會被改動。",
+      { inline_keyboard: rows }
+    );
+    return stop(env, cq, "請選擇會員等級");
+  }
+
+  if (action === "member_tier_set") {
+    const tierKey = String(parts[2] || "");
+    const tier = memberTierByKeyV211(tierKey);
+    if (!tier) return stop(env, cq, "會員等級無效");
+
+    const loaded = await loadActiveMemberForEditV211(env, phone);
+    if (!loaded.member) return stop(env, cq, "找不到會員資料");
+
+    const member = loaded.member;
+    member.manualTierKey = tier.key;
+    member.manualTierName = tier.name;
+    member.manualTierIcon = tier.icon;
+    member.memberTierOverrideKey = tier.key;
+    member.memberTierOverrideName = tier.name;
+    member.memberTierOverrideIcon = tier.icon;
+    member.manualTierUpdatedAt = new Date().toISOString();
+    member.manualTierUpdatedBy = "telegram";
+    member.updatedAt = member.manualTierUpdatedAt;
+
+    await saveActiveMemberForEditV211(env, loaded);
+
+    const enriched = await enrichMemberStatsForTelegram(env, member);
+    await editTelegramMessage(env, chatId, messageId, buildMemberDetailText(enriched, false), buildMemberDetailReplyMarkup(enriched, false));
+    return stop(env, cq, "已更改會員等級：" + tier.name);
+  }
+
+  return stop(env, cq, "未知會員編輯操作");
+}
+
+async function handleMemberEditDraftTextV211(env, message, text, draft) {
+  const chatId = message.chat && message.chat.id ? message.chat.id : env.TELEGRAM_CHAT_ID;
+  if (!isAuthorizedTelegramChat(env, chatId)) {
+    await clearMemberEditDraftV211(env, chatId);
+    return json({ ok: true });
+  }
+
+  if (String(text || "").trim() === "取消") {
+    await clearMemberEditDraftV211(env, chatId);
+    await sendTelegramMessage(env, chatId, "已取消會員資料修改。", buildCommandMenuMarkupV183 ? buildCommandMenuMarkupV183() : null);
+    return json({ ok: true });
+  }
+
+  if (draft.type === "birthday") {
+    const birthday = String(text || "").trim();
+    if (!birthdayValidV211(birthday)) {
+      await sendTelegramMessage(env, chatId, "生日格式不正確，請輸入 YYYY-MM-DD，例如：1990-08-18。\n輸入「取消」可取消操作。", null);
+      return json({ ok: true });
+    }
+
+    const loaded = await loadActiveMemberForEditV211(env, draft.phone);
+    if (!loaded.member) {
+      await clearMemberEditDraftV211(env, chatId);
+      await sendTelegramMessage(env, chatId, "找不到會員資料，已取消。", null);
+      return json({ ok: true });
+    }
+
+    const member = loaded.member;
+    member.birthday = birthday;
+    member.birthdayUpdatedAt = new Date().toISOString();
+    member.birthdayUpdatedBy = "telegram";
+    member.updatedAt = member.birthdayUpdatedAt;
+
+    await saveActiveMemberForEditV211(env, loaded);
+    await clearMemberEditDraftV211(env, chatId);
+
+    const enriched = await enrichMemberStatsForTelegram(env, member);
+    await sendTelegramMessage(env, chatId, "✅ 已更新會員生日\n\n" + buildMemberDetailText(enriched, false), buildMemberDetailReplyMarkup(enriched, false));
+    return json({ ok: true });
+  }
+
+  await clearMemberEditDraftV211(env, chatId);
+  return json({ ok: true });
+}
+
+buildMemberDetailText = function(member, deleted = false) {
+  const tier = memberDisplayTierV211(member);
+  const lines = [];
+  lines.push("👤 SKY31 會員詳細資料");
+  lines.push("");
+  if (deleted) {
+    lines.push("狀態：已刪除");
+  } else {
+    lines.push("狀態：有效會員｜等級：" + tier.name + " " + tier.icon + (tier.manual ? "（店方設定）" : ""));
+  }
+  lines.push("姓名：" + (member.name || "-"));
+  lines.push("電話：" + (member.phone || "-"));
+  lines.push("生日：" + (member.birthday || "-"));
+  if (member.note) lines.push("備註：" + member.note);
+  if (member.createdAt) lines.push("註冊時間：" + formatDateTime(member.createdAt));
+  if (member.deletedAt) lines.push("刪除時間：" + formatDateTime(member.deletedAt));
+  if (member.restoredAt && !deleted) lines.push("恢復時間：" + formatDateTime(member.restoredAt));
+  if (member.manualTierUpdatedAt && !deleted) lines.push("等級修改時間：" + formatDateTime(member.manualTierUpdatedAt));
+  if (member.birthdayUpdatedAt && !deleted) lines.push("生日修改時間：" + formatDateTime(member.birthdayUpdatedAt));
+  lines.push("");
+  lines.push("累積訂單：" + Number(member.totalOrders || 0));
+  lines.push("累積杯數：" + Number(member.totalCups || 0));
+  lines.push("累積消費：MOP " + String(Math.round(Number(member.totalSpent || 0) * 100) / 100));
+
+  if (deleted && member.deletedOrders != null) {
+    lines.push("已刪除相關訂單：" + Number(member.deletedOrders || 0));
+  }
+
+  const recent = Array.isArray(member.recentOrders) ? member.recentOrders : [];
+  if (recent.length) {
+    lines.push("");
+    lines.push("最近訂單：");
+    recent.forEach(order => {
+      lines.push("#" + order.orderNo + "｜" + statusLabel(order.status) + "｜" + Number(order.cups || 0) + "杯｜MOP " + String(Math.round(Number(order.totalAmount || 0) * 100) / 100));
+    });
+  }
+
+  lines.push("");
+  if (deleted) lines.push("此會員已刪除。可按「恢復賬號」恢復會員。");
+  else lines.push("可在下方修改生日 / 會員等級，或刪除會員。");
+
+  return lines.join("\n").trim();
+};
+
+buildMemberDetailReplyMarkup = function(member, deleted = false) {
+  const phone = normalizePhone(member.phone);
+  const rows = [];
+  if (deleted) {
+    rows.push([{ text: "↩️ 恢復賬號", callback_data: "member_restore:" + phone }]);
+  } else {
+    rows.push([{ text: "🎂 更改生日", callback_data: "member_edit_birthday:" + phone }]);
+    rows.push([{ text: "🏅 更改會員等級", callback_data: "member_tier_menu:" + phone }]);
+    rows.push([{ text: "🗑️ 刪除賬號", callback_data: "member_delete:" + phone }]);
+  }
+  rows.push([{ text: "📋 返回用戶列表", callback_data: "member_list:all" }]);
+  rows.push([{ text: "返回功能列表", callback_data: "limited_cmd_menu:x" }]);
+  return { inline_keyboard: rows };
+};
+
+buildMemberTelegramText = function(member, deleted = false, confirmingDelete = false) {
+  const tier = memberDisplayTierV211(member);
+  const lines = [];
+  lines.push("👤 SKY31 MEMBER");
+  lines.push("");
+
+  if (confirmingDelete) {
+    lines.push("狀態：等待確認刪除");
+  } else if (deleted) {
+    lines.push("狀態：已刪除");
+  } else {
+    lines.push("狀態：有效會員｜等級：" + tier.name + " " + tier.icon + (tier.manual ? "（店方設定）" : ""));
+  }
+
+  lines.push("姓名：" + (member.name || "-"));
+  lines.push("電話：" + (member.phone || "-"));
+  lines.push("生日：" + (member.birthday || "-"));
+  if (member.note) lines.push("備註：" + member.note);
+  if (member.createdAt) lines.push("註冊時間：" + formatDateTime(member.createdAt));
+  if (member.deletedAt && !confirmingDelete) lines.push("刪除時間：" + formatDateTime(member.deletedAt));
+  if (deleted && !confirmingDelete) lines.push("已刪除相關訂單：" + Number(member.deletedOrders || 0));
+  if (member.restoredAt && !deleted && !confirmingDelete) lines.push("恢復時間：" + formatDateTime(member.restoredAt));
+  if (member.restoredAt && !deleted && !confirmingDelete) lines.push("已恢復相關訂單：" + Number(member.restoredOrders || 0));
+  lines.push("");
+  lines.push("累積訂單：" + Number(member.totalOrders || 0));
+  lines.push("累積杯數：" + Number(member.totalCups || 0));
+  lines.push("累積消費：MOP " + String(Math.round(Number(member.totalSpent || 0) * 100) / 100));
+  lines.push("");
+
+  if (confirmingDelete) lines.push("請確認是否刪除此會員資料。");
+  else if (deleted) lines.push("此會員已刪除。客戶不能再用此會員登入；如需要可重新註冊。");
+  else lines.push("提示：可在會員詳細頁修改生日或會員等級。");
+
+  return lines.join("\n").trim();
+};

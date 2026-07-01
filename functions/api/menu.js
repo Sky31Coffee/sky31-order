@@ -21,7 +21,7 @@ export async function onRequest(context) {
     const visible = publicLimitedItemsV187(config);
     return json({
       ok: true,
-      version: "V206",
+      version: "V211",
       limitedItems: visible,
       currentLimitedBeanId: visible[0] ? visible[0].id : "",
       currentLimitedBeanIds: visible.map(item => item.id),
@@ -78,21 +78,43 @@ async function getLimitedMenuConfig(env) {
 }
 
 function sanitizePublicItems(items) {
-  return (Array.isArray(items) ? items : []).map(item => ({
-    id: safeId(item.id),
-    type: "bean",
-    active: item.active !== false,
-    deleted: item.deleted === true,
-    name: String(item.bean || item.beanName || item.name || item.title || "期間限定豆子").trim(),
-    cn: String(item.cn || item.zh || item.chinese || item.name || item.bean || "期間限定豆子").trim(),
-    desc: String(item.desc || item.description || item.note || item.beanNote || "").trim(),
-    bean: String(item.bean || item.beanName || item.name || item.cn || "期間限定豆子").trim(),
-    flavor: String(item.flavor || item.tasting || "").trim(),
-    note: String(item.note || item.beanNote || item.desc || item.description || "").trim(),
-    surcharge: Number(item.surcharge || item.limitedSurcharge || 5) || 5,
-    limitedSurcharge: Number(item.surcharge || item.limitedSurcharge || 5) || 5,
-    updatedAt: item.updatedAt || ""
-  })).filter(item => item.id && item.name && item.bean);
+  function cleanText(v) {
+    return String(v == null ? "" : v).trim();
+  }
+  return (Array.isArray(items) ? items : []).map(item => {
+    const beanName = cleanText(item.beanName || item.name || item.title || item.label || item.cn || item.zh || item.chinese || item.bean);
+    const bean = cleanText(item.beanName || item.name || item.title || item.label || item.cn || item.bean || "期間限定豆子");
+    const name = cleanText(item.name || item.beanName || item.title || item.label || item.bean || "期間限定豆子");
+    const desc = cleanText(item.desc || item.description || item.note || item.beanNote || item.subtitle || item.origin || item.region);
+    const flavor = cleanText(item.flavor || item.beanFlavor || item.tasting || item.taste || item.notes);
+    const note = cleanText(item.note || item.beanNote || item.desc || item.description || item.subtitle);
+    return {
+      id: safeId(item.id),
+      type: "bean",
+      active: item.active !== false,
+      deleted: item.deleted === true,
+      name,
+      bean,
+      beanName,
+      title: cleanText(item.title || ""),
+      label: cleanText(item.label || ""),
+      cn: cleanText(item.cn || item.zh || item.chinese || ""),
+      zh: cleanText(item.zh || item.chinese || ""),
+      desc,
+      description: cleanText(item.description || item.desc || ""),
+      subtitle: cleanText(item.subtitle || ""),
+      origin: cleanText(item.origin || ""),
+      region: cleanText(item.region || ""),
+      flavor,
+      beanFlavor: cleanText(item.beanFlavor || item.flavor || ""),
+      tasting: cleanText(item.tasting || item.flavor || ""),
+      note,
+      beanNote: cleanText(item.beanNote || item.note || ""),
+      surcharge: Number(item.surcharge || item.limitedSurcharge || 5) || 5,
+      limitedSurcharge: Number(item.surcharge || item.limitedSurcharge || 5) || 5,
+      updatedAt: item.updatedAt || ""
+    };
+  }).filter(item => item.id && (item.bean || item.name || item.beanName));
 }
 
 function safeId(id) {
