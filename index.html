@@ -6727,6 +6727,51 @@ body:has(#orderApp.hidden) #sky31PersistentCart.sky31-cart-body-level{
   color:rgba(45,66,98,.66);
 }
 
+
+/* V193: Landing limited bean mobile alignment and membership tier thresholds */
+@media(max-width:520px){
+  .landing-limited-beans-card .limited-bean-preview-v177,
+  .landing-limited-beans-card .v176-limited-mini-grid,
+  .landing-limited-beans-card .origin-bean-topline,
+  .landing-limited-beans-card .limited-bean-mini{
+    align-items:center !important;
+  }
+
+  .landing-limited-beans-card .limited-bean-preview-v177 > div,
+  .landing-limited-beans-card .v176-limited-mini-grid > div,
+  .landing-limited-beans-card .limited-bean-mini{
+    display:flex !important;
+    flex-direction:column !important;
+    justify-content:center !important;
+    min-height:88px !important;
+    padding-top:12px !important;
+    padding-bottom:12px !important;
+  }
+
+  .landing-limited-beans-card .limited-bean-preview-v177 b,
+  .landing-limited-beans-card .v176-limited-mini-grid b,
+  .landing-limited-beans-card .origin-bean-topline b,
+  .limited-bean-mini b{
+    font-size:clamp(11.5px, 3.15vw, 15px) !important;
+    line-height:1.24 !important;
+    margin-top:4px !important;
+    margin-bottom:6px !important;
+    transform:none !important;
+    white-space:nowrap !important;
+    overflow:visible !important;
+    text-overflow:clip !important;
+    letter-spacing:-.04em !important;
+    max-width:100% !important;
+  }
+
+  .landing-limited-beans-card .limited-bean-preview-v177 span,
+  .landing-limited-beans-card .v176-limited-mini-grid span,
+  .limited-bean-mini span{
+    line-height:1.45 !important;
+    margin-top:2px !important;
+  }
+}
+
 </style>
 
 <style>
@@ -15014,11 +15059,11 @@ window.addEventListener("load", function() {
 
   function tier192(cups){
     cups = Number(cups || 0);
-    if(cups >= 100) return {key:"vip", name:"黑金會員", icon:"👑", next:null};
-    if(cups >= 50) return {key:"diamond", name:"鑽石會員", icon:"💎", next:100};
-    if(cups >= 25) return {key:"gold", name:"金卡會員", icon:"🥇", next:50};
-    if(cups >= 10) return {key:"silver", name:"銀卡會員", icon:"🥈", next:25};
-    return {key:"bronze", name:"青銅會員", icon:"☕", next:10};
+    if(cups >= 180) return {key:"vip", name:"黑金會員", icon:"👑", next:null};
+    if(cups >= 100) return {key:"diamond", name:"鑽石會員", icon:"💎", next:180};
+    if(cups >= 60) return {key:"gold", name:"金卡會員", icon:"🥇", next:100};
+    if(cups >= 30) return {key:"silver", name:"銀卡會員", icon:"🥈", next:60};
+    return {key:"bronze", name:"青銅會員", icon:"☕", next:30};
   }
 
   function rewardsFromMember192(member){
@@ -15198,6 +15243,65 @@ window.addEventListener("load", function() {
       updateConfirmReward192();
     }, 2500);
   });
+})();
+</script>
+
+
+<script>
+/* V193: bigger one-line landing Limited Bean names, vertically centered. */
+(function(){
+  function fitLandingNames193(){
+    document.querySelectorAll(".landing-limited-beans-card b,.landing-limited-beans-card .origin-bean-topline b,.limited-bean-mini b").forEach(function(el){
+      const parent = el.parentElement;
+      if(!parent) return;
+
+      el.style.whiteSpace = "nowrap";
+      el.style.overflow = "visible";
+      el.style.textOverflow = "clip";
+      el.style.transform = "none";
+      el.style.marginTop = "4px";
+      el.style.marginBottom = "6px";
+      el.style.lineHeight = "1.24";
+
+      let size = window.innerWidth <= 520 ? 15 : (parseFloat(getComputedStyle(el).fontSize) || 14);
+      el.style.fontSize = size + "px";
+
+      const max = Math.max(100, parent.clientWidth - 10);
+      while(el.scrollWidth > max && size > 10.5){
+        size -= 0.35;
+        el.style.fontSize = size + "px";
+      }
+      el.title = el.textContent || "";
+    });
+
+    document.querySelectorAll(".landing-limited-beans-card .limited-bean-preview-v177 > div,.landing-limited-beans-card .v176-limited-mini-grid > div,.landing-limited-beans-card .limited-bean-mini").forEach(function(card){
+      card.style.display = "flex";
+      card.style.flexDirection = "column";
+      card.style.justifyContent = "center";
+      card.style.minHeight = window.innerWidth <= 520 ? "88px" : "";
+      card.style.paddingTop = window.innerWidth <= 520 ? "12px" : "";
+      card.style.paddingBottom = window.innerWidth <= 520 ? "12px" : "";
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", function(){
+    setTimeout(fitLandingNames193, 300);
+    setTimeout(fitLandingNames193, 900);
+  });
+  window.addEventListener("resize", function(){ setTimeout(fitLandingNames193, 120); });
+  document.addEventListener("visibilitychange", function(){ if(!document.hidden) setTimeout(fitLandingNames193, 120); });
+  document.addEventListener("click", function(){ setTimeout(fitLandingNames193, 180); });
+
+  const oldRefresh193 = window.SKY31_REFRESH_LIMITED;
+  if(oldRefresh193 && !window.__SKY31_V193_LANDING_PATCHED){
+    window.__SKY31_V193_LANDING_PATCHED = true;
+    window.SKY31_REFRESH_LIMITED = async function(){
+      const r = await oldRefresh193.apply(this, arguments);
+      setTimeout(fitLandingNames193, 80);
+      setTimeout(fitLandingNames193, 320);
+      return r;
+    };
+  }
 })();
 </script>
 
