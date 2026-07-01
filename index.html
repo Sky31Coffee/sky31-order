@@ -6211,6 +6211,105 @@ body:has(#orderApp.hidden) #sky31PersistentCart.sky31-cart-body-level{
   box-shadow:0 6px 14px rgba(30,58,100,.08);
 }
 
+
+/* V179: Landing page scroll + start button clickable fix */
+.landing-page{
+  overflow-y:auto !important;
+  overflow-x:hidden !important;
+  align-items:flex-start !important;
+  justify-content:center !important;
+  -webkit-overflow-scrolling:touch !important;
+  padding: max(18px, env(safe-area-inset-top)) 0 max(34px, env(safe-area-inset-bottom)) !important;
+}
+.landing-content{
+  margin:0 auto 34px !important;
+  max-height:none !important;
+  overflow:visible !important;
+  flex:0 0 auto !important;
+}
+.landing-bg,
+.landing-overlay{
+  position:fixed !important;
+}
+.start-order-btn{
+  position:relative !important;
+  z-index:50 !important;
+  pointer-events:auto !important;
+  margin-top:4px !important;
+  margin-bottom:18px !important;
+}
+.landing-beans-showcase,
+.landing-today-beans-card,
+.landing-limited-beans-card{
+  pointer-events:auto !important;
+}
+@media(max-height:760px){
+  .landing-content{
+    padding-top:22px !important;
+    padding-bottom:20px !important;
+  }
+  .landing-logo{
+    width:min(270px,72vw) !important;
+  }
+  .landing-desc{
+    margin-bottom:12px !important;
+  }
+  .landing-beans-showcase{
+    margin-top:12px !important;
+    margin-bottom:16px !important;
+  }
+}
+
+
+/* V180: Limited bean selection refine */
+#limitedMenuSection{
+  display:none !important;
+}
+.bean-chip.limited-bean-option{
+  padding-top:42px !important;
+  padding-right:16px !important;
+}
+.bean-chip.limited-bean-option::after{
+  top:12px !important;
+  right:auto !important;
+  left:14px !important;
+  z-index:2 !important;
+  pointer-events:none !important;
+}
+.bean-chip.limited-bean-option b{
+  display:block !important;
+  padding-right:0 !important;
+}
+.bean-chip.limited-bean-option .flavor{
+  display:block !important;
+  margin-top:7px !important;
+}
+.limited-bean-selection-placeholder{
+  pointer-events:none !important;
+  cursor:default !important;
+  padding:16px !important;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.62), rgba(255,248,232,.45)) !important;
+  border:1px dashed rgba(185,135,55,.35) !important;
+}
+.limited-bean-selection-placeholder b{
+  display:block;
+  color:rgba(55,65,82,.78) !important;
+  font-weight:900 !important;
+}
+.limited-bean-selection-placeholder .flavor{
+  display:block !important;
+  margin-top:7px !important;
+  color:rgba(80,72,58,.62) !important;
+  line-height:1.55 !important;
+}
+.bean-refresh-line{
+  background:rgba(255,255,255,.52) !important;
+}
+.bean-refresh-line span{
+  color:rgba(45,64,90,.58) !important;
+}
+
 </style>
 
 <style>
@@ -13246,11 +13345,11 @@ window.addEventListener("load", function() {
     }else if(productAcceptsLimitedBean(product)){
       html += '<div class="chip bean-chip limited-bean-selection-placeholder" data-value="">' +
         '<b>✨ 期間限定豆子</b>' +
-        '<span class="flavor">Telegram Bot 新增限定豆子後，會自動顯示在這裡。<br>不需要重新上傳 HTML。</span>' +
+        '<span class="flavor">期間限定豆子暫未上架。<br>下一支驚喜豆單正在準備中，敬請期待。</span>' +
       '</div>';
     }
 
-    html += '<div class="bean-refresh-line"><span>Limited Beans 會自動更新</span><button type="button" onclick="window.SKY31_REFRESH_LIMITED_BEANS && window.SKY31_REFRESH_LIMITED_BEANS(true)">立即更新</button></div>';
+    html += '<div class="bean-refresh-line"><span>限定豆子資訊會即時更新</span><button type="button" onclick="window.SKY31_REFRESH_LIMITED_BEANS && window.SKY31_REFRESH_LIMITED_BEANS(true)">立即更新</button></div>';
 
     beanChips.innerHTML = html;
 
@@ -13338,6 +13437,133 @@ window.addEventListener("load", function() {
   setInterval(function(){
     loadLimitedBeanChoices(false);
   }, 60000);
+})();
+</script>
+
+
+<script>
+/* V180: remove standalone Limited menu card; keep Limited only as bean options. Restore Mocha base beans. */
+(function(){
+  function safe180(s){
+    if(typeof esc === "function") return esc(s);
+    return String(s == null ? "" : s).replace(/[&<>"']/g,function(m){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m];
+    });
+  }
+
+  function isLimitedProduct180(p){
+    return !!(p && p.isLimited);
+  }
+
+  function hideStandaloneLimitedSection180(){
+    var section = document.getElementById("limitedMenuSection");
+    if(section){
+      section.classList.add("hidden");
+      section.style.display = "none";
+    }
+    var menu = document.getElementById("limitedMenu");
+    if(menu) menu.innerHTML = "";
+  }
+
+  function renderNormalProductCard180(p, idx){
+    var item = document.createElement("div");
+    item.className = "product";
+    item.onclick = function(){ openDetail(idx); };
+    var price = "";
+    try{
+      if(typeof sky31PriceLabelForProduct === "function") price = sky31PriceLabelForProduct(p) || "";
+    }catch(e){}
+    item.innerHTML =
+      '<div class="product-img" style="background-image:url(' + safe180(p.image || "") + ')"></div>' +
+      '<div class="product-body">' +
+        '<h3>' + safe180(p.name) + '</h3>' +
+        '<p>' + safe180(p.cn) + '</p>' +
+        (price ? '<div class="menu-price-line">' + safe180(price) + '</div>' : '') +
+      '</div>';
+    return item;
+  }
+
+  function installCleanRenderMenu180(){
+    window.renderMenu = renderMenu = function(){
+      var menu = document.getElementById("menu");
+      if(!menu || typeof products === "undefined" || !Array.isArray(products)) return;
+      menu.innerHTML = "";
+      hideStandaloneLimitedSection180();
+
+      products.forEach(function(p, idx){
+        if(!p || p.active === false) return;
+        if(isLimitedProduct180(p)) return;
+        menu.appendChild(renderNormalProductCard180(p, idx));
+      });
+    };
+  }
+
+  function installBeanGroupFix180(){
+    window.beanGroupForProduct = beanGroupForProduct = function(product){
+      if(!product || !product.name) return null;
+      if(product.isLimited) return null;
+      if(product.name === "Americano") return "americano";
+      if(product.name === "Latte" || product.name === "Cappuccino" || product.name === "Mocha") return "milk";
+      if(String(product.name).indexOf("Dirty") >= 0) return "dirty";
+      return null;
+    };
+  }
+
+  function polishLimitedPlaceholderText180(){
+    document.querySelectorAll(".limited-bean-selection-placeholder .flavor").forEach(function(el){
+      el.innerHTML = "期間限定豆子暫未上架。<br>下一支驚喜豆單正在準備中，敬請期待。";
+    });
+    document.querySelectorAll(".bean-refresh-line span").forEach(function(el){
+      el.textContent = "限定豆子資訊會即時更新";
+    });
+  }
+
+  function installConfigureAfterPatch180(){
+    var oldConfigure = window.configureBean || (typeof configureBean === "function" ? configureBean : null);
+    if(!oldConfigure) return;
+
+    window.configureBean = configureBean = function(){
+      oldConfigure.apply(this, arguments);
+      polishLimitedPlaceholderText180();
+      hideStandaloneLimitedSection180();
+    };
+  }
+
+  function forceRefresh180(){
+    installCleanRenderMenu180();
+    installBeanGroupFix180();
+    hideStandaloneLimitedSection180();
+
+    try{ renderMenu(); }catch(e){}
+    try{
+      if(typeof current !== "undefined" && current) configureBean();
+    }catch(e){}
+    polishLimitedPlaceholderText180();
+  }
+
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", function(){
+      installCleanRenderMenu180();
+      installBeanGroupFix180();
+      installConfigureAfterPatch180();
+      setTimeout(forceRefresh180, 80);
+      setTimeout(forceRefresh180, 700);
+      setTimeout(forceRefresh180, 1600);
+    });
+  }else{
+    installCleanRenderMenu180();
+    installBeanGroupFix180();
+    installConfigureAfterPatch180();
+    setTimeout(forceRefresh180, 80);
+    setTimeout(forceRefresh180, 700);
+    setTimeout(forceRefresh180, 1600);
+  }
+
+  document.addEventListener("visibilitychange", function(){
+    if(!document.hidden) setTimeout(forceRefresh180, 120);
+  });
+
+  window.SKY31_FORCE_REFRESH_MENU = forceRefresh180;
 })();
 </script>
 
