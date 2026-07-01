@@ -613,8 +613,31 @@ function sky31RewardTelegramLineV192(order) {
 
 /* V199: reward availability is based on picked_up successful transactions only. */
 function sky31OrderSuccessV199(order) {
-  const s = String(order && order.status || "").toLowerCase();
-  return s === "picked_up" || s === "pickedup" || s === "picked-up";
+  if (!order) return false;
+  const s = String(order.status || "").toLowerCase().replace(/[\s-]+/g, "_");
+  if (s === "cancelled" || s === "canceled" || s.indexOf("cancel") >= 0) return false;
+
+  const positiveStatuses = new Set([
+    "picked_up",
+    "pickedup",
+    "completed",
+    "complete",
+    "done",
+    "finished",
+    "fulfilled",
+    "paid",
+    "paid_success",
+    "success",
+    "successful"
+  ]);
+
+  if (positiveStatuses.has(s)) return true;
+  if (order.pickedUpAt || order.completedAt || order.paidAt || order.paymentAt) return true;
+
+  const pay = String(order.paymentStatus || order.payStatus || "").toLowerCase();
+  if (pay === "paid" || pay === "success" || pay === "successful") return true;
+
+  return false;
 }
 
 function sky31SamePhoneV199(a, b) {

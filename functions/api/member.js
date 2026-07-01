@@ -162,15 +162,9 @@ async function enrichMemberWithOrders(env, member) {
 
     const belongs = orderPhones.some(p => samePhoneForMemberLookup(p, phone));
     if (!belongs) continue;
-
-    if (historyStartAt && order.createdAt) {
-      const orderAt = new Date(order.createdAt).getTime();
-      if (Number.isFinite(orderAt) && orderAt < historyStartAt) continue;
-    }
-
     const cups = orderCups(order);
     const amount = Number(order.totalAmount || cartTotal(order.cart) || 0);
-    const successful = isSuccessfulPickedUpOrderV199(order);
+    const successful = isMemberLifetimeSuccessfulOrderV202(order);
 
     if (successful) {
       totalOrders += 1;
@@ -200,7 +194,7 @@ async function enrichMemberWithOrders(env, member) {
 
   const sortedOrders = sortOrdersForMember(allOrders);
 
-  // V201: preserve existing lifetime counters so older valid totals never disappear.
+  // V202: preserve existing lifetime counters and recover legacy completed/done/paid orders.
   // Newly created orders are still counted only after picked_up / successful transaction.
   const scannedTotalOrders = totalOrders;
   const scannedTotalCups = totalCups;
@@ -596,6 +590,34 @@ function sky31DecorateMemberV196(member) {
 
 /* V199: successful member lifetime stats only count picked_up orders. */
 function isSuccessfulPickedUpOrderV199(order) {
-  const s = String(order && order.status || "").toLowerCase();
-  return s === "picked_up" || s === "pickedup" || s === "picked-up";
+  return isMemberLifetimeSuccessfulOrderV202(order);
+}
+
+function isMemberLifetimeSuccessfulOrderV202(order) {
+  if (!order) return false;
+  if (isCancelledOrder(order)) return false;
+
+  const s = String(order.status || "").toLowerCase().replace(/[\s-]+/g, "_");
+  const positiveStatuses = new Set([
+    "picked_up",
+    "pickedup",
+    "completed",
+    "complete",
+    "done",
+    "finished",
+    "fulfilled",
+    "paid",
+    "paid_success",
+    "success",
+    "successful"
+  ]);
+
+  if (positiveStatuses.has(s)) return true;
+
+  if (order.pickedUpAt || order.completedAt || order.paidAt || order.paymentAt) return true;
+
+  const pay = String(order.paymentStatus || order.payStatus || "").toLowerCase();
+  if (pay === "paid" || pay === "success" || pay === "successful") return true;
+
+  return false;
 }
