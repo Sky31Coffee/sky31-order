@@ -38,6 +38,9 @@ if (!cart.length && !String(body.orderText || "").trim()) {
     const rewardDiscountV199 = Math.min(subtotalBeforeRewardV199, rawRewardDiscountV199);
     const rewardFreeItemsV199 = (typeof sky31RewardCalcV192 !== "undefined" && sky31RewardCalcV192.freeItems) || [];
     const totalAfterRewardV199 = Math.max(0, subtotalBeforeRewardV199 - rewardDiscountV199);
+    const tierDiscountCalcV213 = sky31OrderTierDiscountV213(activeMember, cart, totalAfterRewardV199);
+    const tierDiscountV213 = Math.min(totalAfterRewardV199, Math.max(0, Number(tierDiscountCalcV213.discount || 0)));
+    const totalAfterTierV213 = Math.max(0, totalAfterRewardV199 - tierDiscountV213);
 
 
     const order = {
@@ -55,7 +58,14 @@ if (!cart.length && !String(body.orderText || "").trim()) {
       rewardUse: rewardUseV199,
       rewardDiscount: rewardDiscountV199,
       rewardFreeItems: rewardFreeItemsV199,
-      totalAmount: totalAfterRewardV199,
+      memberTierKey: tierDiscountCalcV213.tier.key,
+      memberTierName: tierDiscountCalcV213.tier.name,
+      memberTierIcon: tierDiscountCalcV213.tier.icon,
+      memberTierManual: !!tierDiscountCalcV213.tier.manual,
+      tierDiscount: tierDiscountV213,
+      tierDiscountDetails: tierDiscountCalcV213.details,
+      totalBeforeTierDiscount: totalAfterRewardV199,
+      totalAmount: totalAfterTierV213,
       currency: "MOP",
       cart,
       orderNote: String(body.orderNote || body.note || "").trim(),
@@ -225,6 +235,70 @@ function calcUnitPrice(item) {
   return calcBaseUnitPrice(item) + limitedBeanSurchargeOrder(item);
 }
 
+
+
+/* V213: final member tier discount calculation, based on backend member record. */
+function sky31OrderTierByKeyV213(key) {
+  key = String(key || "").toLowerCase();
+  if (key === "vip") key = "blackgold";
+  const map = {
+    regular: { key: "regular", name: "普通會員", icon: "🌱" },
+    silver: { key: "silver", name: "銀卡會員", icon: "🥈" },
+    gold: { key: "gold", name: "金卡會員", icon: "🥇" },
+    diamond: { key: "diamond", name: "鑽石會員", icon: "💎" },
+    blackgold: { key: "blackgold", name: "黑金會員", icon: "👑" }
+  };
+  return map[key] || null;
+}
+
+function sky31OrderTierByCupsV213(cups) {
+  cups = Number(cups || 0);
+  if (cups >= 180) return sky31OrderTierByKeyV213("blackgold");
+  if (cups >= 100) return sky31OrderTierByKeyV213("diamond");
+  if (cups >= 60) return sky31OrderTierByKeyV213("gold");
+  if (cups >= 30) return sky31OrderTierByKeyV213("silver");
+  return sky31OrderTierByKeyV213("regular");
+}
+
+function sky31OrderDisplayTierV213(member) {
+  member = member || {};
+  const manual = sky31OrderTierByKeyV213(member.manualTierKey || member.memberTierOverrideKey || member.memberTierManualKey || "");
+  const natural = sky31OrderTierByKeyV213(member.memberTierKey || "") || sky31OrderTierByCupsV213(member.totalCups || member.cups || member.totalItems || 0);
+  return { ...(manual || natural), manual: !!manual };
+}
+
+function sky31OrderLimitedSurchargeTotalV213(cart) {
+  return (Array.isArray(cart) ? cart : []).reduce((sum, item) => {
+    const qty = Math.max(1, Number(item.qty || item.quantity || 1));
+    const surcharge = Number(item.beanSurcharge || item.limitedSurcharge || (isLimitedBeanOrder(item.bean) ? V182_LIMITED_BEAN_SURCHARGE : 0) || 0);
+    return sum + surcharge * qty;
+  }, 0);
+}
+
+function sky31OrderTierDiscountV213(member, cart, afterReward) {
+  const tier = sky31OrderDisplayTierV213(member);
+  const limitedTotal = sky31OrderLimitedSurchargeTotalV213(cart);
+  const details = [];
+  let discount = 0;
+
+  if (tier.key === "silver") {
+    const d = Math.min(limitedTotal, 5);
+    if (d > 0) { discount += d; details.push("限定豆子加價豁免 ×1"); }
+  } else if (tier.key === "gold") {
+    const d = Math.min(limitedTotal, 10);
+    if (d > 0) { discount += d; details.push("限定豆子加價豁免 ×2"); }
+  } else if (tier.key === "diamond") {
+    const d = limitedTotal;
+    if (d > 0) { discount += d; details.push("限定豆子加價全數豁免"); }
+  } else if (tier.key === "blackgold") {
+    const d = Math.min(15, Math.max(0, Number(afterReward || 0)));
+    if (d > 0) { discount += d; details.push("黑金會員 MOP 15 優惠"); }
+  }
+
+  discount = Math.min(Math.max(0, Number(afterReward || 0)), Math.round(discount * 100) / 100);
+  return { tier, discount, details };
+}
+
 function money(n) {
   return "MOP " + String(Math.round(Number(n || 0) * 100) / 100);
 }
@@ -297,6 +371,12 @@ function buildTelegramText(order) {
   }
 
   lines.push("────────────");
+  if (Number(order.rewardDiscount || 0) > 0) lines.push("會員免單扣減：-" + money(order.rewardDiscount));
+  if (Number(order.tierDiscount || 0) > 0) {
+    const tierName = order.memberTierName || "會員等級";
+    const detail = Array.isArray(order.tierDiscountDetails) && order.tierDiscountDetails.length ? "（" + order.tierDiscountDetails.join("、") + "）" : "";
+    lines.push(tierName + "優惠" + detail + "：-" + money(order.tierDiscount));
+  }
   lines.push("總額：" + money(order.totalAmount || cartTotal(order.cart)));
   if (order.orderNote) lines.push("整張訂單備註：" + order.orderNote);
   lines.push("客人：" + (order.customerName || ""));
