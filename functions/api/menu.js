@@ -21,7 +21,7 @@ export async function onRequest(context) {
     const visible = publicLimitedItemsV187(config);
     return json({
       ok: true,
-      version: "V187",
+      version: "V188",
       limitedItems: visible,
       currentLimitedBeanId: visible[0] ? visible[0].id : "",
       allLimitedItems: publicAllLimitedItemsV187(config),
