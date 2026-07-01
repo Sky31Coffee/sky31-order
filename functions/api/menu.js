@@ -3,25 +3,9 @@ const MENU_KEY = "sky31:limited_menu:v1";
 
 const DEFAULT_LIMITED_MENU = {
   updatedAt: "",
-  updatedBy: "default",
-  cleared: false,
-  limitedItems: [
-    {
-      id: "soe-geisha",
-      active: true,
-      name: "Limited SOE Americano",
-      cn: "期間限定 SOE 美式",
-      desc: "使用當季精品 SOE 豆製作，果香明亮，層次乾淨。",
-      bean: "Seasonal Specialty SOE Geisha",
-      flavor: "櫻桃・草莓・紅石榴・紅酒",
-      note: "適合喜歡果香、乾淨酸甜感的客人。",
-      milk: false,
-      tempMode: "both",
-      hotPrice: 38,
-      icedPrice: 42,
-      image: "./americano-new.jpg"
-    }
-  ]
+  updatedBy: "default-empty",
+  cleared: true,
+  limitedItems: []
 };
 
 export async function onRequest(context) {
@@ -34,7 +18,7 @@ export async function onRequest(context) {
     const config = await getLimitedMenuConfig(context.env);
     return json({
       ok: true,
-      version: "V175",
+      version: "V182",
       limitedItems: sanitizePublicItems(config.limitedItems || []),
       updatedAt: config.updatedAt || "",
       updatedBy: config.updatedBy || ""
@@ -61,21 +45,18 @@ async function getLimitedMenuConfig(env) {
 function sanitizePublicItems(items) {
   return (Array.isArray(items) ? items : []).map(item => ({
     id: safeId(item.id),
+    type: "bean",
     active: item.active !== false,
-    name: String(item.name || item.title || "Limited Coffee").trim(),
-    cn: String(item.cn || item.zh || item.chinese || "期間限定").trim(),
+    name: String(item.name || item.bean || item.title || "期間限定豆子").trim(),
+    cn: String(item.cn || item.zh || item.chinese || item.name || item.bean || "期間限定豆子").trim(),
     desc: String(item.desc || item.description || "").trim(),
-    bean: String(item.bean || item.beanName || "期間限定豆子").trim(),
+    bean: String(item.bean || item.beanName || item.name || "期間限定豆子").trim(),
     flavor: String(item.flavor || item.tasting || "").trim(),
     note: String(item.note || item.beanNote || "").trim(),
-    milk: item.milk !== false,
-    tempMode: String(item.tempMode || item.temp || "both").trim() || "both",
-    fixedPrice: Number(item.fixedPrice || item.price || 0) || 0,
-    hotPrice: Number(item.hotPrice || item.hot || 0) || 0,
-    icedPrice: Number(item.icedPrice || item.iced || 0) || 0,
-    image: String(item.image || item.imageUrl || "").trim() || "./americano-new.jpg",
+    surcharge: Number(item.surcharge || item.limitedSurcharge || 5) || 5,
+    limitedSurcharge: Number(item.surcharge || item.limitedSurcharge || 5) || 5,
     updatedAt: item.updatedAt || ""
-  })).filter(item => item.id && item.name && item.cn);
+  })).filter(item => item.id && item.name && item.bean);
 }
 
 function safeId(id) {

@@ -7,7 +7,7 @@ export async function onRequest(context) {
     return json({
       ok: true,
       endpoint: "telegram-webhook",
-      version: "V175",
+      version: "V182",
       method,
       message: "Webhook endpoint reachable. Telegram sends POST updates here."
     });
@@ -256,14 +256,23 @@ function isLimitedMenuCommand(text) {
   return (
     t === "/limited" ||
     t === "/limited_help" ||
+    t === "/limited_beans" ||
+    t === "/limited_bean_help" ||
     t === "限定" ||
     t === "限定列表" ||
     t === "期間限定" ||
     t === "期间限定" ||
     t === "限定說明" ||
+    t === "限定豆子" ||
+    t === "限定豆子列表" ||
+    t === "限定豆子說明" ||
+    t === "限定豆子说明" ||
     t === "限定说明" ||
+    t.startsWith("新增限定豆子") ||
     t.startsWith("新增限定") ||
     t.startsWith("添加限定") ||
+    t.startsWith("編輯限定豆子") ||
+    t.startsWith("编辑限定豆子") ||
     t.startsWith("編輯限定") ||
     t.startsWith("编辑限定") ||
     t.startsWith("刪除限定") ||
@@ -286,12 +295,12 @@ async function handleLimitedMenuTextCommand(env, message, text) {
   const t = String(text || "").trim();
   const lower = t.toLowerCase();
 
-  if (lower === "/limited_help" || t === "限定說明" || t === "限定说明") {
+  if (lower === "/limited_help" || lower === "/limited_bean_help" || t === "限定說明" || t === "限定说明" || t === "限定豆子說明" || t === "限定豆子说明") {
     await sendTelegramMessage(env, chatId, buildLimitedHelpText(), null);
     return json({ ok: true });
   }
 
-  if (lower === "/limited" || t === "限定" || t === "限定列表" || t === "期間限定" || t === "期间限定") {
+  if (lower === "/limited" || lower === "/limited_beans" || t === "限定" || t === "限定列表" || t === "限定豆子" || t === "限定豆子列表" || t === "期間限定" || t === "期间限定") {
     const config = await getLimitedMenuConfig(env);
     await sendTelegramMessage(env, chatId, buildLimitedListText(config), buildLimitedListMarkup(config));
     return json({ ok: true });
@@ -299,7 +308,7 @@ async function handleLimitedMenuTextCommand(env, message, text) {
 
   if (t.startsWith("清空限定")) {
     const config = await saveLimitedMenuConfig(env, { limitedItems: [], cleared: true, updatedAt: new Date().toISOString(), updatedBy: "telegram" });
-    await sendTelegramMessage(env, chatId, "已清空所有期間限定項目。\n網站會即時隱藏 Limited 區域。", buildLimitedListMarkup(config));
+    await sendTelegramMessage(env, chatId, "已清空所有限定豆子。\n網站會顯示敬請期待文案。", buildLimitedListMarkup(config));
     return json({ ok: true });
   }
 
@@ -310,7 +319,7 @@ async function handleLimitedMenuTextCommand(env, message, text) {
     config.limitedItems = config.limitedItems.filter(item => cleanLimitedId(item.id) !== id && String(item.name || "").trim() !== id && String(item.cn || "").trim() !== id);
     config.cleared = false;
     await saveLimitedMenuConfig(env, config);
-    await sendTelegramMessage(env, chatId, before === config.limitedItems.length ? "找不到要刪除的限定項目：" + id : "已刪除限定項目：" + id, buildLimitedListMarkup(config));
+    await sendTelegramMessage(env, chatId, before === config.limitedItems.length ? "找不到要刪除的限定豆子：" + id : "已刪除限定豆子：" + id, buildLimitedListMarkup(config));
     return json({ ok: true });
   }
 
@@ -361,7 +370,7 @@ async function handleLimitedMenuTextCommand(env, message, text) {
 
     config.cleared = false;
     await saveLimitedMenuConfig(env, config);
-    await sendTelegramMessage(env, chatId, (editMode ? "已更新期間限定：" : "已新增期間限定：") + item.name + "\n編號：" + item.id, buildLimitedListMarkup(config));
+    await sendTelegramMessage(env, chatId, (editMode ? "已更新限定豆子：" : "已新增限定豆子：") + item.name + "\n編號：" + item.id, buildLimitedListMarkup(config));
     return json({ ok: true });
   }
 
@@ -396,13 +405,13 @@ async function handleLimitedMenuAction(env, cq, data) {
     });
     await saveLimitedMenuConfig(env, config);
     await editTelegramMessage(env, chatId, messageId, buildLimitedListText(config), buildLimitedListMarkup(config));
-    return stop(env, cq, found ? "已切換限定狀態" : "找不到項目");
+    return stop(env, cq, found ? "已切換限定豆子狀態" : "找不到項目");
   }
 
   if (action === "limited_delete") {
     const item = config.limitedItems.find(x => cleanLimitedId(x.id) === id);
     if (!item) return stop(env, cq, "找不到項目");
-    await editTelegramMessage(env, chatId, messageId, "確定刪除期間限定？\n\n" + limitedItemLine(item), {
+    await editTelegramMessage(env, chatId, messageId, "確定刪除限定豆子？\n\n" + limitedItemLine(item), {
       inline_keyboard: [
         [{ text: "✅ 確認刪除", callback_data: "limited_delete_yes:" + id }],
         [{ text: "取消", callback_data: "limited_list:all" }]
@@ -416,7 +425,7 @@ async function handleLimitedMenuAction(env, cq, data) {
     config.cleared = config.limitedItems.length === 0;
     await saveLimitedMenuConfig(env, config);
     await editTelegramMessage(env, chatId, messageId, buildLimitedListText(config), buildLimitedListMarkup(config));
-    return stop(env, cq, "已刪除限定項目");
+    return stop(env, cq, "已刪除限定豆子");
   }
 
   return stop(env, cq, "未知限定操作");
@@ -432,24 +441,10 @@ async function getLimitedMenuConfig(env) {
   const raw = await env.ORDERS.get(LIMITED_MENU_KEY);
   if (!raw) {
     return {
-      limitedItems: [{
-        id: "soe-geisha",
-        active: true,
-        name: "Limited SOE Americano",
-        cn: "期間限定 SOE 美式",
-        desc: "使用當季精品 SOE 豆製作，果香明亮，層次乾淨。",
-        bean: "Seasonal Specialty SOE Geisha",
-        flavor: "櫻桃・草莓・紅石榴・紅酒",
-        note: "適合喜歡果香、乾淨酸甜感的客人。",
-        milk: false,
-        tempMode: "both",
-        hotPrice: 38,
-        icedPrice: 42,
-        image: "./americano-new.jpg"
-      }],
-      cleared: false,
+      limitedItems: [],
+      cleared: true,
       updatedAt: "",
-      updatedBy: "default"
+      updatedBy: "default-empty"
     };
   }
   try {
@@ -491,31 +486,27 @@ function field(fields, names, fallback = "") {
 }
 
 function buildLimitedItemFromFields(fields, editMode) {
-  const name = field(fields, ["名稱", "名称", "name", "Name"]);
-  const cn = field(fields, ["中文", "cn", "CN", "zh"], name || "期間限定");
-  const id = cleanLimitedId(field(fields, ["編號", "编号", "id", "ID"], name ? slugLimitedId(name) : ("limited" + Date.now().toString(36).slice(-5))));
-  const price = Number(field(fields, ["價格", "价格", "price", "固定價", "固定价"], "0")) || 0;
-  const hotPrice = Number(field(fields, ["熱價", "热价", "hot", "hotPrice"], price ? String(price) : "0")) || 0;
-  const icedPrice = Number(field(fields, ["凍價", "冻价", "冰價", "冰价", "iced", "icedPrice"], price ? String(price) : "0")) || 0;
-  let milk = field(fields, ["奶", "奶類", "奶类", "milk"], "yes");
-  milk = !/^(no|false|0|否|不要|不需要|black|無|无)$/i.test(milk);
+  // V181: Limited is bean-only, not a standalone drink.
+  // Required: 名稱 / 豆子. Optional: 中文, 風味, 描述/介紹, 備註, 編號, 啟用.
+  const rawName = field(fields, ["名稱", "名称", "名字", "name", "Name", "豆子", "豆", "bean", "beans"]);
+  const beanName = String(rawName || "").trim();
+  const cn = field(fields, ["中文", "cn", "CN", "zh"], beanName || "期間限定豆子");
+  const id = cleanLimitedId(field(fields, ["編號", "编号", "id", "ID"], beanName ? slugLimitedId(beanName) : ("bean" + Date.now().toString(36).slice(-5))));
   let active = field(fields, ["啟用", "启用", "active"], "yes");
   active = !/^(no|false|0|否|停用)$/i.test(active);
+
   return {
     id,
+    type: "bean",
     active,
-    name,
+    name: beanName,
     cn,
-    desc: field(fields, ["描述", "desc", "description"], ""),
-    bean: field(fields, ["豆子", "豆", "bean", "beans"], "期間限定豆子"),
+    bean: beanName,
     flavor: field(fields, ["風味", "风味", "flavor", "tasting"], ""),
+    desc: field(fields, ["描述", "介紹", "介绍", "desc", "description"], ""),
     note: field(fields, ["備註", "备注", "note"], ""),
-    milk,
-    tempMode: field(fields, ["溫度", "温度", "temp", "temperature"], "both"),
-    fixedPrice: price,
-    hotPrice,
-    icedPrice,
-    image: field(fields, ["圖片", "图片", "image", "imageUrl"], "./americano-new.jpg"),
+    surcharge: 5,
+    limitedSurcharge: 5,
     updatedAt: new Date().toISOString()
   };
 }
@@ -523,25 +514,28 @@ function buildLimitedItemFromFields(fields, editMode) {
 function buildLimitedListText(config) {
   const items = Array.isArray(config.limitedItems) ? config.limitedItems : [];
   const lines = [];
-  lines.push("✨ SKY31 期間限定管理");
+  lines.push("✨ SKY31 限定豆子管理");
   lines.push("");
-  lines.push("目前項目：" + items.length);
+  lines.push("目前豆子：" + items.length);
   lines.push("更新時間：" + (config.updatedAt ? formatDateTime(config.updatedAt) : "-") );
   lines.push("");
   if (!items.length) {
-    lines.push("目前沒有期間限定項目。");
+    lines.push("目前沒有上架限定豆子。");
   } else {
     items.forEach(item => lines.push(limitedItemLine(item)));
   }
   lines.push("");
-  lines.push("發送「限定說明」查看新增 / 編輯格式。");
+  lines.push("發送「限定豆子說明」查看新增 / 編輯格式。");
   return lines.join("\n").trim();
 }
 
 function limitedItemLine(item) {
   const status = item.active === false ? "停用" : "啟用";
-  const price = Number(item.fixedPrice || 0) > 0 ? ("MOP " + Number(item.fixedPrice)) : ("熱 MOP " + Number(item.hotPrice || 0) + " / 凍 MOP " + Number(item.icedPrice || 0));
-  return "• [" + status + "] " + (item.name || "-") + "｜" + (item.cn || "-") + "\n  編號：" + cleanLimitedId(item.id) + "｜" + price + "\n  豆子：" + (item.bean || "-") + (item.flavor ? "｜" + item.flavor : "");
+  const surcharge = Number(item.surcharge || item.limitedSurcharge || 5) || 5;
+  return "• [" + status + "] " + (item.bean || item.name || "-") + "
+  編號：" + cleanLimitedId(item.id) + "｜限定豆子 +MOP " + surcharge + "
+  風味：" + (item.flavor || "-") + (item.note || item.desc ? "
+  備註：" + (item.note || item.desc) : "");
 }
 
 function buildLimitedListMarkup(config) {
@@ -560,29 +554,35 @@ function buildLimitedListMarkup(config) {
 
 function buildLimitedHelpText() {
   return [
-    "✨ SKY31 期間限定管理格式",
+    "✨ SKY31 限定豆子管理",
     "",
-    "新增：",
-    "新增限定",
-    "名稱：Honey Latte",
-    "中文：蜂蜜拿鐵",
-    "描述：蜂蜜香氣配鮮牛乳，口感柔和。",
-    "豆子：Colombia Pink Bourbon",
-    "風味：蜂蜜・柑橘・紅茶",
-    "熱價：45",
-    "凍價：48",
-    "奶：yes",
-    "溫度：both",
-    "圖片：https://...jpg",
+    "用途：",
+    "限定豆子只會出現在各咖啡品項的「豆子選擇」內，",
+    "不是單獨飲品，不需要熱價、凍價、奶類或圖片。",
+    "",
+    "新增格式：",
+    "新增限定豆子",
+    "名稱：Ethiopia Guji",
+    "中文：埃塞俄比亞 Guji",
+    "風味：莓果・白花・柑橘",
+    "描述：明亮花香，酸甜乾淨，適合想試新豆的客人。",
+    "",
+    "編輯格式：",
+    "編輯限定豆子",
+    "編號：ethiopia-guji",
+    "名稱：Ethiopia Guji",
+    "中文：埃塞俄比亞 Guji",
+    "風味：莓果・白花・柑橘",
+    "描述：明亮花香，酸甜乾淨。",
     "",
     "其他指令：",
-    "限定列表 / /limited",
+    "限定豆子列表 / /limited_beans",
     "停用限定 編號",
     "啟用限定 編號",
     "刪除限定 編號",
     "清空限定",
     "",
-    "備註：圖片暫時支援圖片 URL；直接上傳相片需要下一版接 Cloudflare R2 / Images。"
+    "價格規則：客人選擇任何限定豆子，系統會自動 +MOP 5。"
   ].join("\n");
 }
 
@@ -1435,4 +1435,436 @@ function formatDateTime(d) {
 }
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json; charset=utf-8" } });
+}
+
+
+/* V182: interactive Limited Bean input templates and edit templates.
+   These overrides keep Limited Beans as bean options only, not standalone drinks. */
+
+function isLimitedMenuCommand(text) {
+  const t = String(text || "").trim().toLowerCase();
+  return (
+    t === "/limited" ||
+    t === "/limited_help" ||
+    t === "/limited_beans" ||
+    t === "/limited_bean_help" ||
+    t === "限定" ||
+    t === "限定列表" ||
+    t === "限定豆子" ||
+    t === "限定豆子列表" ||
+    t === "限定豆子說明" ||
+    t === "限定豆子说明" ||
+    t === "限定說明" ||
+    t === "限定说明" ||
+    t === "新增豆子" ||
+    t === "新增限定豆子" ||
+    t === "新增限定" ||
+    t === "添加豆子" ||
+    t === "添加限定豆子" ||
+    t === "編輯豆子" ||
+    t === "编辑豆子" ||
+    t === "編輯限定豆子" ||
+    t === "编辑限定豆子" ||
+    t.startsWith("新增豆子") ||
+    t.startsWith("新增限定豆子") ||
+    t.startsWith("新增限定") ||
+    t.startsWith("添加豆子") ||
+    t.startsWith("添加限定") ||
+    t.startsWith("編輯豆子") ||
+    t.startsWith("编辑豆子") ||
+    t.startsWith("編輯限定豆子") ||
+    t.startsWith("编辑限定豆子") ||
+    t.startsWith("編輯限定") ||
+    t.startsWith("编辑限定") ||
+    t.startsWith("刪除限定") ||
+    t.startsWith("删除限定") ||
+    t.startsWith("停用限定") ||
+    t.startsWith("啟用限定") ||
+    t.startsWith("启用限定") ||
+    t.startsWith("清空限定")
+  );
+}
+
+async function handleLimitedMenuTextCommand(env, message, text) {
+  const chatId = message.chat && message.chat.id ? message.chat.id : env.TELEGRAM_CHAT_ID;
+
+  if (!isAuthorizedTelegramChat(env, chatId)) {
+    await sendTelegramMessage(env, chatId, "沒有權限修改 Sky31 限定豆子。", null);
+    return json({ ok: true });
+  }
+
+  const t = String(text || "").trim();
+  const lower = t.toLowerCase();
+
+  if (
+    lower === "/limited_help" ||
+    lower === "/limited_bean_help" ||
+    t === "限定說明" ||
+    t === "限定说明" ||
+    t === "限定豆子說明" ||
+    t === "限定豆子说明"
+  ) {
+    await sendTelegramMessage(env, chatId, buildLimitedHelpText(), buildLimitedHelpMarkupV182());
+    return json({ ok: true });
+  }
+
+  if (
+    lower === "/limited" ||
+    lower === "/limited_beans" ||
+    t === "限定" ||
+    t === "限定列表" ||
+    t === "限定豆子" ||
+    t === "限定豆子列表"
+  ) {
+    const config = await getLimitedMenuConfig(env);
+    await sendTelegramMessage(env, chatId, buildLimitedListText(config), buildLimitedListMarkup(config));
+    return json({ ok: true });
+  }
+
+  if (/^(新增豆子|新增限定豆子|新增限定|添加豆子|添加限定豆子|添加限定)$/i.test(t)) {
+    await sendTelegramMessage(env, chatId, buildLimitedAddTemplateText(), buildLimitedForceReplyMarkupV182("請填寫後整段傳送"));
+    return json({ ok: true });
+  }
+
+  if (/^(編輯豆子|编辑豆子|編輯限定豆子|编辑限定豆子|編輯限定|编辑限定)$/i.test(t)) {
+    const config = await getLimitedMenuConfig(env);
+    await sendTelegramMessage(env, chatId, "請先在下面列表按「編輯格式」，或輸入：\n編輯限定豆子 編號\n\n" + buildLimitedListText(config), buildLimitedListMarkup(config));
+    return json({ ok: true });
+  }
+
+  const editIdOnly = t.match(/^(編輯豆子|编辑豆子|編輯限定豆子|编辑限定豆子|編輯限定|编辑限定)\s+(.+)$/i);
+  if (editIdOnly && !t.includes("：") && !t.includes(":")) {
+    const config = await getLimitedMenuConfig(env);
+    const id = cleanLimitedId(editIdOnly[2] || "");
+    const item = findLimitedItemV182(config, id);
+    if (!item) {
+      await sendTelegramMessage(env, chatId, "找不到限定豆子：" + id + "\n請發送「限定豆子列表」查看編號。", buildLimitedListMarkup(config));
+    } else {
+      await sendTelegramMessage(env, chatId, buildLimitedEditTemplateText(item), buildLimitedForceReplyMarkupV182("請修改後整段傳送"));
+    }
+    return json({ ok: true });
+  }
+
+  if (t.startsWith("清空限定")) {
+    const config = await saveLimitedMenuConfig(env, { limitedItems: [], cleared: true, updatedAt: new Date().toISOString(), updatedBy: "telegram" });
+    await sendTelegramMessage(env, chatId, "已清空所有限定豆子。\n網站會顯示：下一支驚喜豆單正在準備中，敬請期待。", buildLimitedListMarkup(config));
+    return json({ ok: true });
+  }
+
+  if (t.startsWith("刪除限定") || t.startsWith("删除限定")) {
+    const id = cleanLimitedId(t.replace(/^刪除限定|^删除限定/, "").trim());
+    const config = await getLimitedMenuConfig(env);
+    const before = config.limitedItems.length;
+    config.limitedItems = config.limitedItems.filter(item => cleanLimitedId(item.id) !== id && String(item.name || "").trim() !== id && String(item.cn || "").trim() !== id);
+    config.cleared = config.limitedItems.length === 0;
+    await saveLimitedMenuConfig(env, config);
+    await sendTelegramMessage(env, chatId, before === config.limitedItems.length ? "找不到要刪除的限定豆子：" + id : "已刪除限定豆子：" + id, buildLimitedListMarkup(config));
+    return json({ ok: true });
+  }
+
+  if (t.startsWith("停用限定") || t.startsWith("啟用限定") || t.startsWith("启用限定")) {
+    const enable = t.startsWith("啟用限定") || t.startsWith("启用限定");
+    const id = cleanLimitedId(t.replace(/^停用限定|^啟用限定|^启用限定/, "").trim());
+    const config = await getLimitedMenuConfig(env);
+    let found = false;
+    config.limitedItems.forEach(item => {
+      if (cleanLimitedId(item.id) === id || String(item.name || "").trim() === id || String(item.cn || "").trim() === id) {
+        item.active = enable;
+        item.updatedAt = new Date().toISOString();
+        found = true;
+      }
+    });
+    config.cleared = config.limitedItems.length === 0;
+    await saveLimitedMenuConfig(env, config);
+    await sendTelegramMessage(env, chatId, found ? (enable ? "已啟用限定豆子：" : "已停用限定豆子：") + id : "找不到限定豆子：" + id, buildLimitedListMarkup(config));
+    return json({ ok: true });
+  }
+
+  if (t.startsWith("新增豆子") || t.startsWith("新增限定豆子") || t.startsWith("新增限定") || t.startsWith("添加豆子") || t.startsWith("添加限定") || t.startsWith("編輯豆子") || t.startsWith("编辑豆子") || t.startsWith("編輯限定豆子") || t.startsWith("编辑限定豆子") || t.startsWith("編輯限定") || t.startsWith("编辑限定")) {
+    const editMode = t.startsWith("編輯") || t.startsWith("编辑");
+    const fields = parseLimitedFields(t);
+    const hasFields = Object.keys(fields).length > 0;
+
+    if (!hasFields) {
+      await sendTelegramMessage(env, chatId, editMode ? buildLimitedHelpText() : buildLimitedAddTemplateText(), buildLimitedForceReplyMarkupV182("請填寫後整段傳送"));
+      return json({ ok: true });
+    }
+
+    const config = await getLimitedMenuConfig(env);
+    const item = buildLimitedItemFromFields(fields, editMode);
+
+    if (!item.name) {
+      await sendTelegramMessage(env, chatId, "資料不完整，至少需要「名稱」。\n\n" + buildLimitedAddTemplateText(), buildLimitedForceReplyMarkupV182("請填寫後整段傳送"));
+      return json({ ok: true });
+    }
+
+    if (editMode) {
+      const target = cleanLimitedId(fields.id || fields["編號"] || fields["编号"] || fields["id"] || "");
+      let updated = false;
+      config.limitedItems = config.limitedItems.map(old => {
+        if ((target && cleanLimitedId(old.id) === target) || String(old.name || "").trim() === item.name || String(old.cn || "").trim() === item.cn) {
+          updated = true;
+          return { ...old, ...item, id: old.id || item.id, updatedAt: new Date().toISOString() };
+        }
+        return old;
+      });
+      if (!updated) config.limitedItems.unshift(item);
+    } else {
+      config.limitedItems = config.limitedItems.filter(old => cleanLimitedId(old.id) !== cleanLimitedId(item.id));
+      config.limitedItems.unshift(item);
+    }
+
+    config.cleared = false;
+    await saveLimitedMenuConfig(env, config);
+    await sendTelegramMessage(env, chatId, (editMode ? "已更新限定豆子：" : "已新增限定豆子：") + item.name + "\n編號：" + item.id + "\n網站會自動更新 Landing page 及豆子選項。", buildLimitedListMarkup(config));
+    return json({ ok: true });
+  }
+
+  await sendTelegramMessage(env, chatId, buildLimitedHelpText(), buildLimitedHelpMarkupV182());
+  return json({ ok: true });
+}
+
+async function handleLimitedMenuAction(env, cq, data) {
+  const chatId = cq.message && cq.message.chat ? cq.message.chat.id : env.TELEGRAM_CHAT_ID;
+  const messageId = cq.message ? cq.message.message_id : null;
+
+  if (!isAuthorizedTelegramChat(env, chatId)) return stop(env, cq, "沒有權限");
+
+  const parts = String(data || "").split(":");
+  const action = parts[0];
+  const id = cleanLimitedId(parts.slice(1).join(":"));
+  const config = await getLimitedMenuConfig(env);
+
+  if (action === "limited_add_template") {
+    await sendTelegramMessage(env, chatId, buildLimitedAddTemplateText(), buildLimitedForceReplyMarkupV182("請填寫後整段傳送"));
+    return stop(env, cq, "已提供新增格式");
+  }
+
+  if (action === "limited_help") {
+    await sendTelegramMessage(env, chatId, buildLimitedHelpText(), buildLimitedHelpMarkupV182());
+    return stop(env, cq, "已提供說明");
+  }
+
+  if (action === "limited_edit_template") {
+    const item = findLimitedItemV182(config, id);
+    if (!item) return stop(env, cq, "找不到限定豆子");
+    await sendTelegramMessage(env, chatId, buildLimitedEditTemplateText(item), buildLimitedForceReplyMarkupV182("請修改後整段傳送"));
+    return stop(env, cq, "已提供編輯格式");
+  }
+
+  if (action === "limited_list") {
+    await editTelegramMessage(env, chatId, messageId, buildLimitedListText(config), buildLimitedListMarkup(config));
+    return stop(env, cq, "已刷新限定豆子列表");
+  }
+
+  if (action === "limited_toggle") {
+    let found = false;
+    config.limitedItems.forEach(item => {
+      if (cleanLimitedId(item.id) === id) {
+        item.active = item.active === false ? true : false;
+        item.updatedAt = new Date().toISOString();
+        found = true;
+      }
+    });
+    config.cleared = config.limitedItems.length === 0;
+    await saveLimitedMenuConfig(env, config);
+    await editTelegramMessage(env, chatId, messageId, buildLimitedListText(config), buildLimitedListMarkup(config));
+    return stop(env, cq, found ? "已切換限定豆子狀態" : "找不到豆子");
+  }
+
+  if (action === "limited_delete") {
+    const item = config.limitedItems.find(x => cleanLimitedId(x.id) === id);
+    if (!item) return stop(env, cq, "找不到豆子");
+    await editTelegramMessage(env, chatId, messageId, "確定刪除限定豆子？\n\n" + limitedItemLine(item), {
+      inline_keyboard: [
+        [{ text: "✅ 確認刪除", callback_data: "limited_delete_yes:" + id }],
+        [{ text: "取消", callback_data: "limited_list:all" }]
+      ]
+    });
+    return stop(env, cq, "請確認刪除");
+  }
+
+  if (action === "limited_delete_yes") {
+    config.limitedItems = config.limitedItems.filter(item => cleanLimitedId(item.id) !== id);
+    config.cleared = config.limitedItems.length === 0;
+    await saveLimitedMenuConfig(env, config);
+    await editTelegramMessage(env, chatId, messageId, buildLimitedListText(config), buildLimitedListMarkup(config));
+    return stop(env, cq, "已刪除限定豆子");
+  }
+
+  return stop(env, cq, "未知限定操作");
+}
+
+function findLimitedItemV182(config, id) {
+  id = cleanLimitedId(id);
+  const items = Array.isArray(config && config.limitedItems) ? config.limitedItems : [];
+  return items.find(item =>
+    cleanLimitedId(item.id) === id ||
+    cleanLimitedId(item.name) === id ||
+    cleanLimitedId(item.bean) === id ||
+    cleanLimitedId(item.cn) === id
+  );
+}
+
+function buildLimitedAddTemplateText() {
+  return [
+    "➕ 新增限定豆子",
+    "",
+    "請複製下面格式，填好後整段傳送：",
+    "",
+    "新增限定豆子",
+    "名稱：",
+    "中文：",
+    "風味：",
+    "描述：",
+    "備註：",
+    "",
+    "例子：",
+    "新增限定豆子",
+    "名稱：Ethiopia Guji",
+    "中文：埃塞俄比亞 Guji",
+    "風味：莓果・白花・柑橘",
+    "描述：明亮花香，酸甜乾淨，適合想試新豆的客人。",
+    "備註：限時供應，售完即止。",
+    "",
+    "價格：客人選擇此限定豆子時，自動 +MOP 5。"
+  ].join("\n");
+}
+
+function buildLimitedEditTemplateText(item) {
+  item = item || {};
+  return [
+    "✏️ 編輯限定豆子",
+    "",
+    "請修改下面資料後，整段傳送：",
+    "",
+    "編輯限定豆子",
+    "編號：" + cleanLimitedId(item.id),
+    "名稱：" + (item.name || item.bean || ""),
+    "中文：" + (item.cn || ""),
+    "風味：" + (item.flavor || ""),
+    "描述：" + (item.desc || ""),
+    "備註：" + (item.note || ""),
+    "",
+    "價格：限定豆子固定自動 +MOP 5。"
+  ].join("\n");
+}
+
+function buildLimitedHelpText() {
+  return [
+    "✨ SKY31 限定豆子管理",
+    "",
+    "用途：",
+    "限定豆子只會出現在 Landing page 及各咖啡品項的「豆子選擇」內。",
+    "它不是單獨飲品，不需要熱價、凍價、奶類或圖片。",
+    "",
+    "可輸入：",
+    "新增限定豆子",
+    "編輯限定豆子 編號",
+    "限定豆子列表",
+    "",
+    "新增資料欄位：",
+    "名稱：豆子名稱，會顯示在豆子選項",
+    "中文：中文名稱，會顯示在頁面輔助文字",
+    "風味：風味描述，會顯示在 Landing page 和選項內",
+    "描述：簡短介紹，會顯示在頁面",
+    "備註：例如限時供應、售完即止",
+    "",
+    "價格規則：",
+    "客人選擇任何限定豆子，系統會自動 +MOP 5。"
+  ].join("\n");
+}
+
+function buildLimitedListText(config) {
+  const items = Array.isArray(config && config.limitedItems) ? config.limitedItems : [];
+  const lines = [];
+  lines.push("✨ SKY31 限定豆子管理");
+  lines.push("");
+  lines.push("目前豆子：" + items.length);
+  lines.push("更新時間：" + (config && config.updatedAt ? formatDateTime(config.updatedAt) : "-"));
+  lines.push("");
+  if (!items.length) {
+    lines.push("目前沒有上架限定豆子。");
+    lines.push("網站會顯示：下一支驚喜豆單正在準備中，敬請期待。");
+  } else {
+    items.forEach(item => lines.push(limitedItemLine(item)));
+  }
+  lines.push("");
+  lines.push("按「新增豆子格式」或發送「新增限定豆子」即可開始填寫。");
+  return lines.join("\n").trim();
+}
+
+function limitedItemLine(item) {
+  const status = item.active === false ? "停用" : "啟用";
+  const surcharge = Number(item.surcharge || item.limitedSurcharge || 5) || 5;
+  return [
+    "• [" + status + "] " + (item.bean || item.name || "-"),
+    "  編號：" + cleanLimitedId(item.id) + "｜選用 +MOP " + surcharge,
+    "  中文：" + (item.cn || "-"),
+    "  風味：" + (item.flavor || "-"),
+    item.desc ? "  描述：" + item.desc : "",
+    item.note ? "  備註：" + item.note : ""
+  ].filter(Boolean).join("\n");
+}
+
+function buildLimitedListMarkup(config) {
+  const rows = [];
+  const items = Array.isArray(config && config.limitedItems) ? config.limitedItems : [];
+
+  rows.push([
+    { text: "➕ 新增豆子格式", callback_data: "limited_add_template:all" },
+    { text: "📋 說明", callback_data: "limited_help:all" }
+  ]);
+
+  items.slice(0, 10).forEach(item => {
+    const id = cleanLimitedId(item.id);
+    rows.push([{ text: "✏️ 編輯格式 " + id, callback_data: "limited_edit_template:" + id }]);
+    rows.push([
+      { text: item.active === false ? "啟用 " + id : "停用 " + id, callback_data: "limited_toggle:" + id },
+      { text: "刪除", callback_data: "limited_delete:" + id }
+    ]);
+  });
+
+  rows.push([{ text: "刷新列表", callback_data: "limited_list:all" }]);
+  return { inline_keyboard: rows };
+}
+
+function buildLimitedHelpMarkupV182() {
+  return {
+    inline_keyboard: [
+      [{ text: "➕ 新增豆子格式", callback_data: "limited_add_template:all" }],
+      [{ text: "📋 查看限定豆子列表", callback_data: "limited_list:all" }]
+    ]
+  };
+}
+
+function buildLimitedForceReplyMarkupV182(placeholder) {
+  return {
+    force_reply: true,
+    input_field_placeholder: placeholder || "請填寫限定豆子資料"
+  };
+}
+
+function buildLimitedItemFromFields(fields, editMode) {
+  const rawName = field(fields, ["名稱", "名称", "名字", "name", "Name", "豆子", "豆", "bean", "beans"]);
+  const beanName = String(rawName || "").trim();
+  const cn = field(fields, ["中文", "cn", "CN", "zh"], beanName || "期間限定豆子");
+  const id = cleanLimitedId(field(fields, ["編號", "编号", "id", "ID"], beanName ? slugLimitedId(beanName) : ("bean" + Date.now().toString(36).slice(-5))));
+  let active = field(fields, ["啟用", "启用", "active"], "yes");
+  active = !/^(no|false|0|否|停用)$/i.test(active);
+
+  return {
+    id,
+    type: "bean",
+    active,
+    name: beanName,
+    cn,
+    bean: beanName,
+    flavor: field(fields, ["風味", "风味", "flavor", "tasting"], ""),
+    desc: field(fields, ["描述", "介紹", "介绍", "desc", "description"], ""),
+    note: field(fields, ["備註", "备注", "note"], ""),
+    surcharge: 5,
+    limitedSurcharge: 5,
+    updatedAt: new Date().toISOString()
+  };
 }

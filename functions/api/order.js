@@ -183,7 +183,19 @@ function priceKeyByName(name, cn) {
   return "";
 }
 
-function calcUnitPrice(item) {
+const V182_LIMITED_BEAN_SURCHARGE = 5;
+
+function isLimitedBeanOrder(bean) {
+  return String(bean || "").indexOf("Limited｜") === 0 || String(bean || "").indexOf("Limited|") === 0;
+}
+
+function limitedBeanSurchargeOrder(item) {
+  if (!item) return 0;
+  if (isLimitedBeanOrder(item.bean)) return V182_LIMITED_BEAN_SURCHARGE;
+  return 0;
+}
+
+function calcBaseUnitPrice(item) {
   const key = priceKeyByName(item.name || item.title, item.cn || item.zh);
   const table = SKY31_PRICE_TABLE[key];
   if (!table) return Number(item.unitPrice || item.price || 0);
@@ -191,6 +203,10 @@ function calcUnitPrice(item) {
   const temp = String(item.temp || item.temperature || "");
   const iced = temp.includes("Iced") || temp.includes("凍") || temp.includes("冻");
   return iced ? table.iced : table.hot;
+}
+
+function calcUnitPrice(item) {
+  return calcBaseUnitPrice(item) + limitedBeanSurchargeOrder(item);
 }
 
 function money(n) {
@@ -220,7 +236,10 @@ function normalizeCart(cart) {
       pickup: item.pickup || "",
       note: item.note || ""
     };
+    const surcharge = limitedBeanSurchargeOrder(base);
     const unit = calcUnitPrice(base);
+    base.basePrice = unit - surcharge;
+    base.beanSurcharge = surcharge;
     base.unitPrice = unit;
     base.price = unit;
     base.subtotal = unit * base.qty;
@@ -254,6 +273,7 @@ function buildTelegramText(order) {
       if (item.temp) parts.push(item.temp.includes("Hot") || item.temp.includes("熱") ? "🔥 Hot" : item.temp);
       if (item.ice && item.ice !== "不適用") parts.push(item.ice);
       if (item.milk) parts.push(item.milk);
+      if (Number(item.beanSurcharge || 0) > 0) parts.push("限定豆子 +MOP " + Number(item.beanSurcharge || 0));
       lines.push("☕ " + title + " ×" + (item.qty || 1) + (parts.length ? " | " + parts.join(" | ") : "") + " | " + money(item.unitPrice || item.price || 0) + " × " + (item.qty || 1) + " = " + money(item.subtotal || 0));
       if (item.note && item.note !== "無備註") lines.push("備註：" + item.note);
       lines.push("");
@@ -353,13 +373,19 @@ function memberPhoneCandidates(phone) {
 
 function beanIcon(bean) {
   bean = String(bean || "");
+  if (isLimitedBeanOrder(bean)) return "✨";
   if (bean.includes("淺烘") || bean.includes("浅烘")) return "🌸";
   if (bean.includes("中深烘") || bean.includes("拼配")) return "🍫";
   return "☕";
 }
 
 function cleanBeanName(bean) {
-  return String(bean || "").split("|")[0].split("｜")[0].trim();
+  const s = String(bean || "");
+  if (isLimitedBeanOrder(s)) {
+    const parts = s.split("｜");
+    return (parts[1] || "期間限定豆子") + "（限定豆子 +MOP 5）";
+  }
+  return s.split("|")[0].split("｜")[0].trim();
 }
 
 function pad2(n) {
