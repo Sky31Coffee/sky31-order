@@ -11326,11 +11326,9 @@ window.addEventListener("load", function() {
     var cur = info.current;
     var next = info.next;
 
-    var progressText = info.manual
-      ? '店方設定：' + cur.name + ' ' + cur.icon + '｜總累計 ' + cups + ' 杯'
-      : (next
-        ? '總累計 ' + cups + ' 杯｜還差 ' + Math.max(0, next.cups - cups) + ' 杯升級 ' + next.name + ' ' + next.icon
-        : '總累計 ' + cups + ' 杯｜已達最高等級');
+        var progressText = next
+      ? '總累計 ' + cups + ' 杯｜還差 ' + Math.max(0, next.cups - (info.manual ? info.effectiveCups : cups)) + ' 杯升級 ' + next.name + ' ' + next.icon
+      : '總累計 ' + cups + ' 杯｜已達最高等級';
 
     box.innerHTML =
       '<div class="member-tier-page-card-v210">' +
@@ -16714,7 +16712,7 @@ window.addEventListener("load", function() {
       const t = displayTier214(member);
       const div = document.createElement("div");
       div.className = "v214-member-refresh-note";
-      div.textContent = "已同步最新會員資料｜目前等級：" + t.name + " " + t.icon + (t.manual ? "（店方設定）" : "");
+      div.textContent = "已同步最新會員資料｜目前等級：" + t.name + " " + t.icon;
       panel.appendChild(div);
     }catch(e){}
   }
@@ -16796,7 +16794,7 @@ window.addEventListener("load", function() {
     box.className = "v214-discount-verify";
     box.innerHTML =
       '<div class="title">🏅 會員等級優惠檢查</div>' +
-      '<div class="line"><span>目前等級</span><strong>' + esc214(calc.tier.name) + ' ' + esc214(calc.tier.icon) + (calc.tier.manual ? '（店方設定）' : '') + '</strong></div>' +
+      '<div class="line"><span>目前等級</span><strong>' + esc214(calc.tier.name) + ' ' + esc214(calc.tier.icon) + '</strong></div>' +
       '<div class="line"><span>等級優惠</span><strong>' + (calc.discount > 0 ? '-' + money214(calc.discount) : '暫無可套用') + '</strong></div>' +
       (calc.details.length ? '<div class="line"><span>優惠內容</span><strong>' + esc214(calc.details.join("、")) + '</strong></div>' : '') +
       '<div class="line"><span>預計應付</span><strong>' + money214(finalTotal) + '</strong></div>' +
@@ -17039,5 +17037,6 @@ window.addEventListener("load", function() {
 })();
 </script>
 
+<!-- V220: Manual tier upgrade hint uses same customer-facing wording as normal tiers. -->
 </body>
 </html>
