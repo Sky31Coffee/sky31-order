@@ -42,6 +42,7 @@ export async function onRequestPost(context) {
       totalAmount: cartTotal(cart),
       currency: "MOP",
       cart,
+      orderNote: String(body.orderNote || body.note || "").trim(),
       orderText: "",
       createdAt: createdAt.toISOString(),
       updatedAt: createdAt.toISOString(),
@@ -261,6 +262,7 @@ function buildTelegramText(order) {
 
   lines.push("────────────");
   lines.push("總額：" + money(order.totalAmount || cartTotal(order.cart)));
+  if (order.orderNote) lines.push("整張訂單備註：" + order.orderNote);
   lines.push("客人：" + (order.customerName || ""));
   lines.push("電話：" + (order.phone || ""));
   lines.push("");

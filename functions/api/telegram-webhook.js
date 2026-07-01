@@ -7,7 +7,7 @@ export async function onRequest(context) {
     return json({
       ok: true,
       endpoint: "telegram-webhook",
-      version: "V172",
+      version: "V175",
       method,
       message: "Webhook endpoint reachable. Telegram sends POST updates here."
     });
@@ -39,6 +39,10 @@ async function handleTelegramPost(context) {
   // If this is not awaited, the runtime may return before the request finishes,
   // causing Telegram to keep showing Loading...
   await answerCallback(env, cq.id, "處理中…");
+
+  if (data.startsWith("limited_")) {
+    return handleLimitedMenuAction(env, cq, data);
+  }
 
   if (
     data.startsWith("member_list:") ||
@@ -210,6 +214,10 @@ async function handleTelegramTextCommand(env, message) {
   const text = String(message.text || "").trim();
   const chatId = message.chat && message.chat.id ? message.chat.id : env.TELEGRAM_CHAT_ID;
 
+  if (isLimitedMenuCommand(text)) {
+    return handleLimitedMenuTextCommand(env, message, text);
+  }
+
   if (!isMemberQueryCommand(text)) {
     return json({ ok: true });
   }
@@ -238,6 +246,353 @@ function isMemberQueryCommand(text) {
     t === "/member" ||
     t === "members"
   );
+}
+
+
+const LIMITED_MENU_KEY = "sky31:limited_menu:v1";
+
+function isLimitedMenuCommand(text) {
+  const t = String(text || "").trim().toLowerCase();
+  return (
+    t === "/limited" ||
+    t === "/limited_help" ||
+    t === "限定" ||
+    t === "限定列表" ||
+    t === "期間限定" ||
+    t === "期间限定" ||
+    t === "限定說明" ||
+    t === "限定说明" ||
+    t.startsWith("新增限定") ||
+    t.startsWith("添加限定") ||
+    t.startsWith("編輯限定") ||
+    t.startsWith("编辑限定") ||
+    t.startsWith("刪除限定") ||
+    t.startsWith("删除限定") ||
+    t.startsWith("停用限定") ||
+    t.startsWith("啟用限定") ||
+    t.startsWith("启用限定") ||
+    t.startsWith("清空限定")
+  );
+}
+
+async function handleLimitedMenuTextCommand(env, message, text) {
+  const chatId = message.chat && message.chat.id ? message.chat.id : env.TELEGRAM_CHAT_ID;
+
+  if (!isAuthorizedTelegramChat(env, chatId)) {
+    await sendTelegramMessage(env, chatId, "沒有權限修改 Sky31 期間限定菜單。", null);
+    return json({ ok: true });
+  }
+
+  const t = String(text || "").trim();
+  const lower = t.toLowerCase();
+
+  if (lower === "/limited_help" || t === "限定說明" || t === "限定说明") {
+    await sendTelegramMessage(env, chatId, buildLimitedHelpText(), null);
+    return json({ ok: true });
+  }
+
+  if (lower === "/limited" || t === "限定" || t === "限定列表" || t === "期間限定" || t === "期间限定") {
+    const config = await getLimitedMenuConfig(env);
+    await sendTelegramMessage(env, chatId, buildLimitedListText(config), buildLimitedListMarkup(config));
+    return json({ ok: true });
+  }
+
+  if (t.startsWith("清空限定")) {
+    const config = await saveLimitedMenuConfig(env, { limitedItems: [], cleared: true, updatedAt: new Date().toISOString(), updatedBy: "telegram" });
+    await sendTelegramMessage(env, chatId, "已清空所有期間限定項目。\n網站會即時隱藏 Limited 區域。", buildLimitedListMarkup(config));
+    return json({ ok: true });
+  }
+
+  if (t.startsWith("刪除限定") || t.startsWith("删除限定")) {
+    const id = cleanLimitedId(t.replace(/^刪除限定|^删除限定/, "").trim());
+    const config = await getLimitedMenuConfig(env);
+    const before = config.limitedItems.length;
+    config.limitedItems = config.limitedItems.filter(item => cleanLimitedId(item.id) !== id && String(item.name || "").trim() !== id && String(item.cn || "").trim() !== id);
+    config.cleared = false;
+    await saveLimitedMenuConfig(env, config);
+    await sendTelegramMessage(env, chatId, before === config.limitedItems.length ? "找不到要刪除的限定項目：" + id : "已刪除限定項目：" + id, buildLimitedListMarkup(config));
+    return json({ ok: true });
+  }
+
+  if (t.startsWith("停用限定") || t.startsWith("啟用限定") || t.startsWith("启用限定")) {
+    const enable = t.startsWith("啟用限定") || t.startsWith("启用限定");
+    const id = cleanLimitedId(t.replace(/^停用限定|^啟用限定|^启用限定/, "").trim());
+    const config = await getLimitedMenuConfig(env);
+    let found = false;
+    config.limitedItems.forEach(item => {
+      if (cleanLimitedId(item.id) === id || String(item.name || "").trim() === id || String(item.cn || "").trim() === id) {
+        item.active = enable;
+        item.updatedAt = new Date().toISOString();
+        found = true;
+      }
+    });
+    config.cleared = false;
+    await saveLimitedMenuConfig(env, config);
+    await sendTelegramMessage(env, chatId, found ? (enable ? "已啟用限定項目：" : "已停用限定項目：") + id : "找不到限定項目：" + id, buildLimitedListMarkup(config));
+    return json({ ok: true });
+  }
+
+  if (t.startsWith("新增限定") || t.startsWith("添加限定") || t.startsWith("編輯限定") || t.startsWith("编辑限定")) {
+    const editMode = t.startsWith("編輯限定") || t.startsWith("编辑限定");
+    const fields = parseLimitedFields(t);
+    const config = await getLimitedMenuConfig(env);
+    const item = buildLimitedItemFromFields(fields, editMode);
+
+    if (!item.name || !item.cn) {
+      await sendTelegramMessage(env, chatId, "資料不完整。至少需要：\n名稱：\n中文：\n\n發送「限定說明」可以查看格式。", null);
+      return json({ ok: true });
+    }
+
+    if (editMode) {
+      const target = cleanLimitedId(fields.id || fields["編號"] || fields["编号"] || fields["id"] || "");
+      let updated = false;
+      config.limitedItems = config.limitedItems.map(old => {
+        if ((target && cleanLimitedId(old.id) === target) || String(old.name || "").trim() === item.name || String(old.cn || "").trim() === item.cn) {
+          updated = true;
+          return { ...old, ...item, id: old.id || item.id, updatedAt: new Date().toISOString() };
+        }
+        return old;
+      });
+      if (!updated) config.limitedItems.unshift(item);
+    } else {
+      config.limitedItems = config.limitedItems.filter(old => cleanLimitedId(old.id) !== cleanLimitedId(item.id));
+      config.limitedItems.unshift(item);
+    }
+
+    config.cleared = false;
+    await saveLimitedMenuConfig(env, config);
+    await sendTelegramMessage(env, chatId, (editMode ? "已更新期間限定：" : "已新增期間限定：") + item.name + "\n編號：" + item.id, buildLimitedListMarkup(config));
+    return json({ ok: true });
+  }
+
+  await sendTelegramMessage(env, chatId, buildLimitedHelpText(), null);
+  return json({ ok: true });
+}
+
+async function handleLimitedMenuAction(env, cq, data) {
+  const chatId = cq.message && cq.message.chat ? cq.message.chat.id : env.TELEGRAM_CHAT_ID;
+  const messageId = cq.message ? cq.message.message_id : null;
+
+  if (!isAuthorizedTelegramChat(env, chatId)) return stop(env, cq, "沒有權限");
+
+  const parts = String(data || "").split(":");
+  const action = parts[0];
+  const id = cleanLimitedId(parts.slice(1).join(":"));
+  const config = await getLimitedMenuConfig(env);
+
+  if (action === "limited_list") {
+    await editTelegramMessage(env, chatId, messageId, buildLimitedListText(config), buildLimitedListMarkup(config));
+    return stop(env, cq, "已刷新期間限定列表");
+  }
+
+  if (action === "limited_toggle") {
+    let found = false;
+    config.limitedItems.forEach(item => {
+      if (cleanLimitedId(item.id) === id) {
+        item.active = item.active === false ? true : false;
+        item.updatedAt = new Date().toISOString();
+        found = true;
+      }
+    });
+    await saveLimitedMenuConfig(env, config);
+    await editTelegramMessage(env, chatId, messageId, buildLimitedListText(config), buildLimitedListMarkup(config));
+    return stop(env, cq, found ? "已切換限定狀態" : "找不到項目");
+  }
+
+  if (action === "limited_delete") {
+    const item = config.limitedItems.find(x => cleanLimitedId(x.id) === id);
+    if (!item) return stop(env, cq, "找不到項目");
+    await editTelegramMessage(env, chatId, messageId, "確定刪除期間限定？\n\n" + limitedItemLine(item), {
+      inline_keyboard: [
+        [{ text: "✅ 確認刪除", callback_data: "limited_delete_yes:" + id }],
+        [{ text: "取消", callback_data: "limited_list:all" }]
+      ]
+    });
+    return stop(env, cq, "請確認刪除");
+  }
+
+  if (action === "limited_delete_yes") {
+    config.limitedItems = config.limitedItems.filter(item => cleanLimitedId(item.id) !== id);
+    config.cleared = config.limitedItems.length === 0;
+    await saveLimitedMenuConfig(env, config);
+    await editTelegramMessage(env, chatId, messageId, buildLimitedListText(config), buildLimitedListMarkup(config));
+    return stop(env, cq, "已刪除限定項目");
+  }
+
+  return stop(env, cq, "未知限定操作");
+}
+
+function isAuthorizedTelegramChat(env, chatId) {
+  const allowed = String(env.TELEGRAM_CHAT_ID || "").trim();
+  if (!allowed) return true;
+  return String(chatId || "").trim() === allowed;
+}
+
+async function getLimitedMenuConfig(env) {
+  const raw = await env.ORDERS.get(LIMITED_MENU_KEY);
+  if (!raw) {
+    return {
+      limitedItems: [{
+        id: "soe-geisha",
+        active: true,
+        name: "Limited SOE Americano",
+        cn: "期間限定 SOE 美式",
+        desc: "使用當季精品 SOE 豆製作，果香明亮，層次乾淨。",
+        bean: "Seasonal Specialty SOE Geisha",
+        flavor: "櫻桃・草莓・紅石榴・紅酒",
+        note: "適合喜歡果香、乾淨酸甜感的客人。",
+        milk: false,
+        tempMode: "both",
+        hotPrice: 38,
+        icedPrice: 42,
+        image: "./americano-new.jpg"
+      }],
+      cleared: false,
+      updatedAt: "",
+      updatedBy: "default"
+    };
+  }
+  try {
+    const config = JSON.parse(raw);
+    if (!config || typeof config !== "object") throw new Error("bad config");
+    if (!Array.isArray(config.limitedItems)) config.limitedItems = [];
+    return config;
+  } catch (_) {
+    return { limitedItems: [], cleared: true, updatedAt: new Date().toISOString(), updatedBy: "error" };
+  }
+}
+
+async function saveLimitedMenuConfig(env, config) {
+  config = config || {};
+  config.limitedItems = Array.isArray(config.limitedItems) ? config.limitedItems.slice(0, 20) : [];
+  config.updatedAt = new Date().toISOString();
+  config.updatedBy = "telegram";
+  await env.ORDERS.put(LIMITED_MENU_KEY, JSON.stringify(config));
+  return config;
+}
+
+function parseLimitedFields(text) {
+  const fields = {};
+  String(text || "").split(/\r?\n/).forEach(line => {
+    const m = line.match(/^\s*([^:：]{1,12})\s*[:：]\s*(.*?)\s*$/);
+    if (!m) return;
+    const key = String(m[1] || "").trim();
+    const value = String(m[2] || "").trim();
+    if (key) fields[key] = value;
+  });
+  return fields;
+}
+
+function field(fields, names, fallback = "") {
+  for (const name of names) {
+    if (fields[name] != null && String(fields[name]).trim() !== "") return String(fields[name]).trim();
+  }
+  return fallback;
+}
+
+function buildLimitedItemFromFields(fields, editMode) {
+  const name = field(fields, ["名稱", "名称", "name", "Name"]);
+  const cn = field(fields, ["中文", "cn", "CN", "zh"], name || "期間限定");
+  const id = cleanLimitedId(field(fields, ["編號", "编号", "id", "ID"], name ? slugLimitedId(name) : ("limited" + Date.now().toString(36).slice(-5))));
+  const price = Number(field(fields, ["價格", "价格", "price", "固定價", "固定价"], "0")) || 0;
+  const hotPrice = Number(field(fields, ["熱價", "热价", "hot", "hotPrice"], price ? String(price) : "0")) || 0;
+  const icedPrice = Number(field(fields, ["凍價", "冻价", "冰價", "冰价", "iced", "icedPrice"], price ? String(price) : "0")) || 0;
+  let milk = field(fields, ["奶", "奶類", "奶类", "milk"], "yes");
+  milk = !/^(no|false|0|否|不要|不需要|black|無|无)$/i.test(milk);
+  let active = field(fields, ["啟用", "启用", "active"], "yes");
+  active = !/^(no|false|0|否|停用)$/i.test(active);
+  return {
+    id,
+    active,
+    name,
+    cn,
+    desc: field(fields, ["描述", "desc", "description"], ""),
+    bean: field(fields, ["豆子", "豆", "bean", "beans"], "期間限定豆子"),
+    flavor: field(fields, ["風味", "风味", "flavor", "tasting"], ""),
+    note: field(fields, ["備註", "备注", "note"], ""),
+    milk,
+    tempMode: field(fields, ["溫度", "温度", "temp", "temperature"], "both"),
+    fixedPrice: price,
+    hotPrice,
+    icedPrice,
+    image: field(fields, ["圖片", "图片", "image", "imageUrl"], "./americano-new.jpg"),
+    updatedAt: new Date().toISOString()
+  };
+}
+
+function buildLimitedListText(config) {
+  const items = Array.isArray(config.limitedItems) ? config.limitedItems : [];
+  const lines = [];
+  lines.push("✨ SKY31 期間限定管理");
+  lines.push("");
+  lines.push("目前項目：" + items.length);
+  lines.push("更新時間：" + (config.updatedAt ? formatDateTime(config.updatedAt) : "-") );
+  lines.push("");
+  if (!items.length) {
+    lines.push("目前沒有期間限定項目。");
+  } else {
+    items.forEach(item => lines.push(limitedItemLine(item)));
+  }
+  lines.push("");
+  lines.push("發送「限定說明」查看新增 / 編輯格式。");
+  return lines.join("\n").trim();
+}
+
+function limitedItemLine(item) {
+  const status = item.active === false ? "停用" : "啟用";
+  const price = Number(item.fixedPrice || 0) > 0 ? ("MOP " + Number(item.fixedPrice)) : ("熱 MOP " + Number(item.hotPrice || 0) + " / 凍 MOP " + Number(item.icedPrice || 0));
+  return "• [" + status + "] " + (item.name || "-") + "｜" + (item.cn || "-") + "\n  編號：" + cleanLimitedId(item.id) + "｜" + price + "\n  豆子：" + (item.bean || "-") + (item.flavor ? "｜" + item.flavor : "");
+}
+
+function buildLimitedListMarkup(config) {
+  const rows = [];
+  const items = Array.isArray(config.limitedItems) ? config.limitedItems : [];
+  items.slice(0, 12).forEach(item => {
+    const id = cleanLimitedId(item.id);
+    rows.push([
+      { text: item.active === false ? "啟用 " + id : "停用 " + id, callback_data: "limited_toggle:" + id },
+      { text: "刪除", callback_data: "limited_delete:" + id }
+    ]);
+  });
+  rows.push([{ text: "刷新列表", callback_data: "limited_list:all" }]);
+  return { inline_keyboard: rows };
+}
+
+function buildLimitedHelpText() {
+  return [
+    "✨ SKY31 期間限定管理格式",
+    "",
+    "新增：",
+    "新增限定",
+    "名稱：Honey Latte",
+    "中文：蜂蜜拿鐵",
+    "描述：蜂蜜香氣配鮮牛乳，口感柔和。",
+    "豆子：Colombia Pink Bourbon",
+    "風味：蜂蜜・柑橘・紅茶",
+    "熱價：45",
+    "凍價：48",
+    "奶：yes",
+    "溫度：both",
+    "圖片：https://...jpg",
+    "",
+    "其他指令：",
+    "限定列表 / /limited",
+    "停用限定 編號",
+    "啟用限定 編號",
+    "刪除限定 編號",
+    "清空限定",
+    "",
+    "備註：圖片暫時支援圖片 URL；直接上傳相片需要下一版接 Cloudflare R2 / Images。"
+  ].join("\n");
+}
+
+function cleanLimitedId(id) {
+  return String(id || "").trim().replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 32);
+}
+
+function slugLimitedId(s) {
+  s = String(s || "limited").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 18);
+  return s || ("limited" + Date.now().toString(36).slice(-5));
 }
 
 async function handleMemberQueryAction(env, cq, data) {
