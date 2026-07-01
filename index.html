@@ -7626,6 +7626,49 @@ body:has(#orderApp.hidden) #sky31PersistentCart.sky31-cart-body-level{
   font-weight:820 !important;
 }
 
+
+/* V206: upgrade hint position, no hidden-count text, Limited bean description label */
+.member-tier-upgrade-v205{
+  margin-top:4px !important;
+  padding:0 !important;
+  border:0 !important;
+  background:transparent !important;
+  color:rgba(43,57,82,.68) !important;
+  font-size:12px !important;
+  line-height:1.45 !important;
+  font-weight:820 !important;
+}
+.member-reward-sub-v196{
+  margin-top:9px !important;
+}
+.member-history-hidden-note-v205{
+  display:none !important;
+}
+.member-history-expand-v205{
+  margin:14px 0 8px !important;
+  padding:0 !important;
+  clear:both !important;
+}
+.member-history-expand-v205 button{
+  display:block !important;
+  position:relative !important;
+  z-index:2 !important;
+  line-height:1.25 !important;
+  white-space:normal !important;
+}
+#limitedBeanPreview.v198-limited-grid .landing-bean-topline span{
+  max-width:52% !important;
+  overflow:hidden !important;
+  text-overflow:ellipsis !important;
+  white-space:nowrap !important;
+  text-transform:none !important;
+  letter-spacing:0 !important;
+  font-size:10.8px !important;
+}
+#limitedBeanPreview.v198-limited-grid .landing-bean-topline b{
+  max-width:48% !important;
+}
+
 </style>
 
 <style>
@@ -10436,24 +10479,24 @@ window.addEventListener("load", function() {
       return { key:"regular", name:"普通會員", icon:"🌱", next:30, nextName:"銀卡會員", nextIcon:"🥈" };
     }
 
-    var t = (member.rewards && member.rewards.tier) || { name: member.memberTier, icon: member.memberTierIcon } || tier(cups);
-    if(!t.name || t.name === "青銅會員" || t.name === "普通會員") t = tier(cups);
-    if(!("next" in t)) t = tier(cups);
+    // V206: always derive full tier metadata from total cups.
+    // Backend tier may not include nextName / nextIcon, which caused undefined undefined.
+    var t = tier(cups);
 
     var upgradeText = t.next
       ? ("還差 " + Math.max(0, Number(t.next) - cups) + " 杯即可晉級成為 " + t.nextName + " " + t.nextIcon)
       : "已達最高等級，感謝你的長期支持。";
 
     var rewardText = available > 0
-      ? ("你目前有 " + available + " 次免費兌換，可於確認訂單時自動扣減。兌換後不會扣減總累計杯數。")
-      : ("距離下一次免費兌換還差 " + remain + " 杯。免單只扣可用次數，不扣總累計杯數。");
+      ? ("你目前有 " + available + " 次免費兌換，可於確認訂單時自動扣減。")
+      : ("距離下一次免費兌換還差 " + remain + " 杯。");
 
     return '' +
       '<div class="member-reward-card member-reward-card-v196">' +
         '<div class="member-reward-head-v196">' +
           '<div>' +
             '<div class="member-reward-title-v196"><span class="member-tier-fixed-icon-v200">👤</span> ' + esc(t.name || "普通會員") + '</div>' +
-            '<div class="member-reward-sub-v196">成功領取累計 10 杯，可免費兌換任何 1 杯飲品</div>' +
+            '<div class="member-tier-upgrade-v205">🚀 ' + esc(upgradeText) + '</div>' +
           '</div>' +
           '<div class="member-reward-icon-v196" title="目前等級">' + esc(t.icon || "🌱") + '</div>' +
         '</div>' +
@@ -10464,8 +10507,7 @@ window.addEventListener("load", function() {
           '<div class="member-reward-stat-v196"><b>' + available + '</b><span>目前可用<br>免單次數</span></div>' +
         '</div>' +
         '<div class="member-reward-bar-v196"><i style="width:' + pct + '%"></i></div>' +
-        '<div class="member-reward-line-v196">🎁 ' + esc(rewardText) + '</div>' +
-        '<div class="member-tier-upgrade-v205">🚀 ' + esc(upgradeText) + '</div>' +
+        '<div class="member-reward-line-v196">🎁 成功領取累計 10 杯，可免費兌換任何 1 杯飲品。<br>' + esc(rewardText) + ' 免單只扣可用次數，不扣總累計杯數。</div>' +
       '</div>';
   }
 
@@ -10628,7 +10670,6 @@ window.addEventListener("load", function() {
     var expandControl = "";
     if(!expanded && orders.length > 3){
       expandControl =
-        '<div class="member-history-hidden-note-v205">其餘 ' + (orders.length - 3) + ' 張訂單已自動隱藏。</div>' +
         '<div class="member-history-expand-v205"><button class="primary" type="button" onclick="memberHistoryExpandV205()">查看全部歷史訂單 ▼</button></div>';
     }else if(expanded && orders.length > 3){
       expandControl =
@@ -15397,14 +15438,27 @@ window.addEventListener("load", function() {
 
   function normalize198(item){
     item = item || {};
-    const label = String(item.bean || item.beanLabel || item.name || item.cn || "期間限定豆子").trim();
-    const flavor = String(item.flavor || item.beanFlavor || item.tasting || item.desc || item.description || item.note || "").trim() || "限時供應";
-    const note = String(item.note || item.beanNote || item.desc || item.description || "").trim() || "限時供應，售完即止。";
+    function firstRealValue(list){
+      for(const v of list){
+        const s = String(v || "").trim();
+        if(!s) continue;
+        if(s === "期間限定豆子" || s === "Limited" || s === "Limited Beans") continue;
+        return s;
+      }
+      return "";
+    }
+
+    const label = firstRealValue([item.bean, item.beanName, item.name, item.beanLabel, item.cn, item.zh, item.chinese]) || "期間限定豆子";
+    const flavor = firstRealValue([item.flavor, item.beanFlavor, item.tasting]) || "限時供應";
+    const descLabel = firstRealValue([item.desc, item.description, item.note, item.beanNote]) || "期間限定";
+    const note = firstRealValue([item.note, item.beanNote, item.desc, item.description]) || "限時供應，售完即止。";
+
     return {
       id: String(item.id || item.limitedId || label).replace(/[^a-zA-Z0-9_-]/g,"").slice(0,40),
       active: item.active !== false && item.deleted !== true,
       label,
       flavor,
+      descLabel,
       note,
       surcharge: Number(item.surcharge || item.limitedSurcharge || SURCHARGE) || SURCHARGE
     };
@@ -15466,17 +15520,18 @@ window.addEventListener("load", function() {
     box.className = "landing-beans-grid v198-limited-grid";
 
     if(!beans.length){
-      box.innerHTML = '<div class="landing-bean-panel v198-limited-empty"><div class="landing-bean-icon">✨</div><div class="landing-bean-copy"><div class="landing-bean-topline"><span>Limited Beans</span><b>期間限定豆子</b></div><div class="landing-bean-flavor">暫時未上架，請留意 Sky31 最新更新。</div></div></div>';
+      box.innerHTML = '<div class="landing-bean-panel v198-limited-empty"><div class="landing-bean-icon">✨</div><div class="landing-bean-copy"><div class="landing-bean-topline"><span>期間限定</span><b>期間限定豆子</b></div><div class="landing-bean-flavor">暫時未上架，請留意 Sky31 最新更新。</div></div></div>';
       return;
     }
 
     box.innerHTML = beans.map(bean => {
+      const descLabel = bean.descLabel || bean.note || "期間限定";
       return '' +
         '<div class="landing-bean-panel v198-limited-panel" data-limited-id="' + esc198(bean.id) + '">' +
           '<div class="landing-bean-icon">✨</div>' +
           '<div class="landing-bean-copy">' +
             '<div class="landing-bean-topline">' +
-              '<span>Limited Beans</span>' +
+              '<span title="' + esc198(descLabel) + '">' + esc198(descLabel) + '</span>' +
               '<b title="' + esc198(bean.label) + '">' + esc198(bean.label) + '</b>' +
             '</div>' +
             '<div class="landing-bean-flavor">' + esc198(bean.flavor) + '</div>' +
@@ -15501,11 +15556,13 @@ window.addEventListener("load", function() {
   }
 
   function chip198(bean){
-    const val = "Limited｜" + bean.label + "｜風味：" + bean.flavor;
+    const beanName = bean.label || "期間限定豆子";
+    const beanFlavor = bean.flavor || "限時供應";
+    const val = "Limited｜" + beanName + "｜風味：" + beanFlavor;
     return '' +
-      '<div class="chip bean-chip limited-bean-option v198-limited-bean-option" data-value="' + esc198(val) + '" data-bean-label="' + esc198(bean.label) + '" data-bean-flavor="' + esc198(bean.flavor) + '" data-surcharge="' + bean.surcharge + '">' +
-        '<b>✨ ' + esc198(bean.label) + '<span class="limited-surcharge-badge">+MOP ' + bean.surcharge + '</span></b>' +
-        '<span class="flavor">限定豆子：' + esc198(bean.flavor) + '<br>' + esc198(bean.note) + '</span>' +
+      '<div class="chip bean-chip limited-bean-option v198-limited-bean-option" data-value="' + esc198(val) + '" data-bean-label="' + esc198(beanName) + '" data-bean-flavor="' + esc198(beanFlavor) + '" data-surcharge="' + bean.surcharge + '">' +
+        '<b>✨ ' + esc198(beanName) + '<span class="limited-surcharge-badge">+MOP ' + bean.surcharge + '</span></b>' +
+        '<span class="flavor">限定豆子：' + esc198(beanFlavor) + '<br>' + esc198(bean.note || "限時供應，售完即止。") + '</span>' +
       '</div>';
   }
 
