@@ -13,7 +13,7 @@ export async function onRequestGet(context) {
   }
 
   const withStats = await enrichMemberWithOrders(env, member);
-  return json({ ok: true, member: withStats });
+  return json({ ok: true, member: sky31DecorateMemberV196(withStats) });
 }
 
 export async function onRequestPost(context) {
@@ -60,7 +60,7 @@ export async function onRequestPost(context) {
     if (context.waitUntil) context.waitUntil(bg);
     else await bg;
 
-    return json({ ok: true, member: withStats });
+    return json({ ok: true, member: sky31DecorateMemberV196(withStats) });
   } catch (e) {
     return json({ ok: false, error: e.message || "保存會員失敗" }, 500);
   }
@@ -244,6 +244,8 @@ async function enrichMemberWithOrders(env, member) {
     totalOrders: fixedMember.totalOrders,
     totalCups: fixedMember.totalCups,
     totalSpent: fixedMember.totalSpent,
+    rewardRedeemed: Number(fixedMember.rewardRedeemed || fixedMember.rewardsRedeemed || 0),
+    rewardsRedeemed: Number(fixedMember.rewardRedeemed || fixedMember.rewardsRedeemed || 0),
     recentOrders: sortedOrders,
     historyOrders: sortedOrders,
     orders: sortedOrders
@@ -531,4 +533,53 @@ function sky31DecorateMemberV192(member) {
   member.memberTierIcon = rewards.tier.icon;
   member.memberTierKey = rewards.tier.key;
   return member;
+}
+
+
+/* V196: force /api/member to return visible reward stats */
+function sky31RewardTierV196(totalCups) {
+  totalCups = Number(totalCups || 0);
+  if (totalCups >= 180) return { key: "vip", name: "黑金會員", icon: "👑", next: null };
+  if (totalCups >= 100) return { key: "diamond", name: "鑽石會員", icon: "💎", next: 180 };
+  if (totalCups >= 60) return { key: "gold", name: "金卡會員", icon: "🥇", next: 100 };
+  if (totalCups >= 30) return { key: "silver", name: "銀卡會員", icon: "🥈", next: 60 };
+  return { key: "regular", name: "普通會員", icon: "🪪", next: 30 };
+}
+
+function sky31RewardsFromMemberV196(member) {
+  member = member || {};
+  const totalCups = Number(member.totalCups || member.cups || member.totalItems || member.orderCups || 0);
+  const redeemed = Number(member.rewardRedeemed || member.rewardsRedeemed || 0);
+  const earned = Math.floor(totalCups / 10);
+  const available = Math.max(0, earned - redeemed);
+  const progress = totalCups % 10;
+  const cupsToNextReward = progress === 0 && totalCups > 0 ? 0 : 10 - progress;
+  const tier = sky31RewardTierV196(totalCups);
+  return {
+    totalCups,
+    earnedRewards: earned,
+    redeemedRewards: redeemed,
+    availableRewards: available,
+    cupsToNextReward,
+    nextRewardAt: (earned + 1) * 10,
+    rule: "每累計 10 杯，可免費兌換任何 1 杯飲品",
+    tier
+  };
+}
+
+function sky31DecorateMemberV196(member) {
+  if (!member || typeof member !== "object") return member;
+  const rewards = sky31RewardsFromMemberV196(member);
+  return {
+    ...member,
+    rewardRedeemed: rewards.redeemedRewards,
+    rewards,
+    availableRewards: rewards.availableRewards,
+    earnedRewards: rewards.earnedRewards,
+    redeemedRewards: rewards.redeemedRewards,
+    cupsToNextReward: rewards.cupsToNextReward,
+    memberTier: rewards.tier.name,
+    memberTierIcon: rewards.tier.icon,
+    memberTierKey: rewards.tier.key
+  };
 }

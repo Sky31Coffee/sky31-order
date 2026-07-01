@@ -21,7 +21,7 @@ export async function onRequest(context) {
     const visible = publicLimitedItemsV187(config);
     return json({
       ok: true,
-      version: "V195",
+      version: "V197",
       limitedItems: visible,
       currentLimitedBeanId: visible[0] ? visible[0].id : "",
       currentLimitedBeanIds: visible.map(item => item.id),
@@ -47,11 +47,14 @@ function publicLimitedItemsV187(config) {
   }
 
   const selected = [];
+
   ids.forEach(id => {
     const item = active.find(x => safeId(x.id) === id);
     if (item && !selected.find(x => safeId(x.id) === safeId(item.id))) selected.push(item);
   });
 
+  // Fallback for older KV data: if Telegram has saved several active beans,
+  // website still shows the first two instead of falling back to only one.
   active.forEach(item => {
     if (selected.length < 2 && !selected.find(x => safeId(x.id) === safeId(item.id))) selected.push(item);
   });
