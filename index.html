@@ -8046,6 +8046,93 @@ body:has(#orderApp.hidden) #sky31PersistentCart.sky31-cart-body-level{
   line-height:1.45 !important;
 }
 
+
+/* V217: drink voucher count + birthday month blessing modal */
+.member-voucher-strip-v217{
+  margin-top:10px !important;
+  padding:10px 12px !important;
+  border-radius:18px !important;
+  background:linear-gradient(135deg,rgba(255,251,236,.94),rgba(255,255,255,.72)) !important;
+  border:1px solid rgba(213,158,55,.28) !important;
+  color:rgba(84,57,21,.88) !important;
+  font-size:12px !important;
+  line-height:1.45 !important;
+  font-weight:850 !important;
+  box-shadow:0 8px 18px rgba(126,82,18,.06), inset 0 1px 0 rgba(255,255,255,.86) !important;
+}
+.member-voucher-strip-v217 b{
+  font-size:15px !important;
+  color:rgba(126,82,18,.98) !important;
+}
+.member-birthday-modal-v217{
+  position:fixed !important;
+  inset:0 !important;
+  z-index:99999 !important;
+  display:none !important;
+  align-items:center !important;
+  justify-content:center !important;
+  padding:22px !important;
+  background:rgba(20,18,16,.28) !important;
+  backdrop-filter:blur(14px) !important;
+}
+.member-birthday-modal-v217.show{
+  display:flex !important;
+}
+.member-birthday-card-v217{
+  width:min(360px,100%) !important;
+  border-radius:28px !important;
+  padding:22px !important;
+  background:linear-gradient(135deg,rgba(255,255,255,.96),rgba(255,244,214,.90)) !important;
+  border:1px solid rgba(255,255,255,.82) !important;
+  box-shadow:0 28px 70px rgba(44,31,13,.22), inset 0 1px 0 rgba(255,255,255,.92) !important;
+  text-align:center !important;
+  color:#25221e !important;
+}
+.member-birthday-card-v217 .cake{
+  width:62px !important;
+  height:62px !important;
+  margin:0 auto 12px !important;
+  border-radius:24px !important;
+  display:grid !important;
+  place-items:center !important;
+  background:rgba(255,255,255,.70) !important;
+  border:1px solid rgba(255,255,255,.82) !important;
+  font-size:34px !important;
+}
+.member-birthday-card-v217 h3{
+  margin:0 0 8px !important;
+  font-size:22px !important;
+  font-weight:950 !important;
+}
+.member-birthday-card-v217 p{
+  margin:0 !important;
+  font-size:13px !important;
+  line-height:1.62 !important;
+  color:rgba(47,42,36,.66) !important;
+  font-weight:760 !important;
+}
+.member-birthday-card-v217 .coupon{
+  margin-top:14px !important;
+  padding:11px 12px !important;
+  border-radius:18px !important;
+  background:rgba(255,255,255,.58) !important;
+  border:1px dashed rgba(126,82,18,.30) !important;
+  color:rgba(126,82,18,.96) !important;
+  font-size:13px !important;
+  font-weight:950 !important;
+}
+.member-birthday-card-v217 button{
+  margin-top:16px !important;
+  border:0 !important;
+  border-radius:999px !important;
+  padding:11px 18px !important;
+  background:#1f1d1a !important;
+  color:#fff !important;
+  font-size:13px !important;
+  font-weight:950 !important;
+  cursor:pointer !important;
+}
+
 </style>
 
 <style>
@@ -10910,6 +10997,7 @@ window.addEventListener("load", function() {
         '</div>' +
         '<div class="member-reward-bar-v196"><i style="width:' + pct + '%"></i></div>' +
         '<div class="member-reward-line-v196">🎁 成功領取累計 10 杯，可免費兌換任何 1 杯飲品。<br>' + esc(rewardText) + ' 免單只扣可用次數，不扣總累計杯數。</div>' +
+        '<div class="member-voucher-strip-v217">🎫 飲品券：<b>' + (Number(available || 0) + Number(sky31BirthdayVoucherCountV217(member) || 0)) + '</b> 張可用' + (sky31BirthdayVoucherCountV217(member) > 0 ? '｜含生日月飲品券 1 張 🎂' : '') + '</div>' +
       '</div>';
   }
 
@@ -10965,6 +11053,7 @@ window.addEventListener("load", function() {
       renderLoggedPanel(fresh);
       if(memberPage === "history") renderHistoryPage();
       if(memberPage === "tier") renderMemberTierPageV210();
+      try{ sky31ShowBirthdayBlessingV217(fresh, true); }catch(_){}
       alert("生日已添加。");
     }catch(e){
       alert(e.message || "添加生日失敗");
@@ -10972,6 +11061,58 @@ window.addEventListener("load", function() {
   };
 
   window.memberAddBirthdayV211 = window.memberAddBirthdayV213;
+
+
+  function sky31BirthdayVoucherCountV217(member){
+    member = member || {};
+    var birthday = String(member.birthday || "").trim();
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(birthday)) return 0;
+    var parts = birthday.split("-");
+    var month = Number(parts[1] || 0);
+    var now = new Date();
+    return month === (now.getMonth() + 1) ? 1 : 0;
+  }
+
+  function sky31BirthdayMonthKeyV217(member){
+    member = member || {};
+    var phone = String(member.phone || "").replace(/\D/g,"");
+    var birthday = String(member.birthday || "").trim();
+    var now = new Date();
+    return phone + ":" + birthday + ":" + now.getFullYear() + "-" + String(now.getMonth()+1).padStart(2,"0");
+  }
+
+  function sky31ShowBirthdayBlessingV217(member, force){
+    member = member || storedMember();
+    if(!member || !member.phone) return;
+    if(!sky31BirthdayVoucherCountV217(member)) return;
+
+    var key = "sky31_birthday_blessing_seen_v217:" + sky31BirthdayMonthKeyV217(member);
+    if(!force && localStorage.getItem(key)) return;
+    localStorage.setItem(key, "1");
+
+    var existing = $("memberBirthdayModalV217");
+    if(existing) existing.remove();
+
+    var name = member.name || "Sky31 會員";
+    var div = document.createElement("div");
+    div.id = "memberBirthdayModalV217";
+    div.className = "member-birthday-modal-v217 show";
+    div.innerHTML =
+      '<div class="member-birthday-card-v217">' +
+        '<div class="cake">🎂</div>' +
+        '<h3>生日月快樂！</h3>' +
+        '<p>' + esc(name) + '，Sky31 祝你生日月快樂，願你每天都有一杯喜歡的咖啡陪伴。</p>' +
+        '<div class="coupon">🎫 已為你顯示生日月飲品券 1 張</div>' +
+        '<button type="button" onclick="sky31CloseBirthdayBlessingV217()">收到，謝謝</button>' +
+      '</div>';
+    document.body.appendChild(div);
+  }
+
+  window.sky31CloseBirthdayBlessingV217 = function(){
+    var m = $("memberBirthdayModalV217");
+    if(m) m.classList.remove("show");
+    setTimeout(function(){ if(m) m.remove(); }, 220);
+  };
 
   function renderHomeQuickCard(){
     var card = $("memberQuickCard");
@@ -16690,5 +16831,41 @@ window.addEventListener("load", function() {
 </script>
 
 <!-- V215: Limited bean option label changed from 限定豆子 to 風味. -->
+
+<script>
+/* V217: birthday coupon modal fallback + visible refresh after birthday/admin changes. */
+(function(){
+  function stored(){
+    try{ return JSON.parse(localStorage.getItem("sky31_member_v1") || "null"); }catch(e){ return null; }
+  }
+  function rerenderV217(member){
+    try{ if(typeof renderHomeQuickCard === "function") renderHomeQuickCard(); }catch(e){}
+    try{ if(typeof renderLoggedPanel === "function") renderLoggedPanel(member || stored()); }catch(e){}
+    try{ if(typeof renderMemberTierPageV210 === "function" && typeof memberPage !== "undefined" && memberPage === "tier") renderMemberTierPageV210(); }catch(e){}
+    try{ if(typeof sky31ShowBirthdayBlessingV217 === "function") sky31ShowBirthdayBlessingV217(member || stored(), false); }catch(e){}
+  }
+  window.SKY31_RERENDER_MEMBER_V217 = rerenderV217;
+
+  const oldRefresh = window.SKY31_REFRESH_MEMBER_V214 || window.SKY31_REFRESH_MEMBER_V213;
+  if(typeof oldRefresh === "function" && !window.__SKY31_V217_REFRESH_PATCHED){
+    window.__SKY31_V217_REFRESH_PATCHED = true;
+    const patched = async function(reason){
+      const member = await oldRefresh(reason);
+      rerenderV217(member);
+      return member;
+    };
+    window.SKY31_REFRESH_MEMBER_V214 = patched;
+    window.SKY31_REFRESH_MEMBER_V213 = patched;
+  }
+
+  document.addEventListener("DOMContentLoaded", function(){
+    setTimeout(function(){ rerenderV217(stored()); }, 800);
+  });
+  window.addEventListener("focus", function(){
+    setTimeout(function(){ rerenderV217(stored()); }, 300);
+  });
+})();
+</script>
+
 </body>
 </html>
