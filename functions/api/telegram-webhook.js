@@ -7,7 +7,7 @@ export async function onRequest(context) {
     return json({
       ok: true,
       endpoint: "telegram-webhook",
-      version: "V221",
+      version: "V222",
       method,
       message: "Webhook endpoint reachable. Telegram sends POST updates here."
     });
@@ -4696,3 +4696,270 @@ async function handleMemberDuplicateMergeActionV219(env, cq, data) {
 
   return stop(env, cq, confirm ? "已完成合併重複會員" : "已完成掃描");
 }
+
+
+/* V222: Fix member edit lookup after duplicate merge.
+   Fixes both birthday edit and tier edit by using last-8 phone lookup,
+   canonical member:853xxxx storage, and full member:* fallback scan. */
+function normalizePhoneLast8V222(phone) {
+  const p = normalizePhone(phone || "");
+  return p.length >= 8 ? p.slice(-8) : p;
+}
+
+function memberCanonicalPhoneV222(phone) {
+  const last8 = normalizePhoneLast8V222(phone);
+  return last8 ? "853" + last8 : normalizePhone(phone || "");
+}
+
+function memberLookupPhoneV222(memberOrPhone) {
+  const p = typeof memberOrPhone === "object"
+    ? normalizePhone((memberOrPhone && memberOrPhone.phone) || (memberOrPhone && memberOrPhone._kvKey) || "")
+    : normalizePhone(memberOrPhone || "");
+  return normalizePhoneLast8V222(p);
+}
+
+function normalizeBirthdayInputV222(input) {
+  let s = String(input || "").trim();
+  if (!s) return "";
+  s = s.replace(/[．。]/g, ".")
+       .replace(/[\/\.]/g, "-")
+       .replace(/年/g, "-")
+       .replace(/月/g, "-")
+       .replace(/日/g, "")
+       .replace(/\s+/g, "");
+  const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (!m) return "";
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  if (y < 1900 || y > 2100 || mo < 1 || mo > 12 || d < 1 || d > 31) return "";
+  const date = new Date(Date.UTC(y, mo - 1, d));
+  if (date.getUTCFullYear() !== y || date.getUTCMonth() + 1 !== mo || date.getUTCDate() !== d) return "";
+  return String(y).padStart(4, "0") + "-" + String(mo).padStart(2, "0") + "-" + String(d).padStart(2, "0");
+}
+
+birthdayValidV211 = function(value) {
+  return !!normalizeBirthdayInputV222(value);
+};
+
+async function findActiveMemberByPhoneV222(env, phone) {
+  const last8 = normalizePhoneLast8V222(phone);
+  if (!last8) return { key: "", member: null, matches: [] };
+
+  const directKeys = [
+    "member:" + normalizePhone(phone),
+    "member:" + last8,
+    "member:853" + last8
+  ].filter(k => k !== "member:");
+
+  const matches = [];
+  const seen = new Set();
+
+  async function tryKey(key) {
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    const raw = await env.ORDERS.get(key);
+    if (!raw) return;
+    try {
+      const member = JSON.parse(raw);
+      if (!member || member.deletedAt) return;
+      const stored = normalizePhone(member.phone || key.replace("member:", ""));
+      if (stored.slice(-8) === last8 || normalizePhone(key).slice(-8) === last8) {
+        member.phone = stored || memberCanonicalPhoneV222(last8);
+        member._kvKey = key;
+        matches.push({ key, member });
+      }
+    } catch (_) {}
+  }
+
+  for (const key of Array.from(new Set(directKeys))) await tryKey(key);
+
+  // Full fallback scan after aliases were merged/deleted.
+  let cursor = undefined;
+  let checked = 0;
+  do {
+    const page = await env.ORDERS.list({ prefix: "member:", cursor });
+    for (const key of (page.keys || [])) {
+      checked += 1;
+      if (checked > 6000) break;
+      await tryKey(key.name);
+    }
+    cursor = page.cursor;
+    if (page.list_complete !== false) break;
+  } while (cursor && checked <= 6000);
+
+  if (!matches.length) return { key: "", member: null, matches: [] };
+
+  function timeOf(m) {
+    return Math.max(
+      new Date((m && m.manualTierUpdatedAt) || 0).getTime() || 0,
+      new Date((m && m.birthdayUpdatedAt) || 0).getTime() || 0,
+      new Date((m && m.updatedAt) || 0).getTime() || 0,
+      new Date((m && m.createdAt) || 0).getTime() || 0
+    );
+  }
+
+  matches.sort((a, b) => timeOf(b.member) - timeOf(a.member));
+
+  // Merge important fields from all matches, preserving existing counters and latest birthday/tier.
+  const merged = { ...matches[matches.length - 1].member, ...matches[0].member };
+  for (const item of matches) {
+    const m = item.member || {};
+    if (m.birthday && (!merged.birthday || new Date(m.birthdayUpdatedAt || 0) >= new Date(merged.birthdayUpdatedAt || 0))) {
+      merged.birthday = m.birthday;
+      merged.birthdayUpdatedAt = m.birthdayUpdatedAt || merged.birthdayUpdatedAt || "";
+      merged.birthdayUpdatedBy = m.birthdayUpdatedBy || merged.birthdayUpdatedBy || "";
+    }
+    if ((m.manualTierKey || m.memberTierOverrideKey || m.memberTierManualKey) &&
+        (!merged.manualTierKey || new Date(m.manualTierUpdatedAt || 0) >= new Date(merged.manualTierUpdatedAt || 0))) {
+      merged.manualTierKey = m.manualTierKey || m.memberTierOverrideKey || m.memberTierManualKey || "";
+      merged.manualTierName = m.manualTierName || m.memberTierOverrideName || "";
+      merged.manualTierIcon = m.manualTierIcon || m.memberTierOverrideIcon || "";
+      merged.memberTierOverrideKey = merged.manualTierKey;
+      merged.memberTierOverrideName = merged.manualTierName;
+      merged.memberTierOverrideIcon = merged.manualTierIcon;
+      merged.manualTierUpdatedAt = m.manualTierUpdatedAt || merged.manualTierUpdatedAt || "";
+      merged.manualTierUpdatedBy = m.manualTierUpdatedBy || merged.manualTierUpdatedBy || "";
+      merged.manualTierBaseCups = Number(m.manualTierBaseCups || merged.manualTierBaseCups || 0);
+      merged.manualTierStartCups = Number(m.manualTierStartCups || m.manualTierSetAtCups || m.manualTierOriginalCups || merged.manualTierStartCups || 0);
+      merged.manualTierSetAtCups = merged.manualTierStartCups;
+      merged.manualTierOriginalCups = merged.manualTierStartCups;
+    }
+    merged.totalOrders = Math.max(Number(merged.totalOrders || 0), Number(m.totalOrders || 0));
+    merged.totalCups = Math.max(Number(merged.totalCups || 0), Number(m.totalCups || 0));
+    merged.totalSpent = Math.max(Number(merged.totalSpent || 0), Number(m.totalSpent || 0));
+    merged.rewardRedeemed = Math.max(Number(merged.rewardRedeemed || merged.rewardsRedeemed || 0), Number(m.rewardRedeemed || m.rewardsRedeemed || 0));
+    merged.rewardsRedeemed = merged.rewardRedeemed;
+  }
+
+  const canonical = memberCanonicalPhoneV222(last8);
+  merged.phone = canonical;
+  merged.updatedAt = merged.updatedAt || new Date().toISOString();
+
+  return { key: "member:" + canonical, member: merged, matches };
+}
+
+loadActiveMemberForEditV211 = async function(env, phone) {
+  return await findActiveMemberByPhoneV222(env, phone);
+};
+
+saveActiveMemberForEditV211 = async function(env, loaded) {
+  const member = loaded && loaded.member ? loaded.member : null;
+  if (!member) return;
+  const last8 = normalizePhoneLast8V222(member.phone);
+  const canonical = memberCanonicalPhoneV222(last8);
+  member.phone = canonical;
+  member.updatedAt = member.updatedAt || new Date().toISOString();
+
+  const keysToSave = new Set();
+  keysToSave.add("member:" + canonical);
+
+  // Update any existing aliases that still exist, so old buttons and old phone formats keep working.
+  const matches = (loaded && Array.isArray(loaded.matches)) ? loaded.matches : [];
+  matches.forEach(m => { if (m && m.key) keysToSave.add(m.key); });
+
+  // Only keep canonical and existing aliases in sync. Do not create new short alias if it was already cleaned.
+  for (const key of keysToSave) {
+    await env.ORDERS.put(key, JSON.stringify(member), { expirationTtl: 60 * 60 * 24 * 3650 });
+  }
+};
+
+buildMemberDetailReplyMarkup = function(member, deleted = false) {
+  const lookup = memberLookupPhoneV222(member);
+  const rows = [];
+  if (deleted) {
+    rows.push([{ text: "↩️ 恢復賬號", callback_data: "member_restore:" + lookup }]);
+  } else {
+    rows.push([{ text: "🔄 重新讀取會員資料", callback_data: "member_refresh:" + lookup }]);
+    rows.push([{ text: "🎂 更改生日", callback_data: "member_edit_birthday:" + lookup }]);
+    rows.push([{ text: "🏅 更改會員等級", callback_data: "member_tier_menu:" + lookup }]);
+    rows.push([{ text: "🗑️ 刪除賬號", callback_data: "member_delete:" + lookup }]);
+  }
+  rows.push([{ text: "📋 返回用戶列表", callback_data: "member_list:all" }]);
+  rows.push([{ text: "返回功能列表", callback_data: "limited_cmd_menu:x" }]);
+  return { inline_keyboard: rows };
+};
+
+saveMemberEditDraftV211 = async function(env, chatId, draft) {
+  const payload = JSON.stringify(draft || {});
+  await env.ORDERS.put(memberEditDraftKeyV211(chatId), payload, { expirationTtl: MEMBER_EDIT_DRAFT_TTL_V211 });
+  await env.ORDERS.put("member_edit_draft:last:" + String(chatId || ""), payload, { expirationTtl: MEMBER_EDIT_DRAFT_TTL_V211 });
+};
+
+getMemberEditDraftV211 = async function(env, chatId) {
+  const keys = [
+    memberEditDraftKeyV211(chatId),
+    "member_edit_draft:last:" + String(chatId || "")
+  ];
+  for (const key of keys) {
+    const raw = await env.ORDERS.get(key);
+    if (!raw) continue;
+    try { return JSON.parse(raw); } catch (_) {}
+  }
+  return null;
+};
+
+clearMemberEditDraftV211 = async function(env, chatId) {
+  await env.ORDERS.delete(memberEditDraftKeyV211(chatId));
+  await env.ORDERS.delete("member_edit_draft:last:" + String(chatId || ""));
+};
+
+handleMemberEditDraftTextV211 = async function(env, message, text, draft) {
+  const chatId = message.chat && message.chat.id ? message.chat.id : env.TELEGRAM_CHAT_ID;
+  if (!isAuthorizedTelegramChat(env, chatId)) {
+    await clearMemberEditDraftV211(env, chatId);
+    return json({ ok: true });
+  }
+
+  const raw = String(text || "").trim();
+  if (raw === "取消") {
+    await clearMemberEditDraftV211(env, chatId);
+    await sendTelegramMessage(env, chatId, "已取消會員資料修改。", buildCommandMenuMarkupV183 ? buildCommandMenuMarkupV183() : null);
+    return json({ ok: true });
+  }
+
+  if (draft && draft.type === "birthday") {
+    const birthday = normalizeBirthdayInputV222(raw);
+    if (!birthday) {
+      await sendTelegramMessage(
+        env,
+        chatId,
+        "生日格式不正確，請重新輸入。\n\n可接受格式：\n1990-08-18\n1990/08/18\n1990.08.18\n1990年8月18日\n\n輸入「取消」可取消操作。",
+        null
+      );
+      return json({ ok: true });
+    }
+
+    const loaded = await loadActiveMemberForEditV211(env, draft.phone);
+    if (!loaded.member) {
+      await clearMemberEditDraftV211(env, chatId);
+      await sendTelegramMessage(env, chatId, "找不到會員資料，生日未能更改。請重新進入會員列表，再打開該會員詳細資料操作。", buildCommandMenuMarkupV183 ? buildCommandMenuMarkupV183() : null);
+      return json({ ok: true });
+    }
+
+    const member = loaded.member;
+    member.birthday = birthday;
+    member.birthdayUpdatedAt = new Date().toISOString();
+    member.birthdayUpdatedBy = "telegram";
+    member.updatedAt = member.birthdayUpdatedAt;
+
+    await saveActiveMemberForEditV211(env, loaded);
+    await clearMemberEditDraftV211(env, chatId);
+
+    const enriched = await enrichMemberStatsForTelegram(env, member).catch(() => member);
+    const birthdayMonthNow = Number(birthday.split("-")[1]) === (new Date().getUTCMonth() + 1);
+    await sendTelegramMessage(
+      env,
+      chatId,
+      "✅ 已更新會員生日：" + birthday +
+      (birthdayMonthNow ? "\n🎂 生日月優惠已觸發，客人在會員中心會看到生日祝福和生日月飲品券。" : "") +
+      "\n\n" + buildMemberDetailText(enriched, false),
+      buildMemberDetailReplyMarkup(enriched, false)
+    );
+    return json({ ok: true });
+  }
+
+  await clearMemberEditDraftV211(env, chatId);
+  await sendTelegramMessage(env, chatId, "未找到正在編輯的會員資料，請重新進入會員詳細頁操作。", buildCommandMenuMarkupV183 ? buildCommandMenuMarkupV183() : null);
+  return json({ ok: true });
+};
