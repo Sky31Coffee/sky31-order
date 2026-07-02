@@ -4022,14 +4022,22 @@ async function findActiveMemberV223(env, phone) {
 async function saveActiveMemberV223(env, loaded) {
   if (!loaded || !loaded.member) return null;
   const member = { ...loaded.member };
-  const last8 = phoneLast8V223(member.phone);
-  member.phone = canonicalPhoneV223(member.phone || (loaded.key || "").replace(/^member:/, ""));
+  const last8 = phoneLast8V223(member.phone || (loaded.key || "").replace(/^member:/, ""));
+  member.phone = canonicalPhoneV223(member.phone || last8);
   member.updatedAt = new Date().toISOString();
 
   const canonicalKey = memberKeyV223(member.phone);
+  const ttl = 60 * 60 * 24 * 3650;
 
-  function memberWithLatestTier(baseMember, keyName) {
-    const base = (baseMember && typeof baseMember === "object") ? { ...baseMember } : {};
+  function isSameActiveMemberRecord(keyName, oldMember) {
+    const keyPhone = normalizePhone(String(keyName || "").replace(/^member:/, ""));
+    const storedPhone = normalizePhone((oldMember && oldMember.phone) || keyPhone);
+    if (oldMember && oldMember.deletedAt) return false;
+    return phoneLast8V223(storedPhone || keyPhone) === last8;
+  }
+
+  function withLatestManualTier(oldMember, keyName) {
+    const base = oldMember && typeof oldMember === "object" ? { ...oldMember } : {};
     const keyPhone = normalizePhone(String(keyName || "").replace(/^member:/, ""));
     return {
       ...base,
@@ -4051,51 +4059,39 @@ async function saveActiveMemberV223(env, loaded) {
     };
   }
 
-  await env.ORDERS.put(canonicalKey, JSON.stringify(member), { expirationTtl: 60 * 60 * 24 * 3650 });
-
-  const keysToDelete = new Set();
-  const aliasRecords = new Map();
-
+  const records = new Map();
   (Array.isArray(loaded.records) ? loaded.records : []).forEach(rec => {
-    if (!rec || !rec.key || rec.key === canonicalKey) return;
-    aliasRecords.set(rec.key, rec.member || {});
-    keysToDelete.add(rec.key);
+    if (rec && rec.key) records.set(rec.key, rec.member || {});
   });
 
   let cursor = undefined;
   do {
     const page = await env.ORDERS.list({ prefix: "member:", cursor });
     for (const key of (page.keys || [])) {
-      if (key.name === canonicalKey) continue;
-      const kp = normalizePhone(key.name.replace("member:", ""));
-      if (kp.slice(-8) === last8) {
-        try {
-          const raw = await env.ORDERS.get(key.name);
-          aliasRecords.set(key.name, raw ? JSON.parse(raw) : {});
-        } catch (_) {
-          aliasRecords.set(key.name, {});
-        }
-        keysToDelete.add(key.name);
-      }
+      if (records.has(key.name)) continue;
+      try {
+        const raw = await env.ORDERS.get(key.name);
+        const oldMember = raw ? JSON.parse(raw) : {};
+        if (isSameActiveMemberRecord(key.name, oldMember)) records.set(key.name, oldMember);
+      } catch (_) {}
     }
     cursor = page.cursor;
     if (page.list_complete !== false) break;
   } while (cursor);
 
-  // First synchronize the latest manual tier into existing duplicate records.
-  // This prevents the website from reading an old alias with the previous tier
-  // during KV propagation. No new 853 / alias keys are created here.
-  for (const [key, oldMember] of aliasRecords.entries()) {
-    try {
-      await env.ORDERS.put(key, JSON.stringify(memberWithLatestTier(oldMember, key)), { expirationTtl: 60 * 60 * 24 * 3650 });
-    } catch (_) {}
+  records.set(canonicalKey, records.get(canonicalKey) || member);
+
+  let synced = 0;
+  for (const [key, oldMember] of records.entries()) {
+    if (!key || !key.startsWith("member:")) continue;
+    const nextMember = withLatestManualTier(oldMember, key);
+    await env.ORDERS.put(key, JSON.stringify(nextMember), { expirationTtl: ttl });
+    synced += 1;
   }
 
-  for (const key of keysToDelete) {
-    await env.ORDERS.delete(key);
-  }
-
-  return { key: canonicalKey, member, deletedAliasCount: keysToDelete.size };
+  // Do not create or force an 853 member key. Do not immediately delete old aliases here:
+  // every existing same-phone record is synchronized to the same tier so either read path shows the same result.
+  return { key: canonicalKey, member: withLatestManualTier(records.get(canonicalKey) || member, canonicalKey), syncedAliasCount: synced };
 }
 
 function normalizeBirthdayInputV223(input) {
@@ -4843,14 +4839,24 @@ function memberPurgeLastTokenV238(phone) {
   return p;
 }
 
-async function isPhonePurgedV238(env, phone) {
+async function readMemberPurgeTombstoneV261(env, phone) {
   const candidates = memberPurgeCandidatePhonesV238(phone);
   const last = memberPurgeLastTokenV238(phone);
   if (last) candidates.push("last8:" + last);
+  let latest = null;
   for (const c of Array.from(new Set(candidates.filter(Boolean)))) {
-    if (await env.ORDERS.get("member_purged:" + c)) return true;
+    const raw = await env.ORDERS.get("member_purged:" + c);
+    if (!raw) continue;
+    let data = null;
+    try { data = JSON.parse(raw); } catch (_) { data = { purgedAt: "" }; }
+    const at = new Date((data && data.purgedAt) || 0).getTime() || 0;
+    if (!latest || at >= latest.time) latest = { data, time: at, key: "member_purged:" + c };
   }
-  return false;
+  return latest;
+}
+
+async function isPhonePurgedV238(env, phone) {
+  return !!(await readMemberPurgeTombstoneV261(env, phone));
 }
 
 async function isMemberPurgedRecordV238(env, member) {
@@ -4860,10 +4866,27 @@ async function isMemberPurgedRecordV238(env, member) {
   phones.push(member.memberPhone);
   phones.push(member.submittedPhone);
   if (member._kvKey) phones.push(String(member._kvKey).replace(/^member_deleted:|^member:/, ""));
+
+  let latest = null;
   for (const phone of phones) {
-    if (phone && await isPhonePurgedV238(env, phone)) return true;
+    if (!phone) continue;
+    const found = await readMemberPurgeTombstoneV261(env, phone);
+    if (found && (!latest || found.time >= latest.time)) latest = found;
   }
-  return false;
+  if (!latest) return false;
+
+  // If the customer re-registers after permanent delete, the new active member should be visible again.
+  // Deleted-member archive records remain hidden.
+  const isDeletedRecord = !!(member._deleted || member.deletedAt || (member._kvKey && String(member._kvKey).startsWith("member_deleted:")));
+  if (!isDeletedRecord) {
+    const activeTime = Math.max(
+      new Date(member.createdAt || 0).getTime() || 0,
+      new Date(member.updatedAt || 0).getTime() || 0,
+      new Date(member.manualTierUpdatedAt || 0).getTime() || 0
+    );
+    if (activeTime && latest.time && activeTime > latest.time) return false;
+  }
+  return true;
 }
 
 async function writeMemberPurgeTombstoneV238(env, phone) {
@@ -4997,9 +5020,9 @@ listTelegramMembers = async function(env) {
 
 const _oldGetMemberForTelegramViewV238 = getMemberForTelegramView;
 getMemberForTelegramView = async function(env, phone, deleted) {
-  if (await isPhonePurgedV238(env, phone)) return null;
   const member = await _oldGetMemberForTelegramViewV238(env, phone, deleted);
   if (member && await isMemberPurgedRecordV238(env, member)) return null;
+  if (!member && deleted && await isPhonePurgedV238(env, phone)) return null;
   return member;
 };
 

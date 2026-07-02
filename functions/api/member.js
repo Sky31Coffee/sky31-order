@@ -16,6 +16,27 @@ export async function onRequestGet(context) {
   return json({ ok: true, member: sky31DecorateMemberV196(withStats) });
 }
 
+
+function memberRegistrationPurgeKeysV261(phone) {
+  phone = normalizePhone(phone || "");
+  const out = new Set();
+  if (!phone) return [];
+  out.add("member_purged:" + phone);
+  const last = phone.length >= 8 ? phone.slice(-8) : phone;
+  if (last) out.add("member_purged:last8:" + last);
+  if (phone.length > 3 && phone.startsWith("853")) out.add("member_purged:" + phone.slice(3));
+  // Only remove old tombstones if they already exist. This does not create or normalize a new 853 member record.
+  if (phone.length === 8) out.add("member_purged:853" + phone);
+  return Array.from(out);
+}
+
+async function clearMemberRegistrationBlocksV261(env, phone) {
+  if (!env || !env.ORDERS) return;
+  for (const key of memberRegistrationPurgeKeysV261(phone)) {
+    try { await env.ORDERS.delete(key); } catch (_) {}
+  }
+}
+
 export async function onRequestPost(context) {
   const { request, env } = context;
 
@@ -77,7 +98,8 @@ export async function onRequestPost(context) {
       recentOrderNos: []
     };
 
-    await env.ORDERS.put("member:" + phone, JSON.stringify(member));
+    await clearMemberRegistrationBlocksV261(env, phone);
+    await env.ORDERS.put("member:" + phone, JSON.stringify(member), { expirationTtl: 60 * 60 * 24 * 3650 });
 
     const withStats = await enrichMemberWithOrders(env, member);
 
