@@ -4027,11 +4027,39 @@ async function saveActiveMemberV223(env, loaded) {
   member.updatedAt = new Date().toISOString();
 
   const canonicalKey = memberKeyV223(member.phone);
+
+  function memberWithLatestTier(baseMember, keyName) {
+    const base = (baseMember && typeof baseMember === "object") ? { ...baseMember } : {};
+    const keyPhone = normalizePhone(String(keyName || "").replace(/^member:/, ""));
+    return {
+      ...base,
+      ...member,
+      phone: normalizePhone(base.phone || keyPhone || member.phone || last8),
+      manualTierKey: member.manualTierKey || member.memberTierOverrideKey || member.memberTierManualKey || "",
+      manualTierName: member.manualTierName || member.memberTierOverrideName || "",
+      manualTierIcon: member.manualTierIcon || member.memberTierOverrideIcon || "",
+      memberTierOverrideKey: member.memberTierOverrideKey || member.manualTierKey || "",
+      memberTierOverrideName: member.memberTierOverrideName || member.manualTierName || "",
+      memberTierOverrideIcon: member.memberTierOverrideIcon || member.manualTierIcon || "",
+      manualTierBaseCups: Number(member.manualTierBaseCups ?? 0),
+      manualTierStartCups: Number(member.manualTierStartCups ?? member.manualTierSetAtCups ?? member.manualTierOriginalCups ?? 0),
+      manualTierSetAtCups: Number(member.manualTierSetAtCups ?? member.manualTierStartCups ?? member.manualTierOriginalCups ?? 0),
+      manualTierOriginalCups: Number(member.manualTierOriginalCups ?? member.manualTierStartCups ?? member.manualTierSetAtCups ?? 0),
+      manualTierUpdatedAt: member.manualTierUpdatedAt || member.updatedAt || new Date().toISOString(),
+      manualTierUpdatedBy: member.manualTierUpdatedBy || "telegram",
+      updatedAt: member.updatedAt
+    };
+  }
+
   await env.ORDERS.put(canonicalKey, JSON.stringify(member), { expirationTtl: 60 * 60 * 24 * 3650 });
 
   const keysToDelete = new Set();
+  const aliasRecords = new Map();
+
   (Array.isArray(loaded.records) ? loaded.records : []).forEach(rec => {
-    if (rec && rec.key && rec.key !== canonicalKey) keysToDelete.add(rec.key);
+    if (!rec || !rec.key || rec.key === canonicalKey) return;
+    aliasRecords.set(rec.key, rec.member || {});
+    keysToDelete.add(rec.key);
   });
 
   let cursor = undefined;
@@ -4040,11 +4068,28 @@ async function saveActiveMemberV223(env, loaded) {
     for (const key of (page.keys || [])) {
       if (key.name === canonicalKey) continue;
       const kp = normalizePhone(key.name.replace("member:", ""));
-      if (kp.slice(-8) === last8) keysToDelete.add(key.name);
+      if (kp.slice(-8) === last8) {
+        try {
+          const raw = await env.ORDERS.get(key.name);
+          aliasRecords.set(key.name, raw ? JSON.parse(raw) : {});
+        } catch (_) {
+          aliasRecords.set(key.name, {});
+        }
+        keysToDelete.add(key.name);
+      }
     }
     cursor = page.cursor;
     if (page.list_complete !== false) break;
   } while (cursor);
+
+  // First synchronize the latest manual tier into existing duplicate records.
+  // This prevents the website from reading an old alias with the previous tier
+  // during KV propagation. No new 853 / alias keys are created here.
+  for (const [key, oldMember] of aliasRecords.entries()) {
+    try {
+      await env.ORDERS.put(key, JSON.stringify(memberWithLatestTier(oldMember, key)), { expirationTtl: 60 * 60 * 24 * 3650 });
+    } catch (_) {}
+  }
 
   for (const key of keysToDelete) {
     await env.ORDERS.delete(key);
