@@ -15706,6 +15706,19 @@ window.addEventListener("load", function() {
   }
 
   function forceRefresh180(){
+    var selectedValue180 = "";
+    var selectedLabel180 = "";
+    var selectedFlavor180 = "";
+    try{
+      var beanChips180 = document.getElementById("beanChips");
+      var selected180 = beanChips180 && beanChips180.querySelector(".bean-chip.active");
+      if(selected180){
+        selectedValue180 = String(selected180.getAttribute("data-value") || "");
+        selectedLabel180 = String(selected180.getAttribute("data-bean-label") || "");
+        selectedFlavor180 = String(selected180.getAttribute("data-bean-flavor") || "");
+      }
+    }catch(e){}
+
     installCleanRenderMenu180();
     installBeanGroupFix180();
     hideStandaloneLimitedSection180();
@@ -15714,6 +15727,25 @@ window.addEventListener("load", function() {
     try{
       if(typeof current !== "undefined" && current) configureBean();
     }catch(e){}
+
+    try{
+      if(selectedValue180){
+        var beanChipsAfter180 = document.getElementById("beanChips");
+        var restored180 = beanChipsAfter180 && Array.from(beanChipsAfter180.querySelectorAll(".bean-chip")).find(function(el){
+          if(String(el.getAttribute("data-value") || "") === selectedValue180) return true;
+          if(selectedLabel180 && selectedFlavor180){
+            return String(el.getAttribute("data-bean-label") || "") === selectedLabel180 &&
+                   String(el.getAttribute("data-bean-flavor") || "") === selectedFlavor180;
+          }
+          return false;
+        });
+        if(restored180){
+          beanChipsAfter180.querySelectorAll(".bean-chip").forEach(function(el){ el.classList.remove("active"); });
+          restored180.classList.add("active");
+        }
+      }
+    }catch(e){}
+
     polishLimitedPlaceholderText180();
   }
 
@@ -15837,6 +15869,14 @@ window.addEventListener("load", function() {
     if(!beanChips || typeof current === "undefined" || !current) return;
     if(!productAcceptsLimitedBean181(current)) return;
 
+    // Preserve the customer's current bean selection before the background limited-bean refresh.
+    // The old V181 refresh runs periodically and used to remove/reinsert limited chips without
+    // restoring active state, so a selected limited bean could look cancelled before adding to cart.
+    const selectedBefore = beanChips.querySelector(".bean-chip.active");
+    const selectedValue = selectedBefore ? String(selectedBefore.getAttribute("data-value") || "") : "";
+    const selectedLabel = selectedBefore ? String(selectedBefore.getAttribute("data-bean-label") || "") : "";
+    const selectedFlavor = selectedBefore ? String(selectedBefore.getAttribute("data-bean-flavor") || "") : "";
+
     // Remove older limited chips / placeholder / refresh line, keep original two base beans.
     beanChips.querySelectorAll(".limited-bean-option,.limited-bean-selection-placeholder,.bean-refresh-line").forEach(el => el.remove());
 
@@ -15858,6 +15898,22 @@ window.addEventListener("load", function() {
     );
 
     if(typeof bindChips === "function") bindChips(document.getElementById("beanBox"));
+
+    if(selectedValue){
+      const restored = Array.from(beanChips.querySelectorAll(".bean-chip")).find(function(el){
+        if(String(el.getAttribute("data-value") || "") === selectedValue) return true;
+        if(selectedLabel && selectedFlavor){
+          return String(el.getAttribute("data-bean-label") || "") === selectedLabel &&
+                 String(el.getAttribute("data-bean-flavor") || "") === selectedFlavor;
+        }
+        return false;
+      });
+      if(restored){
+        beanChips.querySelectorAll(".bean-chip").forEach(function(el){ el.classList.remove("active"); });
+        restored.classList.add("active");
+      }
+    }
+
     beanChips.querySelectorAll(".limited-bean-selection-placeholder").forEach(function(el){
       el.onclick = function(ev){ ev.preventDefault(); ev.stopPropagation(); };
     });
