@@ -16992,7 +16992,7 @@ window.addEventListener("load", function() {
       '<div class="line"><span>等級優惠</span><strong>' + (calc.discount > 0 ? '-' + money214(calc.discount) : '暫無可套用') + '</strong></div>' +
       (calc.details.length ? '<div class="line"><span>優惠內容</span><strong>' + esc214(calc.details.join("、")) + '</strong></div>' : '') +
       '<div class="line"><span>預計應付</span><strong>' + money214(finalTotal) + '</strong></div>' +
-      '<div class="v214-debug-line">最終金額仍會由後端 /api/order 重新核算，Telegram 訂單會顯示實際扣減。</div>';
+      '';
 
     const finalLine = summary.querySelector(".v201-final-total") || summary.lastElementChild;
     if(finalLine && finalLine.parentNode === summary) summary.insertBefore(box, finalLine.nextSibling);
@@ -17779,6 +17779,382 @@ window.addEventListener("load", function() {
   if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", function(){ syncBadge(readMember()); }, {once:true});
   else syncBadge(readMember());
   setTimeout(function(){ syncBadge(readMember()); }, 120);
+})();
+</script>
+
+
+<style id="sky31-v240-checkout-fixes">
+/* V240: keep checkout member modal X fixed at the top-right. */
+#checkoutMemberModal .checkout-member-top{
+  position: sticky !important;
+  top: 0 !important;
+  min-height: 54px !important;
+  z-index: 2147482000 !important;
+}
+#checkoutMemberModal .checkout-member-close{
+  position: absolute !important;
+  right: 10px !important;
+  top: 8px !important;
+  left: auto !important;
+  bottom: auto !important;
+  margin: 0 !important;
+  transform: none !important;
+  width: 38px !important;
+  height: 38px !important;
+  min-width: 38px !important;
+  min-height: 38px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  line-height: 1 !important;
+  z-index: 2147483000 !important;
+}
+</style>
+
+<script>
+/* V240: final checkout calculation order + no forced 853 display + checkout close position guard.
+   Rule: tier bean-surcharge waiver first, then reward/free-drink voucher on the discounted cup price.
+   This allows both benefits together without discounting the same +MOP 5 twice. */
+(function(){
+  const MEMBER_KEY = "sky31_member_v1";
+
+  function esc240(s){
+    if(typeof esc === "function") return esc(s);
+    return String(s == null ? "" : s).replace(/[&<>"']/g,function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];
+    });
+  }
+  function money240(n){
+    if(typeof sky31Money === "function") return sky31Money(n);
+    n = Math.round(Number(n || 0) * 100) / 100;
+    return "MOP " + n.toString();
+  }
+  function readMember240(){
+    try{ return JSON.parse(localStorage.getItem(MEMBER_KEY) || "null"); }catch(e){ return null; }
+  }
+  function displayPhone240(phone){
+    let p = String(phone || "").replace(/\D/g, "");
+    if(p.length > 3 && p.indexOf("853") === 0) p = p.slice(3);
+    return p;
+  }
+  function cart240(){
+    try{ if(Array.isArray(window.cart)) return window.cart; if(Array.isArray(cart)) return cart; }catch(e){}
+    return [];
+  }
+  function unit240(item){
+    const q = Math.max(1, Number(item.qty || item.quantity || 1));
+    const explicit = Number(item.unitPrice || item.price || item.finalPrice || 0);
+    if(explicit) return explicit;
+    const sub = Number(item.subtotal || 0);
+    return sub ? sub / q : 0;
+  }
+  function isLimited240(bean){
+    const s = String(bean || "");
+    return s.indexOf("Limited｜") === 0 || s.indexOf("Limited|") === 0;
+  }
+  function surcharge240(item){
+    return Math.max(0, Number(item.beanSurcharge || item.limitedSurcharge || (isLimited240(item.bean) ? 5 : 0) || 0));
+  }
+  function shortBean240(bean){
+    const s = String(bean || "");
+    if(s.indexOf("Limited｜") === 0 || s.indexOf("Limited|") === 0){
+      const parts = s.indexOf("｜") >= 0 ? s.split("｜") : s.split("|");
+      return (parts[1] || "限定豆子") + "（+MOP 5）";
+    }
+    return s.split("｜")[0].split("|")[0];
+  }
+  function tierByKey240(key){
+    key = String(key || "").toLowerCase();
+    if(key === "vip") key = "blackgold";
+    const map = {
+      regular:{key:"regular",name:"普通會員",icon:"🌱"},
+      silver:{key:"silver",name:"銀卡會員",icon:"🥈"},
+      gold:{key:"gold",name:"金卡會員",icon:"🥇"},
+      diamond:{key:"diamond",name:"鑽石會員",icon:"💎"},
+      blackgold:{key:"blackgold",name:"黑金會員",icon:"👑"}
+    };
+    return map[key] || null;
+  }
+  function tierByCups240(cups){
+    cups = Number(cups || 0);
+    if(cups >= 180) return tierByKey240("blackgold");
+    if(cups >= 100) return tierByKey240("diamond");
+    if(cups >= 60) return tierByKey240("gold");
+    if(cups >= 30) return tierByKey240("silver");
+    return tierByKey240("regular");
+  }
+  function displayTier240(member){
+    member = member || {};
+    const manualBase = tierByKey240(member.manualTierKey || member.memberTierOverrideKey || member.memberTierManualKey || "");
+    const cups = Number(member.totalCups || member.cups || member.totalItems || 0);
+    if(!manualBase) return tierByKey240(member.memberTierKey || "") || tierByCups240(cups);
+    const baseMap = {regular:0, silver:30, gold:60, diamond:100, blackgold:180, vip:180};
+    const hasStart = member.manualTierStartCups !== undefined || member.manualTierSetAtCups !== undefined || member.manualTierOriginalCups !== undefined;
+    const base = Number(member.manualTierBaseCups || baseMap[manualBase.key] || 0);
+    const start = hasStart ? Number(member.manualTierStartCups ?? member.manualTierSetAtCups ?? member.manualTierOriginalCups ?? 0) : 0;
+    return tierByCups240(hasStart ? base + Math.max(0, cups - start) : Math.max(cups, base));
+  }
+  function expandedUnits240(){
+    const units = [];
+    cart240().forEach(function(item, itemIndex){
+      const q = Math.max(1, Number(item.qty || item.quantity || 1));
+      const unit = unit240(item);
+      const sur = Math.min(unit, surcharge240(item));
+      for(let i=0;i<q;i++){
+        units.push({
+          itemIndex:itemIndex,
+          cupIndex:i,
+          title:item.name || item.title || item.cn || "飲品",
+          unit:unit,
+          surcharge:sur,
+          tierWaiver:0,
+          rewardUnit:unit
+        });
+      }
+    });
+    return units;
+  }
+  function calculate240(member){
+    member = member || readMember240() || {};
+    const items = cart240();
+    const subtotal = items.reduce(function(sum,item){
+      const q = Math.max(1, Number(item.qty || item.quantity || 1));
+      return sum + Number(item.subtotal || unit240(item) * q || 0);
+    },0);
+    const units = expandedUnits240();
+    const tier = displayTier240(member);
+    const details = [];
+    let tierDiscount = 0;
+
+    if(tier.key === "silver" || tier.key === "gold" || tier.key === "diamond"){
+      const max = tier.key === "silver" ? 1 : (tier.key === "gold" ? 2 : Infinity);
+      let used = 0;
+      units.forEach(function(u){
+        if(used >= max || u.surcharge <= 0) return;
+        u.tierWaiver = Math.min(u.surcharge, 5);
+        u.rewardUnit = Math.max(0, u.unit - u.tierWaiver);
+        tierDiscount += u.tierWaiver;
+        used++;
+      });
+      if(tierDiscount > 0){
+        details.push(tier.key === "diamond" ? "限定豆子加價全數豁免" : "限定豆子加價豁免 ×" + used);
+      }
+    }else if(tier.key === "blackgold"){
+      tierDiscount = Math.min(15, subtotal);
+      if(tierDiscount > 0) details.push("黑金會員 MOP 15 優惠");
+    }
+
+    tierDiscount = Math.min(subtotal, Math.round(tierDiscount * 100) / 100);
+    const afterTier = Math.max(0, subtotal - tierDiscount);
+
+    const cups = Number(member.totalCups || member.cups || member.totalItems || 0);
+    const redeemed = Number(member.rewardRedeemed || member.rewardsRedeemed || (member.rewards && member.rewards.redeemedRewards) || 0);
+    const earned = Math.floor(cups / 10);
+    const available = Math.max(0, Number((member.rewards && member.rewards.availableRewards) || (earned - redeemed) || 0));
+    const rewardUnits = units.slice().sort(function(a,b){ return Number(b.rewardUnit || 0) - Number(a.rewardUnit || 0); });
+    const useRewards = Math.min(available, rewardUnits.length);
+    const freeItems = rewardUnits.slice(0, useRewards);
+    let rewardDiscount = freeItems.reduce(function(sum,u){ return sum + Number(u.rewardUnit || 0); }, 0);
+    rewardDiscount = Math.min(afterTier, Math.round(rewardDiscount * 100) / 100);
+
+    return {
+      subtotal:Math.round(subtotal * 100) / 100,
+      tier:tier,
+      tierDiscount:tierDiscount,
+      tierDetails:details,
+      afterTier:afterTier,
+      cups:cups,
+      earned:earned,
+      redeemed:redeemed,
+      available:available,
+      useRewards:useRewards,
+      rewardDiscount:rewardDiscount,
+      freeItems:freeItems,
+      finalTotal:Math.max(0, Math.round((afterTier - rewardDiscount) * 100) / 100)
+    };
+  }
+
+  function rewardBox240(member, calc){
+    if(!member || !member.phone){
+      return '<div class="v201-checkout-reward"><div class="title">🎁 會員獎賞</div><div class="note">登入會員後，成功領取累計 10 杯，可免費兌換任何 1 杯飲品。</div></div>';
+    }
+    if(calc.useRewards > 0 && calc.rewardDiscount > 0){
+      const names = calc.freeItems.map(function(x){return x.title;}).slice(0,3).join("、");
+      return '<div class="v201-checkout-reward">' +
+        '<div class="title">🎁 已自動套用會員免單</div>' +
+        '<div class="line"><span>目前可用免單</span><strong>' + calc.available + ' 次</strong></div>' +
+        '<div class="line"><span>本次兌換</span><strong>' + calc.useRewards + ' 杯</strong></div>' +
+        '<div class="line"><span>免單扣減</span><strong>-' + money240(calc.rewardDiscount) + '</strong></div>' +
+        '<div class="note">免費飲品：' + esc240(names || "飲品") + '。免單按等級優惠後的飲品價扣減，不會重複扣同一個豆子加價。</div>' +
+      '</div>';
+    }
+    return '<div class="v201-checkout-reward">' +
+      '<div class="title">🎁 會員獎賞</div>' +
+      '<div class="line"><span>總累計杯數</span><strong>' + calc.cups + ' 杯</strong></div>' +
+      '<div class="line"><span>目前可用免單</span><strong>0 次</strong></div>' +
+      '<div class="note">暫時未有可用免單。成功領取累計 10 杯，可免費兌換任何 1 杯飲品。</div>' +
+    '</div>';
+  }
+
+  function tierBox240(calc){
+    return '<div class="v214-discount-verify">' +
+      '<div class="title">🏅 會員等級優惠檢查</div>' +
+      '<div class="line"><span>目前等級</span><strong>' + esc240(calc.tier.name) + ' ' + esc240(calc.tier.icon) + '</strong></div>' +
+      '<div class="line"><span>等級優惠</span><strong>' + (calc.tierDiscount > 0 ? '-' + money240(calc.tierDiscount) : '暫無可套用') + '</strong></div>' +
+      (calc.tierDetails.length ? '<div class="line"><span>優惠內容</span><strong>' + esc240(calc.tierDetails.join("、")) + '</strong></div>' : '') +
+      '<div class="line"><span>計算方式</span><strong>先扣豆子加價，再套用免單</strong></div>' +
+    '</div>';
+  }
+
+  function renderSummary240(member){
+    const summary = document.getElementById("summary");
+    if(!summary) return "";
+    const c = cart240();
+    if(!c.length){
+      summary.innerHTML = "請先選擇餐品。";
+      window.SKY31_REWARD_APPLY_V201 = null;
+      window.SKY31_TIER_APPLY_V214 = null;
+      return "";
+    }
+    member = member || readMember240();
+    const calc = calculate240(member || {});
+    window.SKY31_REWARD_APPLY_V201 = {
+      cups:calc.cups,
+      earned:calc.earned,
+      redeemed:calc.redeemed,
+      available:calc.available,
+      subtotal:calc.subtotal,
+      useRewards:calc.useRewards,
+      rewardDiscount:calc.rewardDiscount,
+      freeItems:calc.freeItems,
+      finalTotal:calc.finalTotal
+    };
+    window.SKY31_REWARD_APPLY_V200 = window.SKY31_REWARD_APPLY_V201;
+    window.SKY31_TIER_APPLY_V214 = {
+      tier:calc.tier,
+      discount:calc.tierDiscount,
+      details:calc.tierDetails,
+      calculationOrder:"tier_first_reward_after"
+    };
+    window.SKY31_CHECKOUT_CALC_V240 = calc;
+
+    const totalQty = c.reduce(function(s,x){return s + Number(x.qty || x.quantity || 1);}, 0);
+    let rows = "";
+    c.forEach(function(x){
+      const q = Math.max(1, Number(x.qty || x.quantity || 1));
+      const u = unit240(x);
+      const sub = Number(x.subtotal || u*q || 0);
+      const iceText = x.ice && x.ice !== "不適用" ? "・" + x.ice : "";
+      rows += '<div class="row"><div><strong>' + esc240(x.name || "飲品") + ' × ' + q + '</strong><br><small>' +
+        esc240(x.cn || "") +
+        (x.bean ? '｜' + esc240(shortBean240(x.bean)) : '') +
+        (x.temp ? '｜' + esc240(x.temp) : '') + iceText +
+        '<span class="cart-price-line">' + money240(u) + ' × ' + q + ' = ' + money240(sub) + '</span>' +
+        '</small></div></div>';
+    });
+
+    summary.innerHTML =
+      '<div class="row"><strong>總杯數</strong><strong>' + totalQty + ' 杯</strong></div>' +
+      '<div class="row"><strong>原本總額</strong><strong>' + money240(calc.subtotal) + '</strong></div>' +
+      (calc.tierDiscount > 0 ? '<div class="row"><strong>' + esc240(calc.tier.name) + '優惠</strong><strong>-' + money240(calc.tierDiscount) + '</strong></div>' : '') +
+      (calc.rewardDiscount > 0 ? '<div class="row"><strong>會員免單兌換 ×' + calc.useRewards + '</strong><strong>-' + money240(calc.rewardDiscount) + '</strong></div>' : '') +
+      '<div class="row v201-final-total"><strong>應付總額</strong><strong>' + money240(calc.finalTotal) + '</strong></div>' +
+      tierBox240(calc) +
+      rewardBox240(member, calc) +
+      rows;
+    return summary.innerText;
+  }
+
+  async function refreshMember240(){
+    const m = readMember240();
+    const p = displayPhone240(m && m.phone);
+    if(!p) return m;
+    try{
+      const res = await fetch("/api/member?phone=" + encodeURIComponent(p) + "&_v=240&_t=" + Date.now(), {cache:"no-store"});
+      const data = await res.json().catch(function(){ return {}; });
+      const member = data && (data.member || data.data || data.profile);
+      if(data && data.ok && member && member.phone){
+        try{ localStorage.setItem(MEMBER_KEY, JSON.stringify(member)); }catch(e){}
+        return member;
+      }
+    }catch(e){}
+    return m;
+  }
+
+  window.SKY31_CALCULATE_CHECKOUT_V240 = calculate240;
+  window.SKY31_RENDER_SUMMARY_V240 = renderSummary240;
+  window.makeCustomerSummary = makeCustomerSummary = function(){ return renderSummary240(readMember240()); };
+
+  const oldOpenCart = window.openCartModal;
+  if(typeof oldOpenCart === "function"){
+    window.openCartModal = openCartModal = async function(){
+      const result = await oldOpenCart.apply(this, arguments);
+      const m = await refreshMember240();
+      setTimeout(function(){ renderSummary240(m); }, 120);
+      setTimeout(function(){ renderSummary240(readMember240()); }, 650);
+      setTimeout(function(){ renderSummary240(readMember240()); }, 1000);
+      return result;
+    };
+  }
+
+  const oldUpdateAll = window.updateAll;
+  if(typeof oldUpdateAll === "function"){
+    window.updateAll = updateAll = function(){
+      const result = oldUpdateAll.apply(this, arguments);
+      setTimeout(function(){ renderSummary240(readMember240()); }, 120);
+      setTimeout(function(){ renderSummary240(readMember240()); }, 520);
+      return result;
+    };
+  }
+
+  const oldStatusOpen = window.openOrderStatusModal;
+  window.openOrderStatusModal = openOrderStatusModal = function(){
+    const modal = document.getElementById("orderStatusModal");
+    if(!modal) return;
+    const input = document.getElementById("statusPhone");
+    const member = readMember240();
+    const fallback = (typeof val === "function" ? val("phone") : ((document.getElementById("phone") || {}).value || ""));
+    if(input) input.value = displayPhone240((member && member.phone) || fallback || input.value || "");
+    modal.classList.add("show");
+    document.body.style.overflow = "hidden";
+    try{ if(typeof oldStatusOpen === "function" && oldStatusOpen !== window.openOrderStatusModal){} }catch(e){}
+  };
+
+  function fixCheckoutClose240(){
+    const btn = document.querySelector("#checkoutMemberModal .checkout-member-close");
+    if(!btn) return;
+    btn.style.setProperty("position", "absolute", "important");
+    btn.style.setProperty("right", "10px", "important");
+    btn.style.setProperty("top", "8px", "important");
+    btn.style.setProperty("left", "auto", "important");
+    btn.style.setProperty("transform", "none", "important");
+  }
+  const oldEnsure = window.ensureCheckoutMemberModal;
+  if(typeof oldEnsure === "function"){
+    window.ensureCheckoutMemberModal = ensureCheckoutMemberModal = function(){
+      const result = oldEnsure.apply(this, arguments);
+      fixCheckoutClose240();
+      return result;
+    };
+  }
+  const oldOpenCheckout = window.openCheckoutMemberModal;
+  if(typeof oldOpenCheckout === "function"){
+    window.openCheckoutMemberModal = openCheckoutMemberModal = function(){
+      const result = oldOpenCheckout.apply(this, arguments);
+      setTimeout(fixCheckoutClose240, 0);
+      setTimeout(fixCheckoutClose240, 120);
+      return result;
+    };
+  }
+  document.addEventListener("DOMContentLoaded", function(){
+    setTimeout(function(){ renderSummary240(readMember240()); fixCheckoutClose240(); }, 600);
+  });
+  document.addEventListener("click", function(e){
+    const t = e.target && e.target.closest ? e.target.closest("button,[onclick]") : null;
+    if(!t) return;
+    const text = String(t.textContent || "") + String(t.getAttribute("onclick") || "") + String(t.getAttribute("aria-label") || "");
+    if(/查詢訂單|openOrderStatusModal|確認訂單|sendOrder|submitOrder/i.test(text)) setTimeout(fixCheckoutClose240, 80);
+  }, true);
 })();
 </script>
 
