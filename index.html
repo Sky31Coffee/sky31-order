@@ -14261,6 +14261,180 @@ window.addEventListener("load", function() {
 </script>
 
 
+
+<style id="sky31-v239-cart-drag-no-snap-style">
+/* V239: cart drag is restored without the release snap. Keep original visuals; only drag mechanics are changed. */
+#sky31PersistentCart.sky31-v239-ready{
+  transform:none !important;
+  will-change:left,top !important;
+  touch-action:none !important;
+  user-select:none !important;
+  -webkit-user-select:none !important;
+}
+#sky31PersistentCart.sky31-v239-dragging{
+  transform:none !important;
+  transition:none !important;
+  cursor:grabbing !important;
+}
+#sky31PersistentCart.sky31-v239-dragging .sky31-persistent-cart-shell{
+  transition:none !important;
+}
+</style>
+
+<script>
+/* V239 cart drag release fix: update left/top directly during drag. This avoids the visible snap caused by V237 resetting translate3d on pointerup. */
+(function(){
+  if(window.__SKY31_V239_CART_DRAG__) return;
+  window.__SKY31_V239_CART_DRAG__ = true;
+
+  var LEFT_KEY = "sky31_persistent_cart_left";
+  var TOP_KEY = "sky31_persistent_cart_top";
+  var SAFE = 8;
+  var THRESHOLD = 4;
+
+  function $(id){ return document.getElementById(id); }
+  function clamp(v, min, max){ return Math.max(min, Math.min(max, v)); }
+  function sizeOf(btn){ return Math.max(btn ? (btn.offsetWidth || 64) : 64, 48); }
+  function defaultPos(btn){ var s = sizeOf(btn); return { left: window.innerWidth - s - 18, top: window.innerHeight - s - 26 }; }
+
+  function ensureCart(){
+    var btn = $("sky31PersistentCart");
+    if(!btn) return null;
+    if(!btn.__sky31V239Clean){
+      var clone = btn.cloneNode(true);
+      clone.__sky31V239Clean = true;
+      clone.__sky31V237Bound = true;
+      clone.style.cssText = btn.style.cssText;
+      btn.replaceWith(clone);
+      btn = clone;
+    }
+    btn.__sky31V237Bound = true;
+    btn.classList.add("sky31-v239-ready");
+    btn.style.setProperty("--sky31-cart-drag-x", "0px");
+    btn.style.setProperty("--sky31-cart-drag-y", "0px");
+    btn.style.right = "auto";
+    btn.style.bottom = "auto";
+    btn.style.pointerEvents = "auto";
+    return btn;
+  }
+
+  function place(btn, left, top, save){
+    if(!btn) return;
+    var s = sizeOf(btn);
+    var maxLeft = Math.max(SAFE, window.innerWidth - s - SAFE);
+    var maxTop = Math.max(SAFE, window.innerHeight - s - SAFE);
+    var x = Number(left), y = Number(top);
+    if(!isFinite(x) || !isFinite(y)){ var d = defaultPos(btn); x = d.left; y = d.top; }
+    x = clamp(x, SAFE, maxLeft);
+    y = clamp(y, SAFE, maxTop);
+    btn.style.left = Math.round(x) + "px";
+    btn.style.top = Math.round(y) + "px";
+    btn.style.right = "auto";
+    btn.style.bottom = "auto";
+    btn.style.setProperty("--sky31-cart-drag-x", "0px");
+    btn.style.setProperty("--sky31-cart-drag-y", "0px");
+    if(save){
+      try{
+        localStorage.setItem(LEFT_KEY, String(Math.round(x)));
+        localStorage.setItem(TOP_KEY, String(Math.round(y)));
+      }catch(e){}
+    }
+  }
+
+  function restore(btn){
+    var left = NaN, top = NaN;
+    try{ left = parseFloat(localStorage.getItem(LEFT_KEY)); top = parseFloat(localStorage.getItem(TOP_KEY)); }catch(e){}
+    place(btn, left, top, false);
+  }
+
+  function openCart(){
+    try{ if(typeof window.openCartModal === "function") return window.openCartModal(); }catch(e){}
+    try{ if(typeof openCartModal === "function") return openCartModal(); }catch(e){}
+    var modal = $("cartModal");
+    if(modal) modal.classList.add("show");
+  }
+
+  function bind(btn){
+    if(!btn || btn.__sky31V239Bound) return;
+    btn.__sky31V239Bound = true;
+
+    var down = false, dragging = false, pointerId = null, raf = 0;
+    var sx = 0, sy = 0, sl = 0, st = 0, nextLeft = 0, nextTop = 0;
+
+    function apply(){
+      raf = 0;
+      place(btn, nextLeft, nextTop, false);
+    }
+    function schedule(){ if(!raf) raf = requestAnimationFrame(apply); }
+
+    btn.addEventListener("pointerdown", function(e){
+      if(e.pointerType === "mouse" && e.button !== 0) return;
+      down = true;
+      dragging = false;
+      pointerId = e.pointerId;
+      var rect = btn.getBoundingClientRect();
+      sx = e.clientX; sy = e.clientY; sl = rect.left; st = rect.top;
+      nextLeft = sl; nextTop = st;
+      place(btn, sl, st, false);
+      btn.classList.add("sky31-v239-pressing");
+      try{ btn.setPointerCapture(pointerId); }catch(err){}
+      if(e.cancelable) e.preventDefault();
+    }, {passive:false});
+
+    btn.addEventListener("pointermove", function(e){
+      if(!down || e.pointerId !== pointerId) return;
+      var dx = e.clientX - sx;
+      var dy = e.clientY - sy;
+      if(!dragging && Math.hypot(dx, dy) < THRESHOLD) return;
+      dragging = true;
+      btn.classList.remove("sky31-v239-pressing");
+      btn.classList.add("sky31-v239-dragging");
+      nextLeft = sl + dx;
+      nextTop = st + dy;
+      if(e.cancelable) e.preventDefault();
+      schedule();
+    }, {passive:false});
+
+    function finish(e, cancelled){
+      if(!down) return;
+      if(e && pointerId !== null && e.pointerId !== pointerId) return;
+      if(raf){ cancelAnimationFrame(raf); raf = 0; }
+      var wasDragging = dragging;
+      if(wasDragging) place(btn, nextLeft, nextTop, !cancelled);
+      else place(btn, sl, st, false);
+      try{ if(pointerId !== null) btn.releasePointerCapture(pointerId); }catch(err){}
+      btn.classList.remove("sky31-v239-pressing", "sky31-v239-dragging", "sky31-v237-pressing", "sky31-v237-dragging", "sky31-cart-dragging", "sky31-cart-holding", "sky31-v152-dragging");
+      down = false; dragging = false; pointerId = null;
+      if(!wasDragging && !cancelled) openCart();
+      if(e && e.cancelable) e.preventDefault();
+    }
+
+    btn.addEventListener("pointerup", function(e){ finish(e, false); }, {passive:false});
+    btn.addEventListener("pointercancel", function(e){ finish(e, true); }, {passive:false});
+  }
+
+  function boot(){
+    var btn = ensureCart();
+    if(!btn) return;
+    restore(btn);
+    bind(btn);
+  }
+
+  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot, {once:true});
+  else boot();
+  setTimeout(boot, 120);
+  setTimeout(boot, 520);
+  window.addEventListener("resize", function(){ var btn = ensureCart(); if(!btn) return; var r = btn.getBoundingClientRect(); place(btn, r.left, r.top, true); }, {passive:true});
+
+  window.sky31CartDragDebug = window.sky31CartDebug = {
+    reset:function(){
+      try{ localStorage.removeItem(LEFT_KEY); localStorage.removeItem(TOP_KEY); }catch(e){}
+      var btn = ensureCart(); if(btn) restore(btn);
+    }
+  };
+})();
+</script>
+
 <script>
 /* V152 disabled in V235.
    Reason: it added non-passive window touchmove/mousemove listeners on every page,
