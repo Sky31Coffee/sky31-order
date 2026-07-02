@@ -11825,7 +11825,7 @@ window.addEventListener("load", function() {
     if(manualBase){
       manual = true;
       var hasStart = member.manualTierStartCups !== undefined || member.manualTierSetAtCups !== undefined || member.manualTierOriginalCups !== undefined;
-      var base = Number(member.manualTierBaseCups || manualBase.cups || 0);
+      var base = Number(member.manualTierBaseCups ?? manualBase.cups ?? 0);
       var start = hasStart ? Number(member.manualTierStartCups ?? member.manualTierSetAtCups ?? member.manualTierOriginalCups ?? 0) : null;
       effectiveCups = hasStart ? (base + Math.max(0, cups - Number(start || 0))) : Math.max(cups, base);
     }
@@ -12151,9 +12151,16 @@ window.addEventListener("load", function() {
   window.memberLoginLookup = async function(){
     var existed = storedMember();
     if(existed && existed.phone){
+      try{
+        var freshExisting = await fetchMember(existed.phone);
+        saveStoredMember(freshExisting);
+        applyMember(freshExisting);
+        fillMemberForm(freshExisting);
+      }catch(e){}
       showPage("home");
       renderHomeQuickCard();
-      if(typeof toast === "function") toast("已登入會員，無需再次登入");
+      try{ if(typeof renderMemberTierPageV210 === "function") renderMemberTierPageV210(); }catch(e){}
+      if(typeof toast === "function") toast("已同步最新會員資料");
       return;
     }
 
