@@ -8209,6 +8209,34 @@ body.sky31-maintenance-active-v218{
   overflow:hidden !important;
 }
 
+
+/* V225: one-success-popup + hard member logout cleanup */
+.sky31-v225-toast{
+  position:fixed !important;
+  left:50% !important;
+  bottom:26px !important;
+  transform:translateX(-50%) translateY(16px) !important;
+  z-index:2147483647 !important;
+  max-width:min(360px,calc(100vw - 38px)) !important;
+  padding:12px 16px !important;
+  border-radius:999px !important;
+  background:rgba(32,34,38,.92) !important;
+  color:#fff !important;
+  font-size:13px !important;
+  font-weight:850 !important;
+  line-height:1.35 !important;
+  text-align:center !important;
+  box-shadow:0 18px 45px rgba(0,0,0,.20) !important;
+  opacity:0 !important;
+  pointer-events:none !important;
+  transition:opacity .18s ease, transform .18s ease !important;
+  backdrop-filter:blur(14px) !important;
+}
+.sky31-v225-toast.show{
+  opacity:1 !important;
+  transform:translateX(-50%) translateY(0) !important;
+}
+
 </style>
 
 <style>
@@ -17070,120 +17098,288 @@ window.addEventListener("load", function() {
 
 <!-- V220: Manual tier upgrade hint uses same customer-facing wording as normal tiers. -->
 
-<script>
-/* V224: member logout one-click stabilization and no stale auto-refresh after logout. */
-(function(){
-  const MEMBER_KEY = "sky31_member_v1";
 
-  function removeMemberStorageV224(){
+<script>
+/* V225: final frontend member cleanup.
+   - One success popup only.
+   - Hard logout once.
+   - Prevent old refresh/scripts from writing member data back after logout.
+*/
+(function(){
+  const MEMBER_KEYS_EXACT = [
+    "sky31_member_v1",
+    "sky31_member",
+    "sky31Member",
+    "member",
+    "currentMember",
+    "memberProfile",
+    "sky31_current_member",
+    "sky31_profile_member"
+  ];
+
+  function isMemberStorageKeyV225(key){
+    key = String(key || "");
+    if(!key) return false;
+    if(MEMBER_KEYS_EXACT.indexOf(key) >= 0) return true;
+    return /(^|[_:-])(member|會員)([_:-]|$)/i.test(key) ||
+           /sky31.*(member|會員)|(member|會員).*sky31/i.test(key) ||
+           /birthday_blessing|member_edit|memberLogin|memberProfile/i.test(key);
+  }
+
+  function eachStorageKeyV225(storage, fn){
     try{
-      const remove = [];
-      for(let i=0;i<localStorage.length;i++){
-        const k = localStorage.key(i);
-        if(!k) continue;
-        if(/sky31.*member|member.*sky31|birthday_blessing|member_edit/i.test(k)) remove.push(k);
+      const keys = [];
+      for(let i=0;i<storage.length;i++){
+        const k = storage.key(i);
+        if(k) keys.push(k);
       }
-      remove.forEach(k => localStorage.removeItem(k));
-      localStorage.removeItem(MEMBER_KEY);
-    }catch(e){}
-    try{
-      const remove = [];
-      for(let i=0;i<sessionStorage.length;i++){
-        const k = sessionStorage.key(i);
-        if(!k) continue;
-        if(/sky31.*member|member.*sky31|birthday_blessing|member_edit/i.test(k)) remove.push(k);
-      }
-      remove.forEach(k => sessionStorage.removeItem(k));
+      keys.forEach(fn);
     }catch(e){}
   }
 
-  function clearMemberFieldsV224(){
-    ["name","phone","modalName","modalPhone","memberPhone","memberName","memberBirthday","memberRegPhone","memberRegName","memberRegBirthday"].forEach(function(id){
+  function removeMemberStorageV225(){
+    try{
+      MEMBER_KEYS_EXACT.forEach(k => localStorage.removeItem(k));
+      eachStorageKeyV225(localStorage, function(k){
+        if(isMemberStorageKeyV225(k)) localStorage.removeItem(k);
+      });
+    }catch(e){}
+    try{
+      MEMBER_KEYS_EXACT.forEach(k => sessionStorage.removeItem(k));
+      eachStorageKeyV225(sessionStorage, function(k){
+        if(isMemberStorageKeyV225(k)) sessionStorage.removeItem(k);
+      });
+    }catch(e){}
+  }
+
+  function hasAnyMemberStorageV225(){
+    let found = false;
+    try{
+      eachStorageKeyV225(localStorage, function(k){
+        if(found) return;
+        if(isMemberStorageKeyV225(k)){
+          const v = localStorage.getItem(k);
+          if(v && /phone|電話|name|會員|member/i.test(String(v))) found = true;
+        }
+      });
+    }catch(e){}
+    return found;
+  }
+
+  function clearMemberFieldsV225(){
+    const ids = [
+      "name","phone","modalName","modalPhone",
+      "memberPhone","memberName","memberBirthday",
+      "memberRegPhone","memberRegName","memberRegBirthday",
+      "memberLoginPhone","checkoutName","checkoutPhone"
+    ];
+    ids.forEach(function(id){
       const el = document.getElementById(id);
-      if(el) el.value = "";
+      if(el && "value" in el) el.value = "";
     });
   }
 
-  function updateLoggedOutUIV224(){
-    try{ if(typeof updateMemberProfileButton === "function") updateMemberProfileButton(null); }catch(e){}
-    try{ if(typeof updateCheckoutCustomerInfo === "function") updateCheckoutCustomerInfo(); }catch(e){}
-    try{ if(typeof renderLoggedPanel === "function") renderLoggedPanel(null); }catch(e){}
-    try{ if(typeof renderHomeQuickCard === "function") renderHomeQuickCard(); }catch(e){}
+  function setLoggedOutClassV225(){
     const modal = document.getElementById("memberModal");
     if(modal){
       modal.classList.remove("member-logged-in-v213");
       modal.classList.add("member-logged-out-v213");
     }
-    document.querySelectorAll("#memberQuickCard,#memberLoggedPanel").forEach(function(el){
-      if(el) { el.innerHTML = ""; el.style.display = "none"; }
+    document.querySelectorAll(".member-auth-only-v213").forEach(el => {
+      el.style.display = "";
+      el.hidden = false;
+    });
+    document.querySelectorAll(".member-logout-only-v213").forEach(el => {
+      el.style.display = "none";
+      el.hidden = true;
     });
   }
 
-  function toastV224(text){
-    try{
-      if(typeof toast === "function") { toast(text); return; }
-    }catch(e){}
-    try{ alert(text); }catch(e){}
+  function clearMemberPanelsV225(){
+    ["memberQuickCard","memberLoggedPanel"].forEach(function(id){
+      const el = document.getElementById(id);
+      if(el){
+        el.innerHTML = "";
+        el.style.display = "none";
+      }
+    });
+    const memberMsg = document.getElementById("memberMsg");
+    if(memberMsg) memberMsg.textContent = "";
   }
 
-  window.SKY31_MEMBER_FORCE_LOGOUT_V224 = function(showToast){
-    window.__SKY31_MEMBER_LOGGED_OUT_V224 = true;
-    window.__SKY31_MEMBER_LOGOUT_AT_V224 = Date.now();
-    removeMemberStorageV224();
-    clearMemberFieldsV224();
-    updateLoggedOutUIV224();
-    try{ if(typeof showPage === "function") showPage("home"); }catch(e){}
-    if(showToast !== false) toastV224("已成功登出");
-    setTimeout(updateLoggedOutUIV224, 50);
-    setTimeout(updateLoggedOutUIV224, 250);
-    setTimeout(updateLoggedOutUIV224, 800);
-    return false;
-  };
+  function updateLoggedOutUIV225(){
+    clearMemberFieldsV225();
+    setLoggedOutClassV225();
+    clearMemberPanelsV225();
+    try{ if(typeof updateMemberProfileButton === "function") updateMemberProfileButton(null); }catch(e){}
+    try{ if(typeof updateCheckoutCustomerInfo === "function") updateCheckoutCustomerInfo(); }catch(e){}
+    try{ if(typeof renderLoggedPanel === "function") renderLoggedPanel(null); }catch(e){}
+    try{ if(typeof renderHomeQuickCard === "function") renderHomeQuickCard(); }catch(e){}
+    try{ if(typeof renderMemberTierPageV210 === "function" && typeof memberPage !== "undefined" && memberPage === "tier") renderMemberTierPageV210(); }catch(e){}
+  }
 
-  window.memberLogout = function(){
-    return window.SKY31_MEMBER_FORCE_LOGOUT_V224(true);
-  };
-
-  const oldRefresh213 = window.SKY31_REFRESH_MEMBER_V213;
-  const oldRefresh214 = window.SKY31_REFRESH_MEMBER_V214;
-  const guardedRefresh = async function(reason){
-    if(window.__SKY31_MEMBER_LOGGED_OUT_V224 || !localStorage.getItem(MEMBER_KEY)){
-      updateLoggedOutUIV224();
-      return null;
+  function showToastV225(text){
+    text = String(text || "").trim();
+    if(!text) return;
+    const now = Date.now();
+    if(window.__SKY31_LAST_POPUP_V225 &&
+       window.__SKY31_LAST_POPUP_V225.text === text &&
+       now - window.__SKY31_LAST_POPUP_V225.time < 2200){
+      return;
     }
-    const fn = oldRefresh214 || oldRefresh213;
-    if(typeof fn === "function") return await fn(reason);
-    return null;
-  };
-  window.SKY31_REFRESH_MEMBER_V213 = guardedRefresh;
-  window.SKY31_REFRESH_MEMBER_V214 = guardedRefresh;
+    window.__SKY31_LAST_POPUP_V225 = { text, time: now };
 
-  const oldLogin = window.memberLoginLookup;
-  if(typeof oldLogin === "function"){
-    window.memberLoginLookup = async function(){
-      window.__SKY31_MEMBER_LOGGED_OUT_V224 = false;
-      return await oldLogin.apply(this, arguments);
-    };
-  }
-  const oldReg = window.memberRegisterSave;
-  if(typeof oldReg === "function"){
-    window.memberRegisterSave = async function(){
-      window.__SKY31_MEMBER_LOGGED_OUT_V224 = false;
-      return await oldReg.apply(this, arguments);
-    };
+    let el = document.getElementById("sky31V225Toast");
+    if(!el){
+      el = document.createElement("div");
+      el.id = "sky31V225Toast";
+      el.className = "sky31-v225-toast";
+      document.body.appendChild(el);
+    }
+    el.textContent = text;
+    el.classList.add("show");
+    clearTimeout(el.__timer);
+    el.__timer = setTimeout(function(){ el.classList.remove("show"); }, 1700);
   }
 
+  // Deduplicate browser alerts. Same message within 2.2s appears only once.
+  if(!window.__SKY31_ALERT_PATCHED_V225){
+    window.__SKY31_ALERT_PATCHED_V225 = true;
+    const nativeAlert = window.alert ? window.alert.bind(window) : null;
+    window.alert = function(msg){
+      const text = String(msg || "");
+      const now = Date.now();
+      if(window.__SKY31_LAST_ALERT_V225 &&
+         window.__SKY31_LAST_ALERT_V225.text === text &&
+         now - window.__SKY31_LAST_ALERT_V225.time < 2200){
+        return;
+      }
+      window.__SKY31_LAST_ALERT_V225 = { text, time: now };
+
+      // For common success messages, use only the single Sky31 toast instead of repeated system alerts.
+      if(/成功|已更新|已登入|已登出|已添加|已送出|完成/i.test(text)){
+        showToastV225(text);
+        return;
+      }
+      if(nativeAlert) return nativeAlert(text);
+      showToastV225(text);
+    };
+  }
+
+  // Prevent stale scripts from writing member data back after hard logout.
+  if(!window.__SKY31_STORAGE_PATCHED_V225){
+    window.__SKY31_STORAGE_PATCHED_V225 = true;
+    const originalSetItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function(key, value){
+      try{
+        if(window.__SKY31_HARD_LOGOUT_ACTIVE_V225 && isMemberStorageKeyV225(key)){
+          return;
+        }
+      }catch(e){}
+      return originalSetItem.apply(this, arguments);
+    };
+  }
+
+  // Remove duplicated visual toasts/alerts created by older scripts.
+  function squashDuplicateSuccessDomV225(){
+    const seen = new Map();
+    const nodes = document.querySelectorAll(".member-toast,.toast,.success-toast,.member-msg,.sky31-toast,[role='alert']");
+    nodes.forEach(function(el){
+      const text = String(el.textContent || "").trim();
+      if(!text || !/成功|已更新|已登入|已登出|已添加|完成/i.test(text)) return;
+      const prev = seen.get(text);
+      if(prev && prev !== el){
+        try{ el.remove(); }catch(e){ el.style.display = "none"; }
+      }else{
+        seen.set(text, el);
+      }
+    });
+  }
+
+  const observer = new MutationObserver(function(){
+    setTimeout(squashDuplicateSuccessDomV225, 20);
+  });
+  try{ observer.observe(document.documentElement || document.body, {childList:true, subtree:true, characterData:true}); }catch(e){}
+
+  function hardLogoutV225(showToast){
+    window.__SKY31_HARD_LOGOUT_ACTIVE_V225 = true;
+    window.__SKY31_MEMBER_LOGGED_OUT_V224 = true;
+    window.__SKY31_MEMBER_LOGOUT_AT_V225 = Date.now();
+
+    removeMemberStorageV225();
+    clearMemberFieldsV225();
+
+    // Make sure old async refreshes cannot restore member data.
+    try{ window.__SKY31_REFRESH_MEMBER_V213 = async function(){ return null; }; }catch(e){}
+    try{ window.__SKY31_REFRESH_MEMBER_V214 = async function(){ return null; }; }catch(e){}
+    try{ window.SKY31_REFRESH_MEMBER_V213 = async function(){ return null; }; }catch(e){}
+    try{ window.SKY31_REFRESH_MEMBER_V214 = async function(){ return null; }; }catch(e){}
+
+    updateLoggedOutUIV225();
+    try{ if(typeof showPage === "function") showPage("home"); }catch(e){}
+
+    setTimeout(removeMemberStorageV225, 30);
+    setTimeout(updateLoggedOutUIV225, 40);
+    setTimeout(removeMemberStorageV225, 180);
+    setTimeout(updateLoggedOutUIV225, 220);
+    setTimeout(removeMemberStorageV225, 600);
+    setTimeout(updateLoggedOutUIV225, 650);
+    setTimeout(function(){
+      // Keep blocking member writes until user starts a new login/register.
+      if(!hasAnyMemberStorageV225()) window.__SKY31_HARD_LOGOUT_ACTIVE_V225 = true;
+    }, 1200);
+
+    if(showToast !== false) showToastV225("已成功登出");
+    return false;
+  }
+
+  window.SKY31_HARD_MEMBER_LOGOUT_V225 = hardLogoutV225;
+  window.SKY31_MEMBER_FORCE_LOGOUT_V224 = hardLogoutV225;
+  window.memberLogout = function(){ return hardLogoutV225(true); };
+  window.logoutMember = window.memberLogout;
+  window.logoutCurrentMember = window.memberLogout;
+
+  // Any member login/register attempt releases the storage-write block before running the real function.
+  function patchEntryV225(name){
+    const fn = window[name];
+    if(typeof fn !== "function" || fn.__sky31V225Entry) return;
+    const wrapped = async function(){
+      window.__SKY31_HARD_LOGOUT_ACTIVE_V225 = false;
+      window.__SKY31_MEMBER_LOGGED_OUT_V224 = false;
+      return await fn.apply(this, arguments);
+    };
+    wrapped.__sky31V225Entry = true;
+    window[name] = wrapped;
+  }
+
+  patchEntryV225("memberLoginLookup");
+  patchEntryV225("memberRegisterSave");
+  patchEntryV225("registerMember");
+  patchEntryV225("loginMember");
+
+  // Capture logout clicks before all old onclick handlers.
   document.addEventListener("click", function(e){
     const el = e.target && e.target.closest ? e.target.closest("button,[onclick],[role='button'],a") : null;
     if(!el) return;
-    const txt = String(el.textContent || "") + " " + String(el.getAttribute("onclick") || "");
-    if(/登出|logout|memberLogout/i.test(txt)){
+    const txt = String(el.textContent || "") + " " + String(el.getAttribute("onclick") || "") + " " + String(el.getAttribute("aria-label") || "");
+    if(/登出|退出|logout|memberLogout/i.test(txt)){
       e.preventDefault();
       e.stopPropagation();
       if(e.stopImmediatePropagation) e.stopImmediatePropagation();
-      window.SKY31_MEMBER_FORCE_LOGOUT_V224(true);
+      hardLogoutV225(true);
+      return false;
     }
   }, true);
+
+  window.addEventListener("storage", function(e){
+    if(window.__SKY31_HARD_LOGOUT_ACTIVE_V225 && e && isMemberStorageKeyV225(e.key)){
+      removeMemberStorageV225();
+      updateLoggedOutUIV225();
+    }
+  });
+
+  setTimeout(squashDuplicateSuccessDomV225, 300);
+  setTimeout(squashDuplicateSuccessDomV225, 1000);
 })();
 </script>
 
