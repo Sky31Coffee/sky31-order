@@ -17150,19 +17150,78 @@ window.addEventListener("load", function() {
         '<div class="sky31-maintenance-brand-v241">Sky31</div>' +
         '<div class="icon">⚠️</div>' +
         '<h2><strong>正在維護</strong></h2>' +
-        '<p id="sky31MaintenanceMsgV218">我們正在維護升級，系統會儘快恢復，感謝你的耐心等候。</p>' +
-        '<div class="small">Sky31 點餐及查詢功能將於維護完成後自動恢復，敬請稍候。</div>' +
+        '<p id="sky31MaintenanceMsgV218">正在維護升級，系統會儘快恢復，感謝你的耐心等候。</p>' +
+        '' +
       '</div>';
     document.body.appendChild(el);
     return el;
   }
 
+  function forceMaintenanceLogoutV246(){
+    try{
+      if(window.__SKY31_MAINTENANCE_LOGOUT_DONE_V246) return;
+      window.__SKY31_MAINTENANCE_LOGOUT_DONE_V246 = true;
+      window.__SKY31_FORCE_LOGGED_OUT_V234 = true;
+      window.__SKY31_HARD_LOGOUT_ACTIVE_V225 = true;
+      window.__SKY31_MEMBER_LOGGED_OUT_V224 = true;
+      window.__SKY31_REAL_LOGGED_OUT_V235 = true;
+
+      if(typeof window.SKY31_REAL_MEMBER_LOGOUT_V235 === "function"){
+        try{ window.SKY31_REAL_MEMBER_LOGOUT_V235(false); }catch(e){}
+      }
+
+      const exactKeys = [
+        "sky31_member_v1","sky31_member","sky31Member","member","currentMember","memberProfile",
+        "sky31_current_member","sky31_profile_member","currentCustomer","customer","customerInfo","checkoutCustomer"
+      ];
+      function isMemberKeyV246(key){
+        key = String(key || "");
+        return exactKeys.indexOf(key) >= 0 || /sky31.*(member|會員)|(member|會員).*sky31|birthday_blessing|member_edit|memberLogin|memberProfile/i.test(key);
+      }
+      function clearStoreV246(store){
+        try{
+          exactKeys.forEach(function(k){ store.removeItem(k); });
+          const keys = [];
+          for(let i=0;i<store.length;i++){ const k = store.key(i); if(k) keys.push(k); }
+          keys.forEach(function(k){ if(isMemberKeyV246(k)) store.removeItem(k); });
+        }catch(e){}
+      }
+      clearStoreV246(localStorage);
+      clearStoreV246(sessionStorage);
+
+      ["name","phone","modalName","modalPhone","memberPhone","memberName","memberBirthday","memberRegPhone","memberRegName","memberRegBirthday","memberLoginPhone","checkoutName","checkoutPhone","checkoutMemberPhone","checkoutRegPhone","checkoutRegName"].forEach(function(id){
+        const field = document.getElementById(id);
+        if(field && "value" in field) field.value = "";
+      });
+      const btn = document.getElementById("profileButton");
+      if(btn){
+        btn.classList.remove("member-logged","logged","active","is-logged","selected");
+        btn.classList.add("logged-out","member-logged-out");
+        btn.title = "會員中心";
+        btn.setAttribute("aria-label", "會員中心");
+        btn.removeAttribute("data-phone");
+        btn.removeAttribute("data-member-phone");
+      }
+      document.body.classList.remove("member-logged","member-logged-in","is-member");
+      document.body.classList.add("member-logged-out");
+      if(typeof window.SKY31_MEMBER_SYNC_V235 === "function"){ try{ window.SKY31_MEMBER_SYNC_V235(null); }catch(e){} }
+      setTimeout(function(){
+        clearStoreV246(localStorage);
+        clearStoreV246(sessionStorage);
+        if(typeof window.SKY31_MEMBER_SYNC_V235 === "function"){ try{ window.SKY31_MEMBER_SYNC_V235(null); }catch(e){} }
+      }, 250);
+    }catch(e){}
+  }
+  window.SKY31_MAINTENANCE_LOGOUT_V246 = forceMaintenanceLogoutV246;
+
   function setMaintenance218(active, msg){
     const el = ensureMaintenanceDom218();
     const p = document.getElementById("sky31MaintenanceMsgV218");
     msg = String(msg || "").trim();
-    if(!msg || msg === "系統維護，暫停使用。" || msg === "系統維護，暫停使用") msg = "我們正在維護升級，系統會儘快恢復，感謝你的耐心等候。";
+    if(!msg || msg === "系統維護，暫停使用。" || msg === "系統維護，暫停使用") msg = "正在維護升級，系統會儘快恢復，感謝你的耐心等候。";
     if(p) p.textContent = msg;
+    if(active) forceMaintenanceLogoutV246();
+    else window.__SKY31_MAINTENANCE_LOGOUT_DONE_V246 = false;
     el.classList.toggle("show", !!active);
     document.body.classList.toggle("sky31-maintenance-active-v218", !!active);
   }
@@ -17172,7 +17231,7 @@ window.addEventListener("load", function() {
       const res = await fetch("/api/menu?_maintenance=1&t=" + Date.now(), {cache:"no-store", headers:{"Cache-Control":"no-cache"}});
       const data = await res.json().catch(() => ({}));
       const m = data && data.maintenance;
-      setMaintenance218(!!(m && m.active), (m && m.message) || "我們正在維護升級，系統會儘快恢復，感謝你的耐心等候。");
+      setMaintenance218(!!(m && m.active), (m && m.message) || "正在維護升級，系統會儘快恢復，感謝你的耐心等候。");
     }catch(e){
       // Do not lock the website if the status check fails.
     }
@@ -18275,6 +18334,53 @@ window.addEventListener("load", function() {
 }
 </style>
 
+<style id="sky31-v246-maintenance-layout">
+/* V246: maintenance modal simplified copy + forced member logout. */
+.sky31-maintenance-card-v218{
+  width:min(430px,calc(100vw - 36px)) !important;
+  min-height:310px !important;
+  padding:34px 28px 34px !important;
+  display:flex !important;
+  flex-direction:column !important;
+  align-items:center !important;
+  justify-content:center !important;
+  text-align:center !important;
+  gap:12px !important;
+}
+.sky31-maintenance-card-v218 .icon{
+  margin:0 auto 10px !important;
+  width:72px !important;
+  height:72px !important;
+  font-size:34px !important;
+}
+.sky31-maintenance-card-v218 h2{
+  margin:0 !important;
+  font-size:29px !important;
+  line-height:1.18 !important;
+  font-weight:950 !important;
+  letter-spacing:-.04em !important;
+}
+.sky31-maintenance-card-v218 p{
+  max-width:355px !important;
+  margin:0 auto !important;
+  font-size:17px !important;
+  line-height:1.72 !important;
+  font-weight:820 !important;
+  color:rgba(31,39,51,.72) !important;
+}
+.sky31-maintenance-card-v218 .small{
+  display:none !important;
+}
+@media (max-width:420px){
+  .sky31-maintenance-card-v218{
+    min-height:300px !important;
+    padding:32px 24px !important;
+  }
+  .sky31-maintenance-card-v218 h2{ font-size:28px !important; }
+  .sky31-maintenance-card-v218 p{ font-size:16.5px !important; line-height:1.75 !important; }
+}
+</style>
+
 <script id="sky31-v241-history-detail-patch">
 /* V241: richer order history / status detail display and maintenance fallback text. */
 (function(){
@@ -18318,8 +18424,8 @@ window.addEventListener("load", function() {
   var oldSetMaint = window.SKY31_CHECK_MAINTENANCE_V218;
   window.SKY31_MAINTENANCE_TEXT_V241 = {
     title:"正在維護",
-    message:"我們正在維護升級，系統會儘快恢復，感謝你的耐心等候。",
-    small:"Sky31 點餐及查詢功能將於維護完成後自動恢復，敬請稍候。"
+    message:"正在維護升級，系統會儘快恢復，感謝你的耐心等候。",
+    small:""
   };
 
   function addDiscountToBb(html, o){
@@ -18578,12 +18684,24 @@ window.addEventListener("load", function() {
 #summary .v244-note strong{max-width:68% !important; white-space:pre-wrap !important;}
 #summary .v244-section{
   margin:12px 0 0 !important;
-  padding:14px 14px 12px !important;
-  border-radius:22px !important;
-  background:rgba(255,255,255,.50) !important;
-  border:1px solid rgba(255,255,255,.62) !important;
-  box-shadow:0 12px 30px rgba(31,39,51,.07) !important;
+  padding:13px 13px 12px !important;
+  border-radius:18px !important;
+  box-shadow:0 10px 22px rgba(31,39,51,.07), inset 0 1px 0 rgba(255,255,255,.78) !important;
 }
+#summary .v244-section.v244-tier{
+  background:linear-gradient(135deg,rgba(238,251,244,.90),rgba(255,255,255,.70)) !important;
+  border:1px solid rgba(97,168,119,.34) !important;
+  color:rgba(35,62,48,.86) !important;
+}
+#summary .v244-section.v244-reward{
+  background:linear-gradient(135deg,rgba(255,250,235,.88),rgba(255,255,255,.70)) !important;
+  border:1px solid rgba(232,188,86,.44) !important;
+  color:rgba(35,45,62,.88) !important;
+}
+#summary .v244-section.v244-tier .v244-title{color:rgba(27,112,68,.94) !important;}
+#summary .v244-section.v244-reward .v244-title{color:rgba(126,78,10,.92) !important;}
+#summary .v244-section.v244-tier .v244-row strong{color:rgba(18,93,72,.98) !important;}
+#summary .v244-section.v244-reward .v244-row strong{color:rgba(22,35,54,.95) !important;}
 #summary .v244-title{
   display:flex !important;
   align-items:center !important;
@@ -18594,16 +18712,7 @@ window.addEventListener("load", function() {
   font-size:15px !important;
   font-weight:950 !important;
 }
-#summary .v244-chip{
-  flex:0 0 auto !important;
-  padding:4px 9px !important;
-  border-radius:999px !important;
-  background:rgba(255,255,255,.62) !important;
-  border:1px solid rgba(255,255,255,.72) !important;
-  color:rgba(31,39,51,.62) !important;
-  font-size:11px !important;
-  font-weight:900 !important;
-}
+#summary .v244-chip{display:none !important;}
 #summary .v244-section .v244-row{font-size:13px !important; padding:7px 0 !important;}
 #summary .v244-muted{color:rgba(31,39,51,.54) !important;}
 </style>
@@ -18676,9 +18785,10 @@ window.addEventListener("load", function() {
   function row244(label, value, extraClass){
     return '<div class="v244-row ' + (extraClass || '') + '"><span>' + esc244(label) + '</span><strong>' + esc244(value) + '</strong></div>';
   }
-  function section244(title, chip, rows){
-    return '<div class="v244-section">' +
-      '<div class="v244-title"><span>' + title + '</span>' + (chip ? '<em class="v244-chip">' + esc244(chip) + '</em>' : '') + '</div>' +
+  function section244(title, chip, rows, kind){
+    const cls = kind ? ' v244-' + kind : '';
+    return '<div class="v244-section' + cls + '">' +
+      '<div class="v244-title"><span>' + title + '</span></div>' +
       rows.join("") +
     '</div>';
   }
@@ -18720,7 +18830,7 @@ window.addEventListener("load", function() {
 
     const rewardRows = [];
     if(!member || !member.phone){
-      rewardRows.push(row244("狀態", "登入後自動檢查"));
+      rewardRows.push(row244("狀態", "登入會員後可查看會員免單"));
     }else{
       rewardRows.push(row244("可用免單", rewardAvailable + " 張"));
       rewardRows.push(row244("本次使用", Number(calc.useRewards || 0) + " 張"));
@@ -18730,8 +18840,8 @@ window.addEventListener("load", function() {
 
     summary.innerHTML =
       '<div class="v244-checkout-panel">' + mainRows.join("") + '</div>' +
-      section244("🏅 會員等級優惠", Number(calc.tierDiscount || 0) > 0 ? "已套用" : "已檢查", tierRows) +
-      section244("🎁 會員免單", Number(calc.useRewards || 0) > 0 ? "已套用" : "自動檢查", rewardRows);
+      section244("🏅 會員等級優惠", "", tierRows, "tier") +
+      section244("🎁 會員免單", "", rewardRows, "reward");
 
     window.SKY31_REWARD_APPLY_V201 = {
       cups:calc.cups, earned:calc.earned, redeemed:calc.redeemed, available:calc.available, subtotal:calc.subtotal,
