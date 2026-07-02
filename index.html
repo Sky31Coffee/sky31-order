@@ -12211,6 +12211,7 @@ window.addEventListener("load", function() {
       }catch(_){}
 
       var member = await registerMember({phone:phone, name:name, birthday:birthday});
+      try{ member = await fetchMember(phone); }catch(e){}
       saveStoredMember(member);
       applyMember(member);
       fillMemberForm(member);
