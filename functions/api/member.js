@@ -55,7 +55,8 @@ export async function onRequestPost(context) {
       return json({ ok: false, error: "請輸入姓名和手機號碼" }, 400);
     }
 
-    const existing = await loadMember(env, phone);
+    let existing = null;
+    try { existing = await loadMember(env, phone); } catch (_) { existing = null; }
     if (existing) {
       return json({ ok: false, error: "此電話已註冊，不能重複註冊。請直接登入。" }, 409);
     }
@@ -116,22 +117,26 @@ async function loadMember(env, phone) {
     try { add(key, JSON.parse(raw)); } catch (_) {}
   }
 
-  // V226: only full-scan member:* if direct keys fail. This avoids slow login after duplicate cleanup.
-  if (!matches.length) {
+  // V260: always merge same-phone member records. A Telegram tier edit can be saved
+  // into a cleaned canonical member key while an older direct key still exists. If we stop
+  // after the first direct hit, the website may show the old tier. This scan does not
+  // create any 853 alias; it only reads existing member:* records and picks the latest
+  // manual tier by manualTierUpdatedAt / updatedAt below.
+  {
     let cursor = undefined;
     let checked = 0;
     do {
       const page = await env.ORDERS.list({ prefix: "member:", cursor });
       for (const key of (page.keys || [])) {
         checked += 1;
-        if (checked > 5000) break;
+        if (checked > 8000) break;
         const raw = await env.ORDERS.get(key.name);
         if (!raw) continue;
         try { add(key.name, JSON.parse(raw)); } catch (_) {}
       }
       cursor = page.cursor;
       if (page.list_complete !== false) break;
-    } while (cursor && checked <= 5000);
+    } while (cursor && checked <= 8000);
   }
 
   if (!matches.length) throw new Error("會員資料不存在或已被刪除，請重新登入或重新註冊");
@@ -538,8 +543,9 @@ function memberPhoneCandidates(phone) {
   phone = normalizePhone(phone);
   const out = [];
   if (phone) out.push(phone);
-  if (phone.length === 8) out.push("853" + phone);
-  if (phone.length === 11 && phone.startsWith("853")) out.push(phone.slice(3));
+  // V260: do not auto-add 853 as a lookup candidate for normal 8-digit numbers.
+  // If the customer actually typed an old 853-prefixed number, also try the stripped form.
+  if (phone.length > 3 && phone.startsWith("853")) out.push(phone.slice(3));
   return Array.from(new Set(out.filter(Boolean)));
 }
 
