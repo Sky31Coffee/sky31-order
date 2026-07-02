@@ -12176,6 +12176,8 @@ window.addEventListener("load", function() {
       renderHomeQuickCard();
       setMsg("");
 
+      try{ if(typeof window.SKY31_REFRESH_CHECKOUT_AFTER_MEMBER === "function") window.SKY31_REFRESH_CHECKOUT_AFTER_MEMBER(member); }catch(e){}
+
       if(typeof toast === "function") toast("已登入會員");
     }catch(e){
       renderLoggedPanel(null);
@@ -12206,6 +12208,7 @@ window.addEventListener("load", function() {
       applyMember(member);
       fillMemberForm(member);
       renderHomeQuickCard();
+      try{ if(typeof window.SKY31_REFRESH_CHECKOUT_AFTER_MEMBER === "function") window.SKY31_REFRESH_CHECKOUT_AFTER_MEMBER(member); }catch(e){}
       setRegMsg("註冊成功，已登入會員。", "success");
       toast("註冊成功，已登入會員");
       setTimeout(function(){
@@ -12747,13 +12750,48 @@ window.addEventListener("load", function() {
       var btn = $("profileButton");
       if(btn){
         btn.classList.add("member-logged");
+        btn.classList.remove("logged-out","member-logged-out","is-logged-out");
         btn.title = "會員：" + (member.name || member.phone);
         btn.setAttribute("aria-label", btn.title);
+        btn.setAttribute("data-member-phone", String(member.phone || ""));
       }
     }catch(e){}
 
     return true;
   }
+
+  function refreshCheckoutAfterMemberChange(member){
+    if(!member || !member.phone) return false;
+
+    try{ saveMember(member); }catch(e){}
+    try{ if(typeof saveStoredMember === "function") saveStoredMember(member); }catch(e){}
+    try{ if(typeof applyMember === "function") applyMember(member); }catch(e){}
+    try{ if(typeof updateMemberProfileButton === "function") updateMemberProfileButton(member); }catch(e){}
+    try{ setOrderCustomerFromMember(member); }catch(e){}
+    try{ if(typeof fillMemberForm === "function") fillMemberForm(member); }catch(e){}
+    try{ if(typeof renderHomeQuickCard === "function") renderHomeQuickCard(); }catch(e){}
+    try{ if(typeof renderMemberTierPageV210 === "function") renderMemberTierPageV210(); }catch(e){}
+
+    try{ if(typeof updateCheckoutCustomerInfo === "function") updateCheckoutCustomerInfo(); }catch(e){}
+    try{ if(typeof updateAll === "function") updateAll(); }catch(e){}
+    try{ if(typeof window.SKY31_RENDER_SUMMARY_V244 === "function") window.SKY31_RENDER_SUMMARY_V244(member); }catch(e){}
+    try{ if(typeof window.SKY31_RENDER_SUMMARY_V242 === "function") window.SKY31_RENDER_SUMMARY_V242(member); }catch(e){}
+    try{ if(typeof window.SKY31_RENDER_SUMMARY_V240 === "function") window.SKY31_RENDER_SUMMARY_V240(member); }catch(e){}
+    try{ if(typeof makeCustomerSummary === "function") makeCustomerSummary(); }catch(e){}
+
+    try{
+      var cartModal = $("cartModal");
+      if(cartModal && cartModal.classList.contains("show")) document.body.style.overflow = "hidden";
+    }catch(e){}
+
+    try{
+      window.dispatchEvent(new CustomEvent("sky31:member-updated", {detail:{member:member, source:"checkout"}}));
+    }catch(e){}
+
+    return true;
+  }
+
+  window.SKY31_REFRESH_CHECKOUT_AFTER_MEMBER = refreshCheckoutAfterMemberChange;
 
   function setCheckoutMsg(msg, type){
     var el = $("checkoutMemberMsg");
@@ -12823,7 +12861,10 @@ window.addEventListener("load", function() {
   window.closeCheckoutMemberModal = function(){
     var modal = $("checkoutMemberModal");
     if(modal) modal.classList.remove("show");
-    try{ document.body.style.overflow = ""; }catch(e){}
+    try{
+      var cartModal = $("cartModal");
+      document.body.style.overflow = (cartModal && cartModal.classList.contains("show")) ? "hidden" : "";
+    }catch(e){}
   };
 
   window.openCheckoutMemberModal = function(){
@@ -12875,15 +12916,14 @@ window.addEventListener("load", function() {
     setCheckoutMsg("登入中...");
     try{
       var member = await fetchMemberByPhone(phone);
-      saveMember(member);
-      setOrderCustomerFromMember(member);
+      refreshCheckoutAfterMemberChange(member);
 
-      setCheckoutMsg("登入成功，請再次按「確認訂單」發送訂單。", "success");
+      setCheckoutMsg("登入成功，已自動更新會員優惠。", "success");
 
       setTimeout(function(){
         closeCheckoutMemberModal();
-        try{ if(typeof updateCheckoutCustomerInfo === "function") updateCheckoutCustomerInfo(); }catch(e){}
-      }, 900);
+        refreshCheckoutAfterMemberChange(member);
+      }, 550);
     }catch(e){
       setCheckoutMsg("該賬號不存在，是否需要註冊賬戶？請按「會員註冊」補充資料。", "error");
       var reg = $("checkoutMemberRegister");
@@ -12942,15 +12982,14 @@ window.addEventListener("load", function() {
       }catch(_){}
 
       var member = await registerMember({phone:phone, name:name, birthday:birthday});
-      saveMember(member);
-      setOrderCustomerFromMember(member);
+      refreshCheckoutAfterMemberChange(member);
 
-      setCheckoutMsg("帳號資料已經成功登記為會員。", "success");
+      setCheckoutMsg("帳號資料已經成功登記，會員優惠已自動更新。", "success");
 
       setTimeout(function(){
         closeCheckoutMemberModal();
-        try{ if(typeof updateCheckoutCustomerInfo === "function") updateCheckoutCustomerInfo(); }catch(e){}
-      }, 1100);
+        refreshCheckoutAfterMemberChange(member);
+      }, 650);
     }catch(e){
       setCheckoutMsg(e.message || "會員註冊失敗，請稍後再試。", "error");
     }
