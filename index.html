@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no">
 <title>Sky31 Coffee</title>
 <style>
 :root {
@@ -8539,6 +8539,51 @@ button[onclick*="closeMemberModal"]{
   isolation: isolate !important;
 }
 
+
+/* V234: logout badge immediate sync + mobile zoom lock */
+body.member-logged-out #profileButton.profile-button::after,
+#profileButton.profile-button:not(.member-logged)::after,
+#profileButton.profile-button.logged-out::after,
+#profileButton.profile-button.member-logged-out::after{
+  content:none !important;
+  display:none !important;
+  opacity:0 !important;
+  width:0 !important;
+  height:0 !important;
+  box-shadow:none !important;
+}
+body:not(.member-logged-out) #profileButton.profile-button.member-logged::after{
+  display:block !important;
+}
+
+/* Reduce accidental iPhone zoom while keeping vertical scrolling smooth. */
+html{
+  -webkit-text-size-adjust:100% !important;
+  text-size-adjust:100% !important;
+  overscroll-behavior:none !important;
+}
+body{
+  touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;
+}
+input,
+textarea,
+select,
+button{
+  font-size:16px !important;
+}
+button,
+.chip,
+.product,
+.member-menu-card,
+.float-cart,
+.cart-close,
+.member-nav-btn,
+.profile-button,
+.order-status-button{
+  touch-action:manipulation !important;
+}
+
 </style>
 
 <style>
@@ -11186,15 +11231,39 @@ window.addEventListener("load", function() {
   function updateMemberProfileButton(member){
     var btn = $("profileButton");
     if(!btn) return;
-    var m = member || storedMember();
+
+    var hardLoggedOut = false;
+    try{
+      hardLoggedOut = !!(window.__SKY31_HARD_LOGOUT_ACTIVE_V225 || window.__SKY31_MEMBER_LOGGED_OUT_V224 || window.__SKY31_FORCE_LOGGED_OUT_V234);
+    }catch(e){}
+
+    var stored = null;
+    try{ stored = storedMember(); }catch(e){ stored = null; }
+
+    // V234: if storage is already logged out, ignore stale member objects from old async refresh.
+    var m = hardLoggedOut ? null : (stored && stored.phone ? stored : (member && member.phone ? member : null));
+
     if(m && m.phone){
       btn.classList.add("member-logged");
+      btn.classList.remove("logged-out","member-logged-out","is-logged-out");
       btn.title = "會員：" + (m.name || m.phone);
       btn.setAttribute("aria-label", btn.title);
+      btn.setAttribute("data-member-phone", String(m.phone || ""));
+      try{
+        document.body.classList.remove("member-logged-out");
+        document.body.classList.add("member-logged");
+      }catch(e){}
     }else{
-      btn.classList.remove("member-logged");
+      btn.classList.remove("member-logged","logged","active","is-logged","selected");
+      btn.classList.add("logged-out","member-logged-out");
+      btn.removeAttribute("data-phone");
+      btn.removeAttribute("data-member-phone");
       btn.title = "會員中心";
       btn.setAttribute("aria-label", "會員中心");
+      try{
+        document.body.classList.remove("member-logged","member-logged-in","is-member");
+        document.body.classList.add("member-logged-out");
+      }catch(e){}
     }
   }
 
@@ -17634,6 +17703,169 @@ window.addEventListener("load", function() {
 
   window.addEventListener("scroll", pinButtonsV233, true);
   window.SKY31_STICKY_BACK_V233 = pinButtonsV233;
+})();
+</script>
+
+
+<script>
+/* V234: logout badge sync and mobile zoom lock.
+   Fixes green login dot staying after logout without refresh.
+*/
+(function(){
+  const MEMBER_KEY = "sky31_member_v1";
+
+  function readMemberV234(){
+    try{
+      const raw = localStorage.getItem(MEMBER_KEY);
+      const m = raw ? JSON.parse(raw) : null;
+      return m && m.phone ? m : null;
+    }catch(e){ return null; }
+  }
+
+  function hasMemberStorageV234(){
+    if(readMemberV234()) return true;
+    try{
+      for(let i=0;i<localStorage.length;i++){
+        const k = localStorage.key(i);
+        if(!k) continue;
+        if(/sky31.*member|member.*sky31/i.test(k)){
+          const v = localStorage.getItem(k);
+          if(v && /phone|電話|member|會員/i.test(v)) return true;
+        }
+      }
+    }catch(e){}
+    return false;
+  }
+
+  function setBadgeLoggedOutV234(){
+    window.__SKY31_FORCE_LOGGED_OUT_V234 = true;
+
+    const btn = document.getElementById("profileButton");
+    if(btn){
+      btn.classList.remove("member-logged","logged","active","is-logged","selected");
+      btn.classList.add("logged-out","member-logged-out");
+      btn.removeAttribute("data-phone");
+      btn.removeAttribute("data-member-phone");
+      btn.title = "會員中心";
+      btn.setAttribute("aria-label","會員中心");
+    }
+
+    try{
+      document.body.classList.remove("member-logged","member-logged-in","is-member");
+      document.body.classList.add("member-logged-out");
+      document.documentElement.removeAttribute("data-member-phone");
+      document.body.removeAttribute("data-member-phone");
+    }catch(e){}
+  }
+
+  function syncBadgeV234(){
+    const member = readMemberV234();
+    const btn = document.getElementById("profileButton");
+
+    if(!member){
+      setBadgeLoggedOutV234();
+      return;
+    }
+
+    window.__SKY31_FORCE_LOGGED_OUT_V234 = false;
+    if(btn){
+      btn.classList.add("member-logged");
+      btn.classList.remove("logged-out","member-logged-out");
+      btn.title = "會員：" + (member.name || member.phone);
+      btn.setAttribute("aria-label", btn.title);
+      btn.setAttribute("data-member-phone", String(member.phone || ""));
+    }
+
+    try{
+      document.body.classList.remove("member-logged-out");
+      document.body.classList.add("member-logged");
+    }catch(e){}
+  }
+
+  // Wrap profile updater so stale async refresh cannot show green dot after storage was cleared.
+  const oldUpdate = window.updateMemberProfileButton;
+  if(typeof oldUpdate === "function" && !oldUpdate.__sky31V234){
+    const wrapped = function(member){
+      if(window.__SKY31_FORCE_LOGGED_OUT_V234 || window.__SKY31_HARD_LOGOUT_ACTIVE_V225 || !hasMemberStorageV234()){
+        setBadgeLoggedOutV234();
+        return;
+      }
+      const result = oldUpdate.apply(this, arguments);
+      syncBadgeV234();
+      return result;
+    };
+    wrapped.__sky31V234 = true;
+    window.updateMemberProfileButton = wrapped;
+  }
+
+  const oldLogout = window.memberLogout;
+  if(typeof oldLogout === "function" && !oldLogout.__sky31V234){
+    const wrappedLogout = function(){
+      window.__SKY31_FORCE_LOGGED_OUT_V234 = true;
+      let result;
+      try{ result = oldLogout.apply(this, arguments); }catch(e){}
+      setBadgeLoggedOutV234();
+      setTimeout(setBadgeLoggedOutV234, 30);
+      setTimeout(setBadgeLoggedOutV234, 150);
+      setTimeout(setBadgeLoggedOutV234, 500);
+      setTimeout(setBadgeLoggedOutV234, 1200);
+      return result === undefined ? false : result;
+    };
+    wrappedLogout.__sky31V234 = true;
+    window.memberLogout = wrappedLogout;
+    window.logoutMember = wrappedLogout;
+    window.logoutCurrentMember = wrappedLogout;
+  }
+
+  // Capture logout click after any old UI has rendered, then force badge off immediately.
+  document.addEventListener("click", function(e){
+    const el = e.target && e.target.closest ? e.target.closest("button,[onclick],[role='button'],a") : null;
+    if(!el) return;
+    const txt = String(el.textContent || "") + " " + String(el.getAttribute("onclick") || "") + " " + String(el.getAttribute("aria-label") || "");
+    if(/登出|退出|logout|memberLogout/i.test(txt)){
+      setTimeout(setBadgeLoggedOutV234, 0);
+      setTimeout(setBadgeLoggedOutV234, 80);
+      setTimeout(setBadgeLoggedOutV234, 300);
+    }
+  }, true);
+
+  window.addEventListener("storage", function(e){
+    if(e && /sky31.*member|member.*sky31|sky31_member_v1/i.test(String(e.key || ""))){
+      setTimeout(syncBadgeV234, 20);
+    }
+  });
+
+  const obs = new MutationObserver(function(){
+    if(!hasMemberStorageV234()) setTimeout(setBadgeLoggedOutV234, 20);
+  });
+  try{
+    obs.observe(document.documentElement || document.body, {subtree:true, childList:true, attributes:true, attributeFilter:["class","data-member-phone"]});
+  }catch(e){}
+
+  // Mobile zoom lock: iOS gesture events + double tap prevention.
+  document.addEventListener("gesturestart", function(e){ e.preventDefault(); }, {passive:false});
+  document.addEventListener("gesturechange", function(e){ e.preventDefault(); }, {passive:false});
+  document.addEventListener("gestureend", function(e){ e.preventDefault(); }, {passive:false});
+
+  let lastTouchEnd = 0;
+  document.addEventListener("touchend", function(e){
+    const now = Date.now();
+    if(now - lastTouchEnd <= 300){
+      e.preventDefault();
+    }
+    lastTouchEnd = now;
+  }, {passive:false});
+
+  document.addEventListener("dblclick", function(e){
+    e.preventDefault();
+  }, {passive:false});
+
+  // Initial state.
+  setTimeout(syncBadgeV234, 80);
+  setTimeout(syncBadgeV234, 500);
+
+  window.SKY31_SYNC_MEMBER_BADGE_V234 = syncBadgeV234;
+  window.SKY31_FORCE_BADGE_LOGOUT_V234 = setBadgeLoggedOutV234;
 })();
 </script>
 
