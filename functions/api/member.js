@@ -249,10 +249,12 @@ async function enrichMemberWithOrders(env, member) {
   const scannedTotalSpent = Math.round(totalSpent * 100) / 100;
   const scannedRewardRedeemed = redeemedRewards;
 
-  const finalTotalOrders = Math.max(Number(member.totalOrders || 0), scannedTotalOrders);
-  const finalTotalCups = Math.max(Number(member.totalCups || 0), scannedTotalCups);
-  const finalTotalSpent = Math.max(Number(member.totalSpent || 0), scannedTotalSpent);
-  const finalRewardRedeemed = Math.max(Number(member.rewardRedeemed || member.rewardsRedeemed || 0), scannedRewardRedeemed);
+  // V239: use exact recomputed values, not Math.max(old, scanned).
+  // Math.max prevented cups/free-drink counts from decreasing after undo pickup or cancel.
+  const finalTotalOrders = scannedTotalOrders;
+  const finalTotalCups = scannedTotalCups;
+  const finalTotalSpent = scannedTotalSpent;
+  const finalRewardRedeemed = scannedRewardRedeemed;
 
   const fixedMember = {
     ...member,
@@ -679,32 +681,14 @@ function isSuccessfulPickedUpOrderV199(order) {
 }
 
 function isMemberLifetimeSuccessfulOrderV202(order) {
+  // V239: Lifetime cups / free-drink vouchers must follow the real shop action:
+  // only Telegram "已領取" orders count. Undo pickup or cancel should immediately
+  // deduct the cups and the redeemed voucher count.
   if (!order) return false;
   if (isCancelledOrder(order)) return false;
 
   const s = String(order.status || "").toLowerCase().replace(/[\s-]+/g, "_");
-  const positiveStatuses = new Set([
-    "picked_up",
-    "pickedup",
-    "completed",
-    "complete",
-    "done",
-    "finished",
-    "fulfilled",
-    "paid",
-    "paid_success",
-    "success",
-    "successful"
-  ]);
-
-  if (positiveStatuses.has(s)) return true;
-
-  if (order.pickedUpAt || order.completedAt || order.paidAt || order.paymentAt) return true;
-
-  const pay = String(order.paymentStatus || order.payStatus || "").toLowerCase();
-  if (pay === "paid" || pay === "success" || pay === "successful") return true;
-
-  return false;
+  return s === "picked_up" || s === "pickedup";
 }
 
 

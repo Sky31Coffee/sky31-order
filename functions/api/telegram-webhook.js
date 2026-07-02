@@ -3739,33 +3739,14 @@ handleLimitedMenuAction = async function(env, cq, data) {
 };
 
 
-/* V199: member lifetime stats in Telegram count picked_up successful transactions only. */
+/* V239: member lifetime stats and free-drink vouchers count picked_up orders only.
+   Recompute from order history on every Telegram status change so undo / cancel can
+   truly deduct cups and redeemed voucher count instead of being blocked by old counters. */
 function sky31TelegramSuccessfulOrderV199(order) {
   if (!order) return false;
   const s = String(order.status || "").toLowerCase().replace(/[\s-]+/g, "_");
   if (s === "cancelled" || s === "canceled" || s.indexOf("cancel") >= 0) return false;
-
-  const positiveStatuses = new Set([
-    "picked_up",
-    "pickedup",
-    "completed",
-    "complete",
-    "done",
-    "finished",
-    "fulfilled",
-    "paid",
-    "paid_success",
-    "success",
-    "successful"
-  ]);
-
-  if (positiveStatuses.has(s)) return true;
-  if (order.pickedUpAt || order.completedAt || order.paidAt || order.paymentAt) return true;
-
-  const pay = String(order.paymentStatus || order.payStatus || "").toLowerCase();
-  if (pay === "paid" || pay === "success" || pay === "successful") return true;
-
-  return false;
+  return s === "picked_up" || s === "pickedup";
 }
 
 function sky31SamePhoneV199(a, b) {
@@ -3775,65 +3756,120 @@ function sky31SamePhoneV199(a, b) {
   if (a === b) return true;
   if (a.length > 3 && a.startsWith("853") && a.slice(3) === b) return true;
   if (b.length > 3 && b.startsWith("853") && b.slice(3) === a) return true;
-  return false;
+  const aa = a.length > 8 ? a.slice(-8) : a;
+  const bb = b.length > 8 ? b.slice(-8) : b;
+  return !!aa && aa === bb;
+}
+
+function sky31PhoneCandidatesV239(phone) {
+  phone = normalizePhone(phone);
+  const out = [];
+  function add(v) { v = normalizePhone(v); if (v && !out.includes(v)) out.push(v); }
+  add(phone);
+  if (phone.length === 8) add("853" + phone);
+  if (phone.length > 8) add(phone.slice(-8));
+  if (phone.length > 3 && phone.startsWith("853")) add(phone.slice(3));
+  return out;
+}
+
+async function sky31CollectOrderNosForMemberV239(env, phone, changedOrderNo) {
+  const orderNos = new Set();
+  const candidates = sky31PhoneCandidatesV239(phone);
+  for (const candidate of candidates) {
+    for (const prefix of ["phone:" + candidate + ":", "member_ordered:" + candidate + ":"]) {
+      let cursor = undefined;
+      do {
+        const page = await env.ORDERS.list({ prefix, cursor });
+        for (const key of (page.keys || [])) {
+          const no = String(key.name || "").replace(prefix, "").trim();
+          if (no) orderNos.add(no);
+        }
+        cursor = page.cursor;
+        if (page.list_complete !== false) break;
+      } while (cursor);
+    }
+  }
+
+  changedOrderNo = String(changedOrderNo || "").trim();
+  if (changedOrderNo) orderNos.add(changedOrderNo);
+  return Array.from(orderNos);
 }
 
 async function recalcMemberFromOrdersV199(env, changedOrder) {
   const phone = normalizePhone(changedOrder && (changedOrder.memberPhone || changedOrder.phone || changedOrder.submittedPhone));
   if (!phone || !env || !env.ORDERS || !changedOrder) return;
 
-  const candidates = [phone];
-  if (phone.length === 8) candidates.push("853" + phone);
-  if (phone.length === 11 && phone.startsWith("853")) candidates.push(phone.slice(3));
-
-  let member = null;
-  let memberKey = "";
-  for (const candidate of Array.from(new Set(candidates))) {
-    const raw = await env.ORDERS.get("member:" + candidate);
+  const candidates = sky31PhoneCandidatesV239(phone);
+  const memberEntries = [];
+  const seenKeys = new Set();
+  for (const candidate of candidates) {
+    const key = "member:" + candidate;
+    if (seenKeys.has(key)) continue;
+    seenKeys.add(key);
+    const raw = await env.ORDERS.get(key);
     if (!raw) continue;
     try {
       const parsed = JSON.parse(raw);
-      if (parsed && !parsed.deletedAt) {
-        member = parsed;
-        memberKey = "member:" + candidate;
-        break;
-      }
+      if (parsed && !parsed.deletedAt) memberEntries.push({ key, member: parsed });
     } catch (_) {}
   }
-  if (!member) return;
+  if (!memberEntries.length) return;
 
-  const orderNo = String(changedOrder.orderNo || changedOrder.orderId || "").trim();
-  if (!orderNo) return;
+  const changedOrderNo = String(changedOrder.orderNo || changedOrder.orderId || "").trim();
+  const orderNos = await sky31CollectOrderNosForMemberV239(env, phone, changedOrderNo);
+  const successfulNos = [];
+  const recentNos = [];
+  let totalOrders = 0;
+  let totalCups = 0;
+  let totalSpent = 0;
+  let rewardRedeemed = 0;
+  let lastOrderAt = "";
+  let lastOrderNo = "";
 
-  const counted = Array.isArray(member.countedRewardOrderNos) ? member.countedRewardOrderNos.slice() : [];
-  const alreadyCounted = counted.includes(orderNo);
-  const shouldCount = sky31TelegramSuccessfulOrderV199(changedOrder);
+  for (const no of orderNos) {
+    const raw = await env.ORDERS.get("order:" + no);
+    if (!raw) continue;
+    let order = null;
+    try { order = JSON.parse(raw); } catch (_) { continue; }
+    if (!order) continue;
 
-  const cups = Math.max(0, Number(orderCupsForMemberQuery(changedOrder) || 0));
-  const amount = Math.max(0, Number(changedOrder.totalAmount || cartTotalForMemberQuery(changedOrder.cart) || 0));
-  const redeemed = Math.max(0, Number(changedOrder.rewardUse || changedOrder.rewardUseRequested || 0));
+    const orderPhones = [order.memberPhone, order.phone, order.submittedPhone].map(normalizePhone).filter(Boolean);
+    if (!orderPhones.some(p => candidates.some(c => sky31SamePhoneV199(p, c)))) continue;
 
-  if (shouldCount && !alreadyCounted) {
-    member.totalOrders = Math.max(0, Number(member.totalOrders || 0)) + 1;
-    member.totalCups = Math.max(0, Number(member.totalCups || 0)) + cups;
-    member.totalSpent = Math.round((Math.max(0, Number(member.totalSpent || 0)) + amount) * 100) / 100;
-    member.rewardRedeemed = Math.max(0, Number(member.rewardRedeemed || member.rewardsRedeemed || 0)) + redeemed;
-    member.rewardsRedeemed = member.rewardRedeemed;
-    counted.push(orderNo);
-  } else if (!shouldCount && alreadyCounted) {
-    member.totalOrders = Math.max(0, Number(member.totalOrders || 0) - 1);
-    member.totalCups = Math.max(0, Number(member.totalCups || 0) - cups);
-    member.totalSpent = Math.max(0, Math.round((Number(member.totalSpent || 0) - amount) * 100) / 100);
-    member.rewardRedeemed = Math.max(0, Number(member.rewardRedeemed || member.rewardsRedeemed || 0) - redeemed);
-    member.rewardsRedeemed = member.rewardRedeemed;
+    recentNos.push(no);
+    const orderAt = String(order.updatedAt || order.statusUpdatedAt || order.createdAt || "");
+    if (!lastOrderAt || orderAt.localeCompare(lastOrderAt) > 0) {
+      lastOrderAt = orderAt;
+      lastOrderNo = String(order.orderNo || no);
+    }
+
+    if (!sky31TelegramSuccessfulOrderV199(order)) continue;
+    successfulNos.push(String(order.orderNo || no));
+    totalOrders += 1;
+    totalCups += Math.max(0, Number(orderCupsForMemberQuery(order) || 0));
+    totalSpent += Math.max(0, Number(order.totalAmount || cartTotalForMemberQuery(order.cart) || 0));
+    rewardRedeemed += Math.max(0, Number(order.rewardUse || order.rewardUseRequested || 0));
   }
 
-  member.countedRewardOrderNos = Array.from(new Set(counted.filter(no => {
-    return shouldCount || no !== orderNo;
-  }))).slice(0, 5000);
+  totalSpent = Math.round(totalSpent * 100) / 100;
+  const now = new Date().toISOString();
+  const ttl = 60 * 60 * 24 * 3650;
 
-  member.updatedAt = new Date().toISOString();
-  await env.ORDERS.put(memberKey || ("member:" + phone), JSON.stringify(member), { expirationTtl: 60 * 60 * 24 * 3650 });
+  for (const entry of memberEntries) {
+    const member = { ...entry.member };
+    member.phone = normalizePhone(member.phone || entry.key.replace(/^member:/, "") || phone);
+    member.totalOrders = totalOrders;
+    member.totalCups = totalCups;
+    member.totalSpent = totalSpent;
+    member.rewardRedeemed = rewardRedeemed;
+    member.rewardsRedeemed = rewardRedeemed;
+    member.countedRewardOrderNos = Array.from(new Set(successfulNos)).slice(0, 5000);
+    member.recentOrderNos = Array.from(new Set(recentNos)).slice(0, 2000);
+    member.lastOrderAt = lastOrderAt || member.lastOrderAt || "";
+    member.lastOrderNo = lastOrderNo || member.lastOrderNo || "";
+    member.updatedAt = now;
+    await env.ORDERS.put(entry.key, JSON.stringify(member), { expirationTtl: ttl });
+  }
 }
 
 

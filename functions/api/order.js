@@ -763,31 +763,12 @@ function sky31RewardTelegramLineV192(order) {
 
 /* V199: reward availability is based on picked_up successful transactions only. */
 function sky31OrderSuccessV199(order) {
+  // V239: reward availability on website must match Telegram backend exactly.
+  // Only orders marked as picked_up / 已領取 count toward cups and free vouchers.
   if (!order) return false;
   const s = String(order.status || "").toLowerCase().replace(/[\s-]+/g, "_");
   if (s === "cancelled" || s === "canceled" || s.indexOf("cancel") >= 0) return false;
-
-  const positiveStatuses = new Set([
-    "picked_up",
-    "pickedup",
-    "completed",
-    "complete",
-    "done",
-    "finished",
-    "fulfilled",
-    "paid",
-    "paid_success",
-    "success",
-    "successful"
-  ]);
-
-  if (positiveStatuses.has(s)) return true;
-  if (order.pickedUpAt || order.completedAt || order.paidAt || order.paymentAt) return true;
-
-  const pay = String(order.paymentStatus || order.payStatus || "").toLowerCase();
-  if (pay === "paid" || pay === "success" || pay === "successful") return true;
-
-  return false;
+  return s === "picked_up" || s === "pickedup";
 }
 
 function sky31SamePhoneV199(a, b) {
@@ -840,10 +821,11 @@ async function sky31RecomputeMemberForRewardV199(env, member, phone) {
   return {
     ...(member || {}),
     phone,
-    totalOrders: Math.max(Number(member && member.totalOrders || 0), totalOrders),
-    totalCups: Math.max(Number(member && member.totalCups || 0), totalCups),
-    totalSpent: Math.max(Number(member && member.totalSpent || 0), scannedTotalSpent),
-    rewardRedeemed: Math.max(Number(member && (member.rewardRedeemed || member.rewardsRedeemed) || 0), rewardRedeemed),
-    rewardsRedeemed: Math.max(Number(member && (member.rewardRedeemed || member.rewardsRedeemed) || 0), rewardRedeemed)
+    // V239: exact recompute, not Math.max(old, scanned), so undo/cancel deducts properly.
+    totalOrders,
+    totalCups,
+    totalSpent: scannedTotalSpent,
+    rewardRedeemed,
+    rewardsRedeemed: rewardRedeemed
   };
 }
