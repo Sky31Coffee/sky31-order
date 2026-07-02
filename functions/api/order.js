@@ -104,7 +104,7 @@ if (!cart.length && !String(body.orderText || "").trim()) {
 
     if (context.waitUntil) context.waitUntil(bg);
 
-    return json({ ok: true, orderNo, status: order.status, pickupTime, totalAmount: order.totalAmount, subtotalBeforeReward: order.subtotalBeforeReward, tierDiscount: order.tierDiscount, rewardUse: order.rewardUse, rewardDiscount: order.rewardDiscount, currency: order.currency });
+    return json({ ok: true, orderNo, status: order.status, pickupTime, totalAmount: order.totalAmount, subtotalBeforeReward: order.subtotalBeforeReward, totalBeforeTierDiscount: order.totalBeforeTierDiscount, totalAfterTierDiscount: order.totalAfterTierDiscount, memberTierName: order.memberTierName, memberTierIcon: order.memberTierIcon, tierDiscount: order.tierDiscount, tierDiscountDetails: order.tierDiscountDetails, rewardUse: order.rewardUse, rewardDiscount: order.rewardDiscount, rewardFreeItems: order.rewardFreeItems, birthdayVoucherCount: order.birthdayVoucherCount, currency: order.currency });
   } catch (e) {
     return json({ ok: false, error: e.message || "提交失敗，請稍後再試" }, 500);
   }
@@ -536,7 +536,6 @@ function buildTelegramText(order) {
     lines.push(tierName + "優惠" + detail + "：-" + money(order.tierDiscount));
   }
   if (Number(order.rewardDiscount || 0) > 0) lines.push("會員免單扣減：-" + money(order.rewardDiscount));
-  if (order.discountCalculationOrder === "tier_first_reward_after") lines.push("計算：先扣會員等級優惠，再套用免單");
   lines.push("總額：" + money(order.totalAmount || cartTotal(order.cart)));
   if (order.orderNote) lines.push("整張訂單備註：" + order.orderNote);
   lines.push("客人：" + (order.customerName || ""));

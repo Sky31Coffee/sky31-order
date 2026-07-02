@@ -4414,14 +4414,14 @@ async function getMaintenanceConfigV218(env) {
     const raw = await env.ORDERS.get(MAINTENANCE_KEY_V223);
     if (!raw) return { active: false, message: "", updatedAt: "", updatedBy: "" };
     const config = JSON.parse(raw);
-    return { active: config && config.active === true, message: String((config && config.message) || "系統維護，暫停使用。"), updatedAt: String((config && config.updatedAt) || ""), updatedBy: String((config && config.updatedBy) || "") };
+    return { active: config && config.active === true, message: String((config && config.message) || "Sky31 正在短暫維護，我們正在更新點餐系統及會員資料，暫時未能下單或查詢訂單。"), updatedAt: String((config && config.updatedAt) || ""), updatedBy: String((config && config.updatedBy) || "") };
   } catch (_) {
     return { active: false, message: "", updatedAt: "", updatedBy: "" };
   }
 }
 
 async function setMaintenanceConfigV223(env, active, by) {
-  const config = { active: active === true, message: active === true ? "系統維護，暫停使用。" : "", updatedAt: new Date().toISOString(), updatedBy: String(by || "telegram") };
+  const config = { active: active === true, message: active === true ? "Sky31 正在短暫維護，我們正在更新點餐系統及會員資料，暫時未能下單或查詢訂單。" : "", updatedAt: new Date().toISOString(), updatedBy: String(by || "telegram") };
   await env.ORDERS.put(MAINTENANCE_KEY_V223, JSON.stringify(config));
   return config;
 }
