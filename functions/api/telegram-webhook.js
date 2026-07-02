@@ -749,7 +749,8 @@ function buildMemberListMarkup(members) {
   members.slice(0, 80).forEach(member => {
     const rawPhone = normalizePhone(member.phone);
     const lookupPhone = memberLookupPhoneV221(member);
-    const displayPhone = rawPhone.length === 8 ? "853" + rawPhone : rawPhone;
+    // V237: show the phone exactly as stored/input; do not auto-prefix 853.
+    const displayPhone = rawPhone;
     const name = member.name || "未命名";
     const deleted = !!member._deleted;
     const label = (deleted ? "🗑️ " : "👤 ") + name + "｜" + displayPhone + (deleted ? "｜已刪除" : "");
@@ -3769,8 +3770,8 @@ function sky31SamePhoneV199(a, b) {
   b = normalizePhone(b);
   if (!a || !b) return false;
   if (a === b) return true;
-  if (a.length === 11 && a.startsWith("853") && a.slice(3) === b) return true;
-  if (b.length === 11 && b.startsWith("853") && b.slice(3) === a) return true;
+  if (a.length > 3 && a.startsWith("853") && a.slice(3) === b) return true;
+  if (b.length > 3 && b.startsWith("853") && b.slice(3) === a) return true;
   return false;
 }
 
@@ -3847,8 +3848,8 @@ function phoneLast8V223(phone) {
 }
 
 function canonicalPhoneV223(phone) {
-  const last8 = phoneLast8V223(phone);
-  return last8 ? "853" + last8 : normalizePhone(phone || "");
+  // V237: no longer force-add Macau 853. Keep the customer's input digits as canonical.
+  return normalizePhone(phone || "");
 }
 
 function memberKeyV223(phone) {
@@ -3979,7 +3980,7 @@ async function saveActiveMemberV223(env, loaded) {
   if (!loaded || !loaded.member) return null;
   const member = { ...loaded.member };
   const last8 = phoneLast8V223(member.phone);
-  member.phone = canonicalPhoneV223(last8);
+  member.phone = canonicalPhoneV223(member.phone || (loaded.key || "").replace(/^member:/, ""));
   member.updatedAt = new Date().toISOString();
 
   const canonicalKey = memberKeyV223(member.phone);
@@ -4490,4 +4491,245 @@ buildCommandMenuMarkupV183 = function() {
       [{ text: "🛠 系統維護", callback_data: "maint_status:x" }]
     ]
   };
+};
+
+
+/* V237 member admin phone/delete fix: no forced 853, robust legacy alias cleanup. */
+function memberLookupPhoneV221(member) {
+  member = member || {};
+  return normalizePhone(member.phone || String(member._kvKey || "").replace(/^member_deleted:|^member:/, ""));
+}
+
+function phoneWithoutForced853V237(phone) {
+  phone = normalizePhone(phone || "");
+  if (phone.length > 3 && phone.startsWith("853")) return phone.slice(3);
+  return phone;
+}
+
+function legacyMemberPhonesV237(phone) {
+  const p = normalizePhone(phone || "");
+  const stripped = phoneWithoutForced853V237(p);
+  const last8 = p.length >= 8 ? p.slice(-8) : p;
+  const strippedLast8 = stripped.length >= 8 ? stripped.slice(-8) : stripped;
+  const out = [];
+  [p, stripped, last8, strippedLast8].forEach(x => { if (x) out.push(x); });
+  [last8, strippedLast8, stripped].forEach(x => { if (x) out.push("853" + x); });
+  return Array.from(new Set(out.map(normalizePhone).filter(Boolean)));
+}
+
+async function findMemberRecordV237(env, phone, preferDeleted) {
+  phone = normalizePhone(phone || "");
+  const candidates = legacyMemberPhonesV237(phone);
+  const prefixes = preferDeleted ? ["member_deleted:", "member:"] : ["member:", "member_deleted:"];
+  const wantedLast = phone.length >= 8 ? phone.slice(-8) : phoneWithoutForced853V237(phone);
+
+  for (const prefix of prefixes) {
+    for (const c of candidates) {
+      const key = prefix + c;
+      const raw = await env.ORDERS.get(key);
+      if (!raw) continue;
+      try {
+        const member = JSON.parse(raw);
+        if (!member) continue;
+        const stored = normalizePhone(member.phone || c);
+        const storedLast = stored.length >= 8 ? stored.slice(-8) : phoneWithoutForced853V237(stored);
+        if (stored === phone || candidates.includes(stored) || storedLast === wantedLast || normalizePhone(c).slice(-8) === wantedLast) {
+          member.phone = stored || c || phone;
+          member._kvKey = key;
+          member._deleted = prefix === "member_deleted:";
+          return { key, member, deleted: prefix === "member_deleted:" };
+        }
+      } catch (_) {}
+    }
+  }
+
+  for (const prefix of prefixes) {
+    let cursor = undefined;
+    let checked = 0;
+    do {
+      const page = await env.ORDERS.list({ prefix, cursor });
+      for (const key of (page.keys || [])) {
+        checked += 1;
+        if (checked > 8000) break;
+        const keyPhone = normalizePhone(String(key.name || "").replace(prefix, ""));
+        const keyLast = keyPhone.length >= 8 ? keyPhone.slice(-8) : phoneWithoutForced853V237(keyPhone);
+        if (wantedLast && keyLast !== wantedLast && !candidates.includes(keyPhone)) continue;
+        const raw = await env.ORDERS.get(key.name);
+        if (!raw) continue;
+        try {
+          const member = JSON.parse(raw);
+          if (!member) continue;
+          const stored = normalizePhone(member.phone || keyPhone);
+          const storedLast = stored.length >= 8 ? stored.slice(-8) : phoneWithoutForced853V237(stored);
+          if (storedLast === wantedLast || keyLast === wantedLast || candidates.includes(stored) || candidates.includes(keyPhone)) {
+            member.phone = stored || keyPhone || phone;
+            member._kvKey = key.name;
+            member._deleted = prefix === "member_deleted:";
+            return { key: key.name, member, deleted: prefix === "member_deleted:" };
+          }
+        } catch (_) {}
+      }
+      cursor = page.cursor;
+      if (page.list_complete !== false) break;
+    } while (cursor && checked <= 8000);
+  }
+  return null;
+}
+
+getAnyMember = async function(env, phone) {
+  const found = await findMemberRecordV237(env, phone, false);
+  return found ? found.member : null;
+};
+
+deleteMemberOrders = async function(env, phone) {
+  const phones = legacyMemberPhonesV237(phone);
+  const orderNos = new Set();
+
+  for (const p of phones) {
+    let cursor = undefined;
+    const prefix = "phone:" + p + ":";
+    do {
+      const page = await env.ORDERS.list({ prefix, cursor });
+      for (const key of (page.keys || [])) {
+        const orderNo = key.name.replace(prefix, "");
+        if (orderNo) orderNos.add(orderNo);
+      }
+      cursor = page.cursor;
+      if (page.list_complete !== false) break;
+    } while (cursor);
+
+    cursor = undefined;
+    const mprefix = "member_ordered:" + p + ":";
+    do {
+      const page = await env.ORDERS.list({ prefix: mprefix, cursor });
+      for (const key of (page.keys || [])) {
+        const orderNo = key.name.replace(mprefix, "");
+        if (orderNo) orderNos.add(orderNo);
+      }
+      cursor = page.cursor;
+      if (page.list_complete !== false) break;
+    } while (cursor);
+  }
+
+  let deletedOrders = 0;
+  const deletedNos = [];
+  for (const orderNo of Array.from(orderNos)) {
+    const orderRaw = await env.ORDERS.get("order:" + orderNo);
+    if (orderRaw) {
+      const archivePhone = normalizePhone(phone || "");
+      await env.ORDERS.put("member_deleted_order:" + archivePhone + ":" + orderNo, orderRaw);
+      await env.ORDERS.delete("order:" + orderNo);
+      deletedOrders += 1;
+      deletedNos.push(orderNo);
+    }
+    for (const p of phones) {
+      const phoneKey = "phone:" + p + ":" + orderNo;
+      const markerKey = "member_ordered:" + p + ":" + orderNo;
+      const phoneRaw = await env.ORDERS.get(phoneKey);
+      const markerRaw = await env.ORDERS.get(markerKey);
+      if (phoneRaw != null) await env.ORDERS.put("member_deleted_phone_index:" + normalizePhone(phone || "") + ":" + orderNo + ":" + p, phoneRaw);
+      if (markerRaw != null) await env.ORDERS.put("member_deleted_order_marker:" + normalizePhone(phone || "") + ":" + orderNo + ":" + p, markerRaw);
+      await env.ORDERS.delete(phoneKey);
+      await env.ORDERS.delete(markerKey);
+    }
+  }
+
+  return { deletedOrders, deletedIndexKeys: deletedNos.length * phones.length * 2, orderNos: deletedNos };
+};
+
+handleMemberAction = async function(env, cq, data) {
+  try {
+    const sep = data.indexOf(":");
+    const action = sep >= 0 ? data.slice(0, sep) : "";
+    const requestedPhone = normalizePhone(sep >= 0 ? data.slice(sep + 1) : "");
+    if (!requestedPhone) return stop(env, cq, "找不到會員電話");
+
+    const chatId = cq.message && cq.message.chat ? cq.message.chat.id : env.TELEGRAM_CHAT_ID;
+    const messageId = cq.message ? cq.message.message_id : null;
+
+    if (action === "member_delete") {
+      const found = await findMemberRecordV237(env, requestedPhone, false);
+      if (!found || found.deleted) return stop(env, cq, "找不到有效會員資料");
+      const phone = normalizePhone(found.member.phone || requestedPhone);
+      await editTelegramMessage(env, chatId, messageId, buildMemberTelegramText(found.member, false, true), {
+        inline_keyboard: [[
+          { text: "✅ 確認刪除", callback_data: "member_delete_confirmed:" + phone },
+          { text: "取消", callback_data: "member_cancel_delete:" + phone }
+        ], [{ text: "📋 返回用戶列表", callback_data: "member_list:all" }]]
+      });
+      return stop(env, cq, "請再次確認是否刪除會員");
+    }
+
+    if (action === "member_cancel_delete") {
+      const found = await findMemberRecordV237(env, requestedPhone, false);
+      if (!found) return stop(env, cq, "找不到會員資料");
+      await editTelegramMessage(env, chatId, messageId, buildMemberTelegramText(found.member, !!found.deleted, false), buildMemberReplyMarkup(found.member, !!found.deleted));
+      return stop(env, cq, "已取消刪除");
+    }
+
+    if (action === "member_delete_confirmed") {
+      const found = await findMemberRecordV237(env, requestedPhone, false);
+      if (!found) {
+        const deletedFound = await findMemberRecordV237(env, requestedPhone, true);
+        if (deletedFound) {
+          await editTelegramMessage(env, chatId, messageId, buildMemberTelegramText(deletedFound.member, true, false), buildMemberReplyMarkup(deletedFound.member, true));
+          return stop(env, cq, "此會員資料已刪除");
+        }
+        return stop(env, cq, "找不到有效會員資料");
+      }
+      if (found.deleted) return stop(env, cq, "此會員資料已刪除");
+
+      const member = found.member;
+      const phone = normalizePhone(member.phone || requestedPhone);
+      const deletePhones = legacyMemberPhonesV237(phone || requestedPhone);
+      const deletedOrderResult = await deleteMemberOrders(env, phone || requestedPhone);
+
+      member.deletedAt = new Date().toISOString();
+      member.deletedBy = "telegram";
+      member.updatedAt = member.deletedAt;
+      member.deletedOrders = deletedOrderResult.deletedOrders || 0;
+      member.deletedOrderNos = deletedOrderResult.orderNos || [];
+      member.totalOrders = 0;
+      member.totalCups = 0;
+      member.totalSpent = 0;
+      member.recentOrderNos = [];
+      member.lastOrderNo = "";
+      member.lastOrderAt = "";
+
+      const deletedKey = "member_deleted:" + phone;
+      await env.ORDERS.put(deletedKey, JSON.stringify(member));
+      const keysToDelete = new Set([found.key]);
+      deletePhones.forEach(p => keysToDelete.add("member:" + p));
+      for (const key of keysToDelete) {
+        if (key && key !== deletedKey) await env.ORDERS.delete(key);
+      }
+
+      await editTelegramMessage(env, chatId, messageId, buildMemberTelegramText(member, true, false), buildMemberReplyMarkup(member, true));
+      return stop(env, cq, "已刪除會員及相關訂單 " + phone);
+    }
+
+    if (action === "member_restore") {
+      const found = await findMemberRecordV237(env, requestedPhone, true);
+      if (!found) return stop(env, cq, "沒有可撤回的會員資料");
+      if (!found.deleted) {
+        await editTelegramMessage(env, chatId, messageId, buildMemberTelegramText(found.member, false, false), buildMemberReplyMarkup(found.member, false));
+        return stop(env, cq, "此會員目前已是有效狀態");
+      }
+      const member = found.member;
+      const phone = normalizePhone(member.phone || requestedPhone);
+      delete member.deletedAt;
+      delete member.deletedBy;
+      member.restoredAt = new Date().toISOString();
+      member.updatedAt = member.restoredAt;
+      await env.ORDERS.put("member:" + phone, JSON.stringify(member));
+      await env.ORDERS.delete(found.key);
+      await editTelegramMessage(env, chatId, messageId, buildMemberTelegramText(member, false, false), buildMemberReplyMarkup(member, false));
+      return stop(env, cq, "已恢復會員 " + phone);
+    }
+
+    return stop(env, cq, "未知會員操作");
+  } catch (e) {
+    try { return stop(env, cq, "操作失敗：" + (e.message || "未知錯誤")); }
+    catch (_) { return json({ ok: false, error: e.message || "member action failed" }, 500); }
+  }
 };

@@ -505,7 +505,8 @@ function normalizePhone(phone) {
 
 function phoneWithoutMacauCode(phone) {
   phone = normalizePhone(phone);
-  if (phone.length === 11 && phone.startsWith("853")) return phone.slice(3);
+  // V237: support old records accidentally saved with 853 prefix of any length.
+  if (phone.length > 3 && phone.startsWith("853")) return phone.slice(3);
   return phone;
 }
 
