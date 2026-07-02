@@ -16110,7 +16110,7 @@ window.addEventListener("load", function() {
     if(calc.useRewards > 0 && calc.rewardDiscount > 0){
       const names = calc.freeItems.map(function(x){return x.title;}).slice(0,3).join("、");
       return '<div class="v201-checkout-reward">' +
-        '<div class="title">🎁 已自動套用會員免單</div>' +
+        '<div class="title">🎁 會員免單</div>' +
         '<div class="line"><span>原本總額</span><strong>' + money201(calc.subtotal) + '</strong></div>' +
         '<div class="line"><span>目前可用免單</span><strong>' + calc.available + ' 次</strong></div>' +
         '<div class="line"><span>本次兌換</span><strong>' + calc.useRewards + ' 杯</strong></div>' +
@@ -16987,7 +16987,7 @@ window.addEventListener("load", function() {
     const box = document.createElement("div");
     box.className = "v214-discount-verify";
     box.innerHTML =
-      '<div class="title">🏅 會員等級優惠檢查</div>' +
+      '<div class="title">🏅 會員等級優惠</div>' +
       '<div class="line"><span>目前等級</span><strong>' + esc214(calc.tier.name) + ' ' + esc214(calc.tier.icon) + '</strong></div>' +
       '<div class="line"><span>等級優惠</span><strong>' + (calc.discount > 0 ? '-' + money214(calc.discount) : '暫無可套用') + '</strong></div>' +
       (calc.details.length ? '<div class="line"><span>優惠內容</span><strong>' + esc214(calc.details.join("、")) + '</strong></div>' : '') +
@@ -17993,7 +17993,7 @@ window.addEventListener("load", function() {
     if(calc.useRewards > 0 && calc.rewardDiscount > 0){
       const names = calc.freeItems.map(function(x){return x.title;}).slice(0,3).join("、");
       return '<div class="v201-checkout-reward">' +
-        '<div class="title">🎁 已自動套用會員免單</div>' +
+        '<div class="title">🎁 會員免單</div>' +
         '<div class="line"><span>目前可用免單</span><strong>' + calc.available + ' 次</strong></div>' +
         '<div class="line"><span>本次兌換</span><strong>' + calc.useRewards + ' 杯</strong></div>' +
         '<div class="line"><span>免單扣減</span><strong>-' + money240(calc.rewardDiscount) + '</strong></div>' +
@@ -18009,7 +18009,7 @@ window.addEventListener("load", function() {
 
   function tierBox240(calc){
     return '<div class="v214-discount-verify">' +
-      '<div class="title">🏅 會員等級優惠檢查</div>' +
+      '<div class="title">🏅 會員等級優惠</div>' +
       '<div class="line"><span>目前等級</span><strong>' + esc240(calc.tier.name) + ' ' + esc240(calc.tier.icon) + '</strong></div>' +
       '<div class="line"><span>等級優惠</span><strong>' + (calc.tierDiscount > 0 ? '-' + money240(calc.tierDiscount) : '暫無可套用') + '</strong></div>' +
       (calc.tierDetails.length ? '<div class="line"><span>優惠內容</span><strong>' + esc240(calc.tierDetails.join("、")) + '</strong></div>' : '') +
@@ -18048,30 +18048,44 @@ window.addEventListener("load", function() {
     };
     window.SKY31_CHECKOUT_CALC_V240 = calc;
 
-    const totalQty = c.reduce(function(s,x){return s + Number(x.qty || x.quantity || 1);}, 0);
-    let rows = "";
-    c.forEach(function(x){
-      const q = Math.max(1, Number(x.qty || x.quantity || 1));
-      const u = unit240(x);
-      const sub = Number(x.subtotal || u*q || 0);
-      const iceText = x.ice && x.ice !== "不適用" ? "・" + x.ice : "";
-      rows += '<div class="row"><div><strong>' + esc240(x.name || "飲品") + ' × ' + q + '</strong><br><small>' +
-        esc240(x.cn || "") +
-        (x.bean ? '｜' + esc240(shortBean240(x.bean)) : '') +
-        (x.temp ? '｜' + esc240(x.temp) : '') + iceText +
-        '<span class="cart-price-line">' + money240(u) + ' × ' + q + ' = ' + money240(sub) + '</span>' +
-        '</small></div></div>';
-    });
+    const totalQty = c.reduce(function(sum,x){ return sum + Math.max(1, Number(x.qty || x.quantity || 1)); }, 0);
+    const saved = Math.max(0, Number(calc.tierDiscount || 0) + Number(calc.rewardDiscount || 0));
+    const orderNoteEl = document.getElementById("orderNote");
+    const orderNote = orderNoteEl ? String(orderNoteEl.value || "").trim() : "";
+
+    const tierName = calc.tier && calc.tier.name ? calc.tier.name : "會員";
+    const tierIcon = calc.tier && calc.tier.icon ? " " + calc.tier.icon : "";
+    const tierBox = '<div class="v214-discount-verify">' +
+      '<div class="title">🏅 會員等級優惠</div>' +
+      '<div class="line"><span>目前等級</span><strong>' + esc240(tierName + tierIcon) + '</strong></div>' +
+      '<div class="line"><span>本次優惠</span><strong>' + (calc.tierDiscount > 0 ? '-' + money240(calc.tierDiscount) : '暫無可套用') + '</strong></div>' +
+    '</div>';
+
+    let rewardBox = '';
+    if(!member || !member.phone){
+      rewardBox = '<div class="v201-checkout-reward"><div class="title">🎁 會員免單</div><div class="line"><span>狀態</span><strong>登入後自動檢查</strong></div></div>';
+    }else if(calc.useRewards > 0 && calc.rewardDiscount > 0){
+      rewardBox = '<div class="v201-checkout-reward">' +
+        '<div class="title">🎁 會員免單</div>' +
+        '<div class="line"><span>本次套用</span><strong>' + calc.useRewards + ' 張</strong></div>' +
+        '<div class="line"><span>免單優惠</span><strong>-' + money240(calc.rewardDiscount) + '</strong></div>' +
+      '</div>';
+    }else{
+      rewardBox = '<div class="v201-checkout-reward">' +
+        '<div class="title">🎁 會員免單</div>' +
+        '<div class="line"><span>可用免單</span><strong>0 張</strong></div>' +
+      '</div>';
+    }
 
     summary.innerHTML =
-      '<div class="row"><strong>總杯數</strong><strong>' + totalQty + ' 杯</strong></div>' +
-      '<div class="row"><strong>原本總額</strong><strong>' + money240(calc.subtotal) + '</strong></div>' +
-      (calc.tierDiscount > 0 ? '<div class="row"><strong>' + esc240(calc.tier.name) + '優惠</strong><strong>-' + money240(calc.tierDiscount) + '</strong></div>' : '') +
-      (calc.rewardDiscount > 0 ? '<div class="row"><strong>會員免單兌換 ×' + calc.useRewards + '</strong><strong>-' + money240(calc.rewardDiscount) + '</strong></div>' : '') +
-      '<div class="row v201-final-total"><strong>應付總額</strong><strong>' + money240(calc.finalTotal) + '</strong></div>' +
-      tierBox240(calc) +
-      rewardBox240(member, calc) +
-      rows;
+      '<div class="v242-checkout-brief">' +
+        '<div class="v242-line"><span>總杯數</span><strong>' + totalQty + ' 杯</strong></div>' +
+        (saved > 0 ? '<div class="v242-line"><span>已套用優惠</span><strong>-' + money240(saved) + '</strong></div>' : '') +
+        '<div class="v242-line v242-final"><span>應付總額</span><strong>' + money240(calc.finalTotal) + '</strong></div>' +
+        (orderNote ? '<div class="v242-line v242-note"><span>整張訂單備註</span><strong>' + esc240(orderNote) + '</strong></div>' : '') +
+      '</div>' +
+      tierBox +
+      rewardBox;
     return summary.innerText;
   }
 
@@ -18328,6 +18342,192 @@ window.addEventListener("load", function() {
   patchCards();
   document.addEventListener("DOMContentLoaded", function(){ setTimeout(patchCards, 120); setTimeout(patchCards, 800); });
   setTimeout(patchCards, 1500);
+})();
+</script>
+
+
+
+<style id="sky31-v242-checkout-clean-style">
+/* V242: cleaner checkout confirmation summary; keep note and quantity controls. */
+.v242-checkout-brief{
+  margin:14px 0 12px !important;
+  padding:14px 14px 12px !important;
+  border-radius:22px !important;
+  background:rgba(255,255,255,.56) !important;
+  border:1px solid rgba(255,255,255,.62) !important;
+  box-shadow:0 14px 34px rgba(31,39,51,.08) !important;
+  backdrop-filter:blur(18px) saturate(1.15) !important;
+  -webkit-backdrop-filter:blur(18px) saturate(1.15) !important;
+}
+.v242-checkout-brief .v242-line{
+  display:flex !important;
+  align-items:center !important;
+  justify-content:space-between !important;
+  gap:12px !important;
+  padding:7px 0 !important;
+  color:rgba(31,39,51,.72) !important;
+  font-size:14px !important;
+  font-weight:760 !important;
+}
+.v242-checkout-brief .v242-line + .v242-line{
+  border-top:1px solid rgba(31,39,51,.06) !important;
+}
+.v242-checkout-brief .v242-final{
+  padding-top:10px !important;
+  color:rgba(22,28,36,.94) !important;
+  font-size:17px !important;
+  font-weight:900 !important;
+}
+.v242-checkout-brief .v242-final strong{
+  font-size:21px !important;
+  letter-spacing:-.02em !important;
+}
+.v242-checkout-brief .v242-note{
+  align-items:flex-start !important;
+}
+.v242-checkout-brief .v242-note strong{
+  text-align:right !important;
+  max-width:68% !important;
+  white-space:pre-wrap !important;
+}
+.v214-discount-verify .title, .v201-checkout-reward .title{
+  letter-spacing:.01em !important;
+}
+.v214-discount-verify .line, .v201-checkout-reward .line{
+  padding:7px 0 !important;
+}
+</style>
+
+<script id="sky31-v242-clean-checkout-summary">
+/* V242: simplify checkout UI wording, keep backend discount logic unchanged. */
+(function(){
+  const MEMBER_KEY = "sky31_member_v1";
+
+  function esc242(s){
+    return String(s == null ? "" : s).replace(/[&<>"']/g,function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];
+    });
+  }
+  function money242(n){
+    if(typeof sky31Money === "function") return sky31Money(n);
+    n = Math.round(Number(n || 0) * 100) / 100;
+    return "MOP " + n.toString();
+  }
+  function readMember242(){
+    try{ const raw = localStorage.getItem(MEMBER_KEY); return raw ? JSON.parse(raw) : null; }catch(e){ return null; }
+  }
+  function cart242(){
+    try{ if(Array.isArray(window.cart)) return window.cart; if(typeof cart !== "undefined" && Array.isArray(cart)) return cart; }catch(e){}
+    return [];
+  }
+  function qty242(){
+    return cart242().reduce(function(s,x){ return s + Math.max(1, Number(x.qty || x.quantity || 1)); }, 0);
+  }
+  function calculate242(member){
+    if(typeof window.SKY31_CALCULATE_CHECKOUT_V240 === "function") return window.SKY31_CALCULATE_CHECKOUT_V240(member || readMember242() || {});
+    const c = cart242();
+    const subtotal = c.reduce(function(s,x){
+      const q = Math.max(1, Number(x.qty || x.quantity || 1));
+      const u = Number(x.unitPrice || x.price || 0);
+      return s + Number(x.subtotal || u*q || 0);
+    },0);
+    return {subtotal:subtotal,tier:{name:"會員",icon:""},tierDiscount:0,tierDetails:[],available:0,useRewards:0,rewardDiscount:0,freeItems:[],finalTotal:subtotal};
+  }
+  function tierBox242(calc){
+    const tierName = (calc.tier && calc.tier.name ? calc.tier.name : "會員");
+    const tierIcon = (calc.tier && calc.tier.icon ? " " + calc.tier.icon : "");
+    return '<div class="v214-discount-verify">' +
+      '<div class="title">🏅 會員等級優惠</div>' +
+      '<div class="line"><span>目前等級</span><strong>' + esc242(tierName + tierIcon) + '</strong></div>' +
+      '<div class="line"><span>本次優惠</span><strong>' + (Number(calc.tierDiscount || 0) > 0 ? '-' + money242(calc.tierDiscount) : '暫無可套用') + '</strong></div>' +
+    '</div>';
+  }
+  function rewardBox242(member, calc){
+    if(!member || !member.phone){
+      return '<div class="v201-checkout-reward"><div class="title">🎁 會員免單</div><div class="line"><span>狀態</span><strong>登入後自動檢查</strong></div></div>';
+    }
+    if(Number(calc.useRewards || 0) > 0 && Number(calc.rewardDiscount || 0) > 0){
+      return '<div class="v201-checkout-reward">' +
+        '<div class="title">🎁 會員免單</div>' +
+        '<div class="line"><span>本次套用</span><strong>' + Number(calc.useRewards || 0) + ' 張</strong></div>' +
+        '<div class="line"><span>免單優惠</span><strong>-' + money242(calc.rewardDiscount) + '</strong></div>' +
+      '</div>';
+    }
+    return '<div class="v201-checkout-reward">' +
+      '<div class="title">🎁 會員免單</div>' +
+      '<div class="line"><span>可用免單</span><strong>0 張</strong></div>' +
+    '</div>';
+  }
+  function applyState242(calc){
+    window.SKY31_REWARD_APPLY_V201 = {
+      cups:calc.cups, earned:calc.earned, redeemed:calc.redeemed, available:calc.available,
+      subtotal:calc.subtotal, useRewards:calc.useRewards, rewardDiscount:calc.rewardDiscount,
+      freeItems:calc.freeItems, finalTotal:calc.finalTotal
+    };
+    window.SKY31_REWARD_APPLY_V200 = window.SKY31_REWARD_APPLY_V201;
+    window.SKY31_TIER_APPLY_V214 = {
+      tier:calc.tier, discount:calc.tierDiscount, details:calc.tierDetails, calculationOrder:"tier_first_reward_after"
+    };
+    window.SKY31_CHECKOUT_CALC_V240 = calc;
+    window.SKY31_CHECKOUT_CALC_V242 = calc;
+  }
+  function renderSummary242(member){
+    const summary = document.getElementById("summary");
+    if(!summary) return "";
+    if(!cart242().length){
+      summary.innerHTML = "請先選擇餐品。";
+      window.SKY31_REWARD_APPLY_V201 = null;
+      window.SKY31_TIER_APPLY_V214 = null;
+      return "";
+    }
+    member = member || readMember242() || {};
+    const calc = calculate242(member);
+    applyState242(calc);
+    const totalQty = qty242();
+    const saved = Math.max(0, Number(calc.tierDiscount || 0) + Number(calc.rewardDiscount || 0));
+    const orderNoteEl = document.getElementById("orderNote");
+    const orderNote = orderNoteEl ? String(orderNoteEl.value || "").trim() : "";
+    summary.innerHTML =
+      '<div class="v242-checkout-brief">' +
+        '<div class="v242-line"><span>總杯數</span><strong>' + totalQty + ' 杯</strong></div>' +
+        (saved > 0 ? '<div class="v242-line"><span>已套用優惠</span><strong>-' + money242(saved) + '</strong></div>' : '') +
+        '<div class="v242-line v242-final"><span>應付總額</span><strong>' + money242(calc.finalTotal) + '</strong></div>' +
+        (orderNote ? '<div class="v242-line v242-note"><span>整張訂單備註</span><strong>' + esc242(orderNote) + '</strong></div>' : '') +
+      '</div>' +
+      tierBox242(calc) +
+      rewardBox242(member, calc);
+    return summary.innerText;
+  }
+
+  window.SKY31_RENDER_SUMMARY_V242 = renderSummary242;
+  window.SKY31_RENDER_SUMMARY_V240 = renderSummary242;
+  window.makeCustomerSummary = makeCustomerSummary = function(){ return renderSummary242(readMember242()); };
+
+  const oldOpenCart242 = window.openCartModal;
+  if(typeof oldOpenCart242 === "function" && !oldOpenCart242.__sky31V242){
+    window.openCartModal = openCartModal = async function(){
+      const result = await oldOpenCart242.apply(this, arguments);
+      [0,160,720,1080,1350].forEach(function(ms){ setTimeout(function(){ renderSummary242(readMember242()); }, ms); });
+      return result;
+    };
+    window.openCartModal.__sky31V242 = true;
+  }
+  const oldUpdateAll242 = window.updateAll;
+  if(typeof oldUpdateAll242 === "function" && !oldUpdateAll242.__sky31V242){
+    window.updateAll = updateAll = function(){
+      const result = oldUpdateAll242.apply(this, arguments);
+      setTimeout(function(){ renderSummary242(readMember242()); }, 40);
+      setTimeout(function(){ renderSummary242(readMember242()); }, 620);
+      return result;
+    };
+    window.updateAll.__sky31V242 = true;
+  }
+  document.addEventListener("input", function(e){
+    if(e.target && e.target.id === "orderNote") renderSummary242(readMember242());
+  }, true);
+  document.addEventListener("DOMContentLoaded", function(){
+    setTimeout(function(){ renderSummary242(readMember242()); }, 700);
+  });
 })();
 </script>
 
