@@ -18536,5 +18536,250 @@ window.addEventListener("load", function() {
 })();
 </script>
 
+
+
+<style id="sky31-v244-stable-checkout-style">
+/* V244: stable checkout summary; no stacked render overlays. */
+#summary .v244-checkout-panel{
+  margin:14px 0 12px !important;
+  padding:15px 15px 13px !important;
+  border-radius:24px !important;
+  background:rgba(255,255,255,.58) !important;
+  border:1px solid rgba(255,255,255,.66) !important;
+  box-shadow:0 16px 38px rgba(31,39,51,.09), inset 0 1px 0 rgba(255,255,255,.72) !important;
+  backdrop-filter:blur(18px) saturate(1.16) !important;
+  -webkit-backdrop-filter:blur(18px) saturate(1.16) !important;
+}
+#summary .v244-row{
+  display:flex !important;
+  align-items:flex-start !important;
+  justify-content:space-between !important;
+  gap:14px !important;
+  padding:8px 0 !important;
+  border-top:1px solid rgba(31,39,51,.06) !important;
+  color:rgba(31,39,51,.72) !important;
+  font-size:14px !important;
+  font-weight:760 !important;
+}
+#summary .v244-row:first-child{border-top:0 !important; padding-top:0 !important;}
+#summary .v244-row span{line-height:1.45 !important;}
+#summary .v244-row strong{
+  text-align:right !important;
+  color:rgba(22,28,36,.9) !important;
+  font-weight:900 !important;
+  line-height:1.45 !important;
+}
+#summary .v244-final{
+  margin-top:4px !important;
+  padding-top:11px !important;
+  color:rgba(22,28,36,.96) !important;
+}
+#summary .v244-final strong{font-size:21px !important; letter-spacing:-.02em !important;}
+#summary .v244-note strong{max-width:68% !important; white-space:pre-wrap !important;}
+#summary .v244-section{
+  margin:12px 0 0 !important;
+  padding:14px 14px 12px !important;
+  border-radius:22px !important;
+  background:rgba(255,255,255,.50) !important;
+  border:1px solid rgba(255,255,255,.62) !important;
+  box-shadow:0 12px 30px rgba(31,39,51,.07) !important;
+}
+#summary .v244-title{
+  display:flex !important;
+  align-items:center !important;
+  justify-content:space-between !important;
+  gap:10px !important;
+  margin-bottom:7px !important;
+  color:rgba(22,28,36,.92) !important;
+  font-size:15px !important;
+  font-weight:950 !important;
+}
+#summary .v244-chip{
+  flex:0 0 auto !important;
+  padding:4px 9px !important;
+  border-radius:999px !important;
+  background:rgba(255,255,255,.62) !important;
+  border:1px solid rgba(255,255,255,.72) !important;
+  color:rgba(31,39,51,.62) !important;
+  font-size:11px !important;
+  font-weight:900 !important;
+}
+#summary .v244-section .v244-row{font-size:13px !important; padding:7px 0 !important;}
+#summary .v244-muted{color:rgba(31,39,51,.54) !important;}
+</style>
+
+<script id="sky31-v244-stable-checkout-summary">
+/* V244: final stable checkout render. Replaces stacked V214/V240/V242 delayed overlays. */
+(function(){
+  const MEMBER_KEY = "sky31_member_v1";
+  function esc244(s){
+    return String(s == null ? "" : s).replace(/[&<>"']/g,function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];
+    });
+  }
+  function money244(n){
+    if(typeof sky31Money === "function") return sky31Money(n);
+    n = Math.round(Number(n || 0) * 100) / 100;
+    return "MOP " + n.toString();
+  }
+  function readMember244(){
+    try{ const raw = localStorage.getItem(MEMBER_KEY); return raw ? JSON.parse(raw) : null; }catch(e){ return null; }
+  }
+  function cart244(){
+    try{ if(Array.isArray(window.cart)) return window.cart; if(typeof cart !== "undefined" && Array.isArray(cart)) return cart; }catch(e){}
+    return [];
+  }
+  function qty244(){
+    return cart244().reduce(function(s,x){ return s + Math.max(1, Number(x.qty || x.quantity || 1)); }, 0);
+  }
+  function unit244(x){
+    const q = Math.max(1, Number(x.qty || x.quantity || 1));
+    const u = Number(x.unitPrice || x.price || x.finalPrice || 0);
+    if(u) return u;
+    const sub = Number(x.subtotal || 0);
+    return sub ? sub / q : 0;
+  }
+  function fallbackCalc244(member){
+    member = member || {};
+    const c = cart244();
+    const subtotal = c.reduce(function(s,x){
+      const q = Math.max(1, Number(x.qty || x.quantity || 1));
+      return s + Number(x.subtotal || unit244(x) * q || 0);
+    }, 0);
+    return {
+      subtotal:subtotal, subtotalBeforeReward:subtotal, tier:{name:"會員",icon:""}, tierDiscount:0, tierDetails:[],
+      cups:Number(member.totalCups || 0), earned:Math.floor(Number(member.totalCups || 0)/10), redeemed:Number(member.rewardRedeemed || 0),
+      available:Number((member.rewards && member.rewards.availableRewards) || 0), useRewards:0, rewardDiscount:0, freeItems:[], finalTotal:subtotal
+    };
+  }
+  function calc244(member){
+    member = member || readMember244() || {};
+    let calc = null;
+    try{ if(typeof window.SKY31_CALCULATE_CHECKOUT_V240 === "function") calc = window.SKY31_CALCULATE_CHECKOUT_V240(member); }catch(e){}
+    if(!calc || typeof calc !== "object") calc = fallbackCalc244(member);
+    calc.subtotal = Number(calc.subtotal || calc.subtotalBeforeReward || 0);
+    calc.tierDiscount = Number(calc.tierDiscount || 0);
+    calc.rewardDiscount = Number(calc.rewardDiscount || 0);
+    calc.useRewards = Number(calc.useRewards || 0);
+    calc.available = Number(calc.available || (member.rewards && member.rewards.availableRewards) || 0);
+    calc.finalTotal = Number(calc.finalTotal != null ? calc.finalTotal : Math.max(0, calc.subtotal - calc.tierDiscount - calc.rewardDiscount));
+    return calc;
+  }
+  function detailText244(list){
+    if(!Array.isArray(list) || !list.length) return "";
+    return list.map(function(x){ return String(x || "").trim(); }).filter(Boolean).slice(0,3).join("、");
+  }
+  function freeItemNames244(items){
+    if(!Array.isArray(items) || !items.length) return "";
+    return items.map(function(x){ return x && (x.title || x.name) || "飲品"; }).filter(Boolean).slice(0,3).join("、");
+  }
+  function row244(label, value, extraClass){
+    return '<div class="v244-row ' + (extraClass || '') + '"><span>' + esc244(label) + '</span><strong>' + esc244(value) + '</strong></div>';
+  }
+  function section244(title, chip, rows){
+    return '<div class="v244-section">' +
+      '<div class="v244-title"><span>' + title + '</span>' + (chip ? '<em class="v244-chip">' + esc244(chip) + '</em>' : '') + '</div>' +
+      rows.join("") +
+    '</div>';
+  }
+  function render244(member){
+    const summary = document.getElementById("summary");
+    if(!summary) return "";
+    const c = cart244();
+    if(!c.length){
+      summary.innerHTML = "請先選擇餐品。";
+      window.SKY31_REWARD_APPLY_V201 = null;
+      window.SKY31_REWARD_APPLY_V200 = null;
+      window.SKY31_TIER_APPLY_V214 = null;
+      return "";
+    }
+    member = member || readMember244() || {};
+    const calc = calc244(member);
+    const subtotal = Number(calc.subtotal || 0);
+    const saved = Math.max(0, Number(calc.tierDiscount || 0) + Number(calc.rewardDiscount || 0));
+    const orderNoteEl = document.getElementById("orderNote");
+    const orderNote = orderNoteEl ? String(orderNoteEl.value || "").trim() : "";
+    const tier = calc.tier || {};
+    const tierName = tier.name || calc.memberTierName || "會員";
+    const tierIcon = tier.icon ? " " + tier.icon : "";
+    const tierDetail = detailText244(calc.tierDetails || calc.tierDiscountDetails);
+    const freeNames = freeItemNames244(calc.freeItems || calc.rewardFreeItems);
+    const rewardAvailable = Math.max(0, Number(calc.available || 0));
+
+    const mainRows = [];
+    mainRows.push(row244("總杯數", qty244() + " 杯"));
+    if(subtotal > 0) mainRows.push(row244("原本總額", money244(subtotal)));
+    if(saved > 0) mainRows.push(row244("已套用優惠", "-" + money244(saved)));
+    mainRows.push(row244("應付總額", money244(calc.finalTotal), "v244-final"));
+    if(orderNote) mainRows.push(row244("整張訂單備註", orderNote, "v244-note"));
+
+    const tierRows = [];
+    tierRows.push(row244("目前等級", tierName + tierIcon));
+    tierRows.push(row244("本次優惠", Number(calc.tierDiscount || 0) > 0 ? "-" + money244(calc.tierDiscount) : "暫無可套用"));
+    if(tierDetail) tierRows.push(row244("優惠內容", tierDetail));
+
+    const rewardRows = [];
+    if(!member || !member.phone){
+      rewardRows.push(row244("狀態", "登入後自動檢查"));
+    }else{
+      rewardRows.push(row244("可用免單", rewardAvailable + " 張"));
+      rewardRows.push(row244("本次使用", Number(calc.useRewards || 0) + " 張"));
+      if(Number(calc.rewardDiscount || 0) > 0) rewardRows.push(row244("免單扣減", "-" + money244(calc.rewardDiscount)));
+      if(freeNames) rewardRows.push(row244("免單飲品", freeNames));
+    }
+
+    summary.innerHTML =
+      '<div class="v244-checkout-panel">' + mainRows.join("") + '</div>' +
+      section244("🏅 會員等級優惠", Number(calc.tierDiscount || 0) > 0 ? "已套用" : "已檢查", tierRows) +
+      section244("🎁 會員免單", Number(calc.useRewards || 0) > 0 ? "已套用" : "自動檢查", rewardRows);
+
+    window.SKY31_REWARD_APPLY_V201 = {
+      cups:calc.cups, earned:calc.earned, redeemed:calc.redeemed, available:calc.available, subtotal:calc.subtotal,
+      useRewards:calc.useRewards, rewardDiscount:calc.rewardDiscount, freeItems:calc.freeItems || calc.rewardFreeItems || [], finalTotal:calc.finalTotal
+    };
+    window.SKY31_REWARD_APPLY_V200 = window.SKY31_REWARD_APPLY_V201;
+    window.SKY31_TIER_APPLY_V214 = { tier:calc.tier, discount:calc.tierDiscount, details:calc.tierDetails || calc.tierDiscountDetails || [], calculationOrder:"tier_first_reward_after" };
+    window.SKY31_CHECKOUT_CALC_V244 = calc;
+    window.SKY31_CHECKOUT_CALC_V242 = calc;
+    window.SKY31_CHECKOUT_CALC_V240 = calc;
+    return summary.innerText;
+  }
+
+  window.SKY31_RENDER_SUMMARY_V244 = render244;
+  window.SKY31_RENDER_SUMMARY_V242 = render244;
+  window.SKY31_RENDER_SUMMARY_V240 = render244;
+  window.makeCustomerSummary = makeCustomerSummary = function(){ return render244(readMember244()); };
+  window.makeOrder = makeOrder = function(){ return render244(readMember244()); };
+
+  window.updateAll = updateAll = function(){
+    try{ if(typeof updateCartList === "function") updateCartList(); }catch(e){}
+    render244(readMember244());
+    try{
+      const badge = document.getElementById("cartBadge");
+      if(badge) badge.textContent = cart244().reduce(function(s,x){ return s + Math.max(1, Number(x.qty || x.quantity || 1)); }, 0);
+    }catch(e){}
+    try{ if(typeof hideMsg === "function") hideMsg(); }catch(e){}
+  };
+
+  window.openCartModal = openCartModal = function(){
+    try{ updateAll(); }catch(e){}
+    try{ if(typeof updateCheckoutCustomerInfo === "function") updateCheckoutCustomerInfo(); }catch(e){}
+    const modal = document.getElementById("cartModal");
+    if(modal) modal.classList.add("show");
+    document.body.style.overflow = "hidden";
+  };
+
+  document.addEventListener("input", function(e){
+    if(e.target && e.target.id === "orderNote") render244(readMember244());
+  }, true);
+  document.addEventListener("click", function(e){
+    if(e.target && e.target.classList && e.target.classList.contains("cart-qty-btn")){
+      setTimeout(function(){ render244(readMember244()); }, 0);
+    }
+  }, true);
+  document.addEventListener("DOMContentLoaded", function(){ setTimeout(function(){ render244(readMember244()); }, 300); });
+})();
+</script>
+
 </body>
 </html>
