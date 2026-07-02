@@ -8303,6 +8303,107 @@ body.sky31-maintenance-active-v218{
   display:none !important;
 }
 
+
+/* V229: login success moves directly to member center home */
+#memberPageLogin .member-login-success-hold-v229{
+  display:none !important;
+}
+
+
+/* V230: center toast and sticky modal controls */
+/* Put logout/success toast in the middle of the screen instead of bottom. */
+.sky31-v225-toast,
+#sky31V225Toast,
+#sky31V229Toast,
+#sky31V230Toast{
+  position:fixed !important;
+  left:50% !important;
+  top:50% !important;
+  bottom:auto !important;
+  right:auto !important;
+  transform:translate(-50%,-50%) scale(.98) !important;
+  z-index:2147483647 !important;
+  max-width:min(360px,calc(100vw - 42px)) !important;
+  text-align:center !important;
+}
+.sky31-v225-toast.show,
+#sky31V225Toast.show,
+#sky31V229Toast.show,
+#sky31V230Toast.show{
+  transform:translate(-50%,-50%) scale(1) !important;
+}
+
+/* Keep modal top controls visible while scrolling. */
+.member-topbar,
+.checkout-member-top,
+.cart-topbar,
+.cart-header,
+.order-topbar,
+.order-status-topbar,
+.status-topbar,
+.confirm-topbar,
+.modal-topbar,
+.sheet-topbar,
+.query-topbar,
+#memberModal .member-topbar,
+#cartModal .cart-topbar,
+#orderStatusModal .order-status-topbar,
+#orderStatusModal .status-topbar{
+  position:sticky !important;
+  top:0 !important;
+  z-index:9999 !important;
+  backdrop-filter:blur(20px) !important;
+  -webkit-backdrop-filter:blur(20px) !important;
+}
+
+/* Ensure X and back buttons stay above scrolling content. */
+.member-nav-btn,
+.member-nav-btn.back,
+.member-nav-btn.close,
+.checkout-member-close,
+.cart-close,
+.order-close,
+.status-close,
+.modal-close,
+.close-btn,
+.back-btn,
+button[onclick*="closeMemberModal"],
+button[onclick*="memberBack"],
+button[onclick*="closeCart"],
+button[onclick*="closeOrder"],
+button[onclick*="closeStatus"],
+button[onclick*="closeOrderStatus"],
+button[onclick*="back"]{
+  position:relative !important;
+  z-index:10001 !important;
+  flex-shrink:0 !important;
+}
+
+/* Member modal has the most scrolling; keep buttons visually floating inside the sticky topbar. */
+#memberModal .member-topbar{
+  height:58px !important;
+  min-height:58px !important;
+}
+#memberModal .member-nav-btn.back{
+  position:absolute !important;
+  left:12px !important;
+  top:8px !important;
+}
+#memberModal .member-nav-btn.close{
+  position:absolute !important;
+  right:12px !important;
+  top:8px !important;
+}
+
+/* If a browser ignores sticky inside a transformed sheet, this fallback keeps controls touchable. */
+.member-sheet,
+.checkout-member-card,
+.cart-sheet,
+.order-status-sheet,
+.modal-sheet{
+  isolation:isolate !important;
+}
+
 </style>
 
 <style>
@@ -17430,6 +17531,306 @@ window.addEventListener("load", function() {
   document.addEventListener("click", function(){ setTimeout(boot, 60); }, true);
 
   window.SKY31_MEMBER_UI_CLEAN_V228 = boot;
+})();
+</script>
+
+
+<script>
+/* V229: login button direct member home.
+   Fixes the case where login succeeds but the modal stays on the login page.
+   This block does not change backend member storage or order/member data.
+*/
+(function(){
+  const MEMBER_KEY = "sky31_member_v1";
+
+  function readMemberV229(){
+    try{
+      const raw = localStorage.getItem(MEMBER_KEY);
+      return raw ? JSON.parse(raw) : null;
+    }catch(e){ return null; }
+  }
+
+  function writeMemberV229(member){
+    try{
+      if(member && member.phone) localStorage.setItem(MEMBER_KEY, JSON.stringify(member));
+    }catch(e){}
+  }
+
+  function hasMemberV229(){
+    const m = readMemberV229();
+    return !!(m && m.phone);
+  }
+
+  function strip853V229(phone){
+    const p = String(phone || "").replace(/\D/g,"");
+    return (p.length === 11 && p.indexOf("853") === 0) ? p.slice(3) : p;
+  }
+
+  function toastV229(text){
+    text = String(text || "").trim();
+    if(!text) return;
+    if(typeof window.__SKY31_LAST_V229_TOAST === "object" &&
+       window.__SKY31_LAST_V229_TOAST.text === text &&
+       Date.now() - window.__SKY31_LAST_V229_TOAST.time < 1800){
+      return;
+    }
+    window.__SKY31_LAST_V229_TOAST = {text:text, time:Date.now()};
+    try{
+      if(typeof window.alert === "function" && !/已登入|無需再次登入/.test(text)){
+        window.alert(text);
+        return;
+      }
+    }catch(e){}
+    var el = document.getElementById("sky31V225Toast") || document.getElementById("sky31V229Toast");
+    if(!el){
+      el = document.createElement("div");
+      el.id = "sky31V229Toast";
+      el.className = "sky31-v225-toast";
+      document.body.appendChild(el);
+    }
+    el.textContent = text;
+    el.classList.add("show");
+    clearTimeout(el.__timer);
+    el.__timer = setTimeout(function(){ el.classList.remove("show"); }, 1600);
+  }
+
+  function cleanLoginArtifactsV229(){
+    document.querySelectorAll(".member-login-hint").forEach(function(el){ el.remove(); });
+    var panel = document.getElementById("memberLoggedPanel");
+    if(panel){
+      panel.innerHTML = "";
+      panel.style.display = "none";
+    }
+    var msg = document.getElementById("memberMsg");
+    if(msg) msg.textContent = "";
+  }
+
+  function setLoggedStateV229(member){
+    member = member || readMemberV229();
+    var logged = !!(member && member.phone);
+    var modal = document.getElementById("memberModal");
+    if(modal){
+      modal.classList.toggle("member-logged-in-v213", logged);
+      modal.classList.toggle("member-logged-out-v213", !logged);
+    }
+    document.querySelectorAll(".member-auth-only-v213").forEach(function(el){
+      el.style.display = logged ? "none" : "";
+      el.hidden = !!logged;
+    });
+    document.querySelectorAll(".member-logout-only-v213").forEach(function(el){
+      el.style.display = logged ? "" : "none";
+      el.hidden = !logged;
+    });
+  }
+
+  function normalizePhoneDisplayV229(member){
+    member = member || readMemberV229();
+    var p = strip853V229(member && member.phone);
+    if(!p) return;
+    ["phone","modalPhone","memberPhone","memberLoginPhone","checkoutPhone"].forEach(function(id){
+      var el = document.getElementById(id);
+      if(el && "value" in el && String(el.value || "").replace(/\D/g,"").indexOf("853") === 0){
+        el.value = p;
+      }
+    });
+  }
+
+  function goMemberHomeV229(member, message){
+    member = member || readMemberV229();
+    if(!member || !member.phone) return false;
+
+    writeMemberV229(member);
+    cleanLoginArtifactsV229();
+
+    try{ if(typeof applyMember === "function") applyMember(member); }catch(e){}
+    try{ if(typeof renderHomeQuickCard === "function") renderHomeQuickCard(); }catch(e){}
+    try{ if(typeof updateMemberProfileButton === "function") updateMemberProfileButton(member); }catch(e){}
+    try{ if(typeof showPage === "function") showPage("home"); }catch(e){}
+    setLoggedStateV229(member);
+    normalizePhoneDisplayV229(member);
+
+    // Force the visible section to member home if older showPage code did not switch correctly.
+    try{
+      document.querySelectorAll(".member-page").forEach(function(page){ page.classList.remove("active"); });
+      var home = document.getElementById("memberPageHome");
+      if(home) home.classList.add("active");
+      var title = document.getElementById("memberTopTitle");
+      if(title) title.textContent = "會員中心";
+      var back = document.getElementById("memberBackBtn");
+      if(back) back.style.display = "none";
+    }catch(e){}
+
+    if(message) toastV229(message);
+    setTimeout(function(){
+      cleanLoginArtifactsV229();
+      setLoggedStateV229(readMemberV229());
+      normalizePhoneDisplayV229(readMemberV229());
+      try{ if(typeof renderHomeQuickCard === "function") renderHomeQuickCard(); }catch(e){}
+    }, 150);
+    setTimeout(function(){
+      cleanLoginArtifactsV229();
+      setLoggedStateV229(readMemberV229());
+      normalizePhoneDisplayV229(readMemberV229());
+    }, 600);
+
+    return true;
+  }
+
+  async function fetchMemberDirectV229(phone){
+    phone = String(phone || "").replace(/\D/g,"");
+    if(!phone) throw new Error("請輸入手機號碼");
+    var res = await fetch("/api/member?phone=" + encodeURIComponent(phone) + "&_v=229&_t=" + Date.now(), {
+      cache:"no-store",
+      headers: {"Cache-Control":"no-cache"}
+    });
+    var data = await res.json().catch(function(){ return {}; });
+    if(!res.ok || !data.ok){
+      throw new Error(data.error || "登入失敗，找不到會員資料");
+    }
+    var member = data.member || data.data || data.profile;
+    if(!member || !member.phone) throw new Error("登入失敗，會員資料不完整");
+    return member;
+  }
+
+  async function loginDirectV229(){
+    if(hasMemberV229()){
+      goMemberHomeV229(readMemberV229(), "已登入會員，無需再次登入。");
+      return false;
+    }
+
+    var input = document.getElementById("memberPhone") || document.querySelector("#memberPageLogin input[inputmode='tel'], #memberPageLogin input");
+    var phone = input ? String(input.value || "").replace(/\D/g,"") : "";
+    if(!phone){
+      toastV229("請輸入手機號碼");
+      if(input && input.focus) input.focus();
+      return false;
+    }
+
+    try{
+      var member = await fetchMemberDirectV229(phone);
+      window.__SKY31_HARD_LOGOUT_ACTIVE_V225 = false;
+      window.__SKY31_MEMBER_LOGGED_OUT_V224 = false;
+      writeMemberV229(member);
+      goMemberHomeV229(member, "已登入會員。");
+      return false;
+    }catch(e){
+      // Fallback to original login if direct API path fails unexpectedly.
+      if(typeof window.__SKY31_OLD_MEMBER_LOGIN_V229 === "function"){
+        try{
+          var result = await window.__SKY31_OLD_MEMBER_LOGIN_V229();
+          var m = (result && result.phone) ? result : readMemberV229();
+          if(m && m.phone){
+            goMemberHomeV229(m, "已登入會員。");
+            return false;
+          }
+        }catch(_){}
+      }
+      toastV229((e && e.message) || "登入失敗");
+      return false;
+    }
+  }
+
+  // Keep original as fallback, but use direct login for the visible login button.
+  if(typeof window.memberLoginLookup === "function" && !window.__SKY31_OLD_MEMBER_LOGIN_V229){
+    window.__SKY31_OLD_MEMBER_LOGIN_V229 = window.memberLoginLookup.bind(window);
+  }
+  window.memberLoginLookup = loginDirectV229;
+
+  // Capture button click first, so old stacked onclick wrappers cannot hold the user on login page.
+  document.addEventListener("click", function(e){
+    var el = e.target && e.target.closest ? e.target.closest("button,[onclick],[role='button'],a") : null;
+    if(!el) return;
+    var inLoginPage = !!(el.closest && el.closest("#memberPageLogin"));
+    var txt = String(el.textContent || "") + " " + String(el.getAttribute("onclick") || "");
+    if(inLoginPage && /登入|memberLoginLookup/i.test(txt)){
+      e.preventDefault();
+      e.stopPropagation();
+      if(e.stopImmediatePropagation) e.stopImmediatePropagation();
+      loginDirectV229();
+      return false;
+    }
+  }, true);
+
+  var oldOpen = window.openMemberModal;
+  if(typeof oldOpen === "function" && !oldOpen.__sky31V229){
+    var wrappedOpen = async function(){
+      var result = await oldOpen.apply(this, arguments);
+      setTimeout(function(){
+        if(hasMemberV229()) goMemberHomeV229(readMemberV229(), "");
+      }, 90);
+      return result;
+    };
+    wrappedOpen.__sky31V229 = true;
+    window.openMemberModal = wrappedOpen;
+  }
+
+  var oldGoPage = window.memberGoPage;
+  if(typeof oldGoPage === "function" && !oldGoPage.__sky31V229){
+    var wrappedGo = function(page){
+      if(page === "login" && hasMemberV229()){
+        goMemberHomeV229(readMemberV229(), "已登入會員，無需再次登入。");
+        return false;
+      }
+      var result = oldGoPage.apply(this, arguments);
+      setTimeout(function(){
+        if(page === "login" && hasMemberV229()) goMemberHomeV229(readMemberV229(), "已登入會員，無需再次登入。");
+      }, 80);
+      return result;
+    };
+    wrappedGo.__sky31V229 = true;
+    window.memberGoPage = wrappedGo;
+  }
+
+  window.SKY31_GO_MEMBER_HOME_V229 = goMemberHomeV229;
+})();
+</script>
+
+
+<script>
+/* V230: toast center enforcement and sticky controls refresh. */
+(function(){
+  function centerToastV230(){
+    var nodes = document.querySelectorAll(".sky31-v225-toast,#sky31V225Toast,#sky31V229Toast,#sky31V230Toast");
+    nodes.forEach(function(el){
+      el.style.left = "50%";
+      el.style.top = "50%";
+      el.style.bottom = "auto";
+      el.style.right = "auto";
+      if(el.classList.contains("show")){
+        el.style.transform = "translate(-50%,-50%) scale(1)";
+      }else{
+        el.style.transform = "translate(-50%,-50%) scale(.98)";
+      }
+    });
+  }
+
+  function stickyControlsV230(){
+    document.querySelectorAll(".member-topbar,.checkout-member-top,.cart-topbar,.cart-header,.order-topbar,.order-status-topbar,.status-topbar,.confirm-topbar,.modal-topbar,.sheet-topbar,.query-topbar").forEach(function(el){
+      el.style.position = "sticky";
+      el.style.top = "0";
+      el.style.zIndex = "9999";
+    });
+  }
+
+  var obs = new MutationObserver(function(){
+    setTimeout(centerToastV230, 20);
+    setTimeout(stickyControlsV230, 20);
+  });
+  try{ obs.observe(document.documentElement || document.body, {childList:true, subtree:true, attributes:true, attributeFilter:["class","style"]}); }catch(e){}
+
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", function(){
+      centerToastV230();
+      stickyControlsV230();
+    });
+  }else{
+    centerToastV230();
+    stickyControlsV230();
+  }
+
+  window.addEventListener("scroll", stickyControlsV230, true);
+  window.SKY31_CENTER_TOAST_V230 = centerToastV230;
+  window.SKY31_STICKY_CONTROLS_V230 = stickyControlsV230;
 })();
 </script>
 
