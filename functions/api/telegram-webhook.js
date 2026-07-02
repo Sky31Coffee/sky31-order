@@ -77,7 +77,10 @@ async function handleTelegramPost(context) {
     data.startsWith("member_delete:") ||
     data.startsWith("member_restore:") ||
     data.startsWith("member_cancel_delete:") ||
-    data.startsWith("member_delete_confirmed:")
+    data.startsWith("member_delete_confirmed:") ||
+    data.startsWith("member_purge:") ||
+    data.startsWith("member_purge_cancel:") ||
+    data.startsWith("member_purge_confirmed:")
   ) {
     return handleMemberAction(env, cq, data);
   }
@@ -4731,5 +4734,296 @@ handleMemberAction = async function(env, cq, data) {
   } catch (e) {
     try { return stop(env, cq, "操作失敗：" + (e.message || "未知錯誤")); }
     catch (_) { return json({ ok: false, error: e.message || "member action failed" }, 500); }
+  }
+};
+
+
+/* V238: Telegram permanent member delete. Purged members are hidden from Telegram lists forever unless KV tombstones are manually removed. */
+function memberPurgeCandidatePhonesV238(phone) {
+  if (typeof legacyMemberPhonesV237 === "function") return legacyMemberPhonesV237(phone);
+  const p = normalizePhone(phone || "");
+  const out = [];
+  if (p) out.push(p);
+  if (p.length >= 8) out.push(p.slice(-8));
+  if (p.length > 3 && p.startsWith("853")) out.push(p.slice(3));
+  if (p.length === 8) out.push("853" + p);
+  return Array.from(new Set(out.map(normalizePhone).filter(Boolean)));
+}
+
+function memberPurgeLastTokenV238(phone) {
+  const p = normalizePhone(phone || "");
+  if (!p) return "";
+  if (p.length >= 8) return p.slice(-8);
+  if (p.length > 3 && p.startsWith("853")) return p.slice(3);
+  return p;
+}
+
+async function isPhonePurgedV238(env, phone) {
+  const candidates = memberPurgeCandidatePhonesV238(phone);
+  const last = memberPurgeLastTokenV238(phone);
+  if (last) candidates.push("last8:" + last);
+  for (const c of Array.from(new Set(candidates.filter(Boolean)))) {
+    if (await env.ORDERS.get("member_purged:" + c)) return true;
+  }
+  return false;
+}
+
+async function isMemberPurgedRecordV238(env, member) {
+  if (!member) return false;
+  const phones = [];
+  phones.push(member.phone);
+  phones.push(member.memberPhone);
+  phones.push(member.submittedPhone);
+  if (member._kvKey) phones.push(String(member._kvKey).replace(/^member_deleted:|^member:/, ""));
+  for (const phone of phones) {
+    if (phone && await isPhonePurgedV238(env, phone)) return true;
+  }
+  return false;
+}
+
+async function writeMemberPurgeTombstoneV238(env, phone) {
+  const now = new Date().toISOString();
+  const candidates = memberPurgeCandidatePhonesV238(phone);
+  const last = memberPurgeLastTokenV238(phone);
+  const payload = JSON.stringify({ purgedAt: now, phoneLastToken: last, source: "telegram_permanent_delete", version: "V238" });
+  const keys = new Set(candidates.map(c => "member_purged:" + c));
+  if (last) keys.add("member_purged:last8:" + last);
+  for (const key of keys) await env.ORDERS.put(key, payload);
+  return { purgedAt: now, tombstones: Array.from(keys) };
+}
+
+async function collectMemberKeysForPhoneV238(env, phone) {
+  const candidates = memberPurgeCandidatePhonesV238(phone);
+  const wantedLast = memberPurgeLastTokenV238(phone);
+  const out = new Set();
+
+  for (const prefix of ["member:", "member_deleted:"]) {
+    for (const c of candidates) out.add(prefix + c);
+  }
+
+  for (const prefix of ["member:", "member_deleted:"]) {
+    let cursor = undefined;
+    let checked = 0;
+    do {
+      const page = await env.ORDERS.list({ prefix, cursor });
+      for (const key of (page.keys || [])) {
+        checked += 1;
+        if (checked > 10000) break;
+        const keyPhone = normalizePhone(String(key.name || "").replace(prefix, ""));
+        const keyLast = memberPurgeLastTokenV238(keyPhone);
+        if (candidates.includes(keyPhone) || (wantedLast && keyLast === wantedLast)) out.add(key.name);
+      }
+      cursor = page.cursor;
+      if (page.list_complete !== false) break;
+    } while (cursor && checked <= 10000);
+  }
+  return Array.from(out);
+}
+
+async function collectOrderNosForPermanentDeleteV238(env, phone) {
+  const candidates = memberPurgeCandidatePhonesV238(phone);
+  const orderNos = new Set();
+  for (const p of candidates) {
+    for (const prefix of ["phone:" + p + ":", "member_ordered:" + p + ":", "member_deleted_order:" + p + ":"]) {
+      let cursor = undefined;
+      do {
+        const page = await env.ORDERS.list({ prefix, cursor });
+        for (const key of (page.keys || [])) {
+          const rest = String(key.name || "").replace(prefix, "");
+          const orderNo = rest.split(":")[0];
+          if (orderNo) orderNos.add(orderNo);
+        }
+        cursor = page.cursor;
+        if (page.list_complete !== false) break;
+      } while (cursor);
+    }
+  }
+  return Array.from(orderNos);
+}
+
+async function deletePrefixedKeysV238(env, prefixes) {
+  let count = 0;
+  for (const prefix of prefixes) {
+    let cursor = undefined;
+    do {
+      const page = await env.ORDERS.list({ prefix, cursor });
+      for (const key of (page.keys || [])) {
+        await env.ORDERS.delete(key.name);
+        count += 1;
+      }
+      cursor = page.cursor;
+      if (page.list_complete !== false) break;
+    } while (cursor);
+  }
+  return count;
+}
+
+async function permanentDeleteMemberV238(env, phone) {
+  const candidates = memberPurgeCandidatePhonesV238(phone);
+  const now = new Date().toISOString();
+  const memberKeys = await collectMemberKeysForPhoneV238(env, phone);
+  const orderNos = await collectOrderNosForPermanentDeleteV238(env, phone);
+  let deletedMemberKeys = 0;
+  let deletedOrderKeys = 0;
+  let deletedIndexKeys = 0;
+  let deletedArchiveKeys = 0;
+
+  for (const key of memberKeys) {
+    await env.ORDERS.delete(key);
+    deletedMemberKeys += 1;
+  }
+
+  for (const orderNo of orderNos) {
+    await env.ORDERS.delete("order:" + orderNo);
+    deletedOrderKeys += 1;
+    for (const p of candidates) {
+      for (const key of [
+        "phone:" + p + ":" + orderNo,
+        "member_ordered:" + p + ":" + orderNo,
+        "member_deleted_order:" + p + ":" + orderNo
+      ]) {
+        await env.ORDERS.delete(key);
+        deletedIndexKeys += 1;
+      }
+    }
+  }
+
+  const archivePrefixes = [];
+  for (const p of candidates) {
+    archivePrefixes.push("member_deleted_order:" + p + ":");
+    archivePrefixes.push("member_deleted_phone_index:" + p + ":");
+    archivePrefixes.push("member_deleted_order_marker:" + p + ":");
+  }
+  deletedArchiveKeys += await deletePrefixedKeysV238(env, archivePrefixes);
+
+  const tombstone = await writeMemberPurgeTombstoneV238(env, phone);
+  return { purgedAt: now, deletedMemberKeys, deletedOrderKeys, deletedIndexKeys, deletedArchiveKeys, orderNos, tombstones: tombstone.tombstones };
+}
+
+const _oldListTelegramMembersV238 = listTelegramMembers;
+listTelegramMembers = async function(env) {
+  const members = await _oldListTelegramMembersV238(env);
+  const filtered = [];
+  for (const member of members) {
+    if (!(await isMemberPurgedRecordV238(env, member))) filtered.push(member);
+  }
+  return filtered;
+};
+
+const _oldGetMemberForTelegramViewV238 = getMemberForTelegramView;
+getMemberForTelegramView = async function(env, phone, deleted) {
+  if (await isPhonePurgedV238(env, phone)) return null;
+  const member = await _oldGetMemberForTelegramViewV238(env, phone, deleted);
+  if (member && await isMemberPurgedRecordV238(env, member)) return null;
+  return member;
+};
+
+buildMemberDetailReplyMarkup = function(member, deleted = false) {
+  const phone = normalizePhone(member && member.phone);
+  if (deleted) {
+    return {
+      inline_keyboard: [
+        [{ text: "↩️ 恢復賬號", callback_data: "member_restore:" + phone }],
+        [{ text: "🧨 永久刪除", callback_data: "member_purge:" + phone }],
+        [{ text: "📋 返回用戶列表", callback_data: "member_list:all" }]
+      ]
+    };
+  }
+  return {
+    inline_keyboard: [
+      [{ text: "🗑️ 刪除賬號", callback_data: "member_delete:" + phone }],
+      [{ text: "🧨 永久刪除", callback_data: "member_purge:" + phone }],
+      [{ text: "📋 返回用戶列表", callback_data: "member_list:all" }]
+    ]
+  };
+};
+
+buildMemberReplyMarkup = function(member, deleted = false) {
+  const phone = normalizePhone(member && member.phone);
+  if (deleted) {
+    return {
+      inline_keyboard: [
+        [{ text: "↩️ 撤回", callback_data: "member_restore:" + phone }],
+        [{ text: "🧨 永久刪除", callback_data: "member_purge:" + phone }],
+        [{ text: "📋 返回用戶列表", callback_data: "member_list:all" }]
+      ]
+    };
+  }
+  return {
+    inline_keyboard: [
+      [{ text: "🗑️ 刪除", callback_data: "member_delete:" + phone }],
+      [{ text: "🧨 永久刪除", callback_data: "member_purge:" + phone }],
+      [{ text: "📋 返回用戶列表", callback_data: "member_list:all" }]
+    ]
+  };
+};
+
+const _oldHandleMemberActionV238 = handleMemberAction;
+handleMemberAction = async function(env, cq, data) {
+  try {
+    const sep = data.indexOf(":");
+    const action = sep >= 0 ? data.slice(0, sep) : "";
+    const requestedPhone = normalizePhone(sep >= 0 ? data.slice(sep + 1) : "");
+    const chatId = cq.message && cq.message.chat ? cq.message.chat.id : env.TELEGRAM_CHAT_ID;
+    const messageId = cq.message ? cq.message.message_id : null;
+
+    if (action === "member_purge") {
+      if (!requestedPhone) return stop(env, cq, "找不到會員電話");
+      const found = await findMemberRecordV237(env, requestedPhone, true);
+      if (!found) {
+        if (await isPhonePurgedV238(env, requestedPhone)) return stop(env, cq, "此會員已永久刪除");
+        return stop(env, cq, "找不到會員資料");
+      }
+      const phone = normalizePhone(found.member.phone || requestedPhone);
+      const text = [
+        "⚠️ 永久刪除會員",
+        "",
+        "姓名：" + (found.member.name || "-"),
+        "電話：" + (found.member.phone || phone || "-"),
+        "",
+        "目前狀態：" + (found.deleted ? "已刪除會員" : "有效會員"),
+        "",
+        "確認後會永久刪除此會員資料、舊 853 alias、已刪除備份及會員訂單索引。",
+        "永久刪除後不會再於 Telegram 會員列表顯示，也不能按撤回恢復。"
+      ].join("\n");
+      await editTelegramMessage(env, chatId, messageId, text, {
+        inline_keyboard: [[
+          { text: "✅ 確認永久刪除", callback_data: "member_purge_confirmed:" + phone },
+          { text: "取消", callback_data: "member_purge_cancel:" + phone }
+        ], [{ text: "📋 返回用戶列表", callback_data: "member_list:all" }]]
+      });
+      return stop(env, cq, "請再次確認永久刪除");
+    }
+
+    if (action === "member_purge_cancel") {
+      if (!requestedPhone) return stop(env, cq, "找不到會員電話");
+      const found = await findMemberRecordV237(env, requestedPhone, true);
+      if (!found) return stop(env, cq, "找不到會員資料");
+      await editTelegramMessage(env, chatId, messageId, buildMemberTelegramText(found.member, !!found.deleted, false), buildMemberReplyMarkup(found.member, !!found.deleted));
+      return stop(env, cq, "已取消永久刪除");
+    }
+
+    if (action === "member_purge_confirmed") {
+      if (!requestedPhone) return stop(env, cq, "找不到會員電話");
+      const result = await permanentDeleteMemberV238(env, requestedPhone);
+      const members = await listTelegramMembers(env);
+      const text = [
+        "✅ 已永久刪除會員",
+        "",
+        "電話：" + requestedPhone,
+        "刪除會員 key：" + result.deletedMemberKeys,
+        "刪除訂單：" + result.deletedOrderKeys,
+        "刪除索引/備份：" + (result.deletedIndexKeys + result.deletedArchiveKeys),
+        "",
+        "此會員已加入永久刪除記錄，之後不會再於 Telegram 會員列表顯示。"
+      ].join("\n");
+      await editTelegramMessage(env, chatId, messageId, text, { inline_keyboard: [[{ text: "📋 返回用戶列表", callback_data: "member_list:all" }]] });
+      return stop(env, cq, "已永久刪除會員");
+    }
+
+    return _oldHandleMemberActionV238(env, cq, data);
+  } catch (e) {
+    try { return stop(env, cq, "操作失敗：" + (e.message || "未知錯誤")); }
+    catch (_) { return json({ ok: false, error: e.message || "member permanent delete failed" }, 500); }
   }
 };
