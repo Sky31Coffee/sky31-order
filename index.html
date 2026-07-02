@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Sky31 Coffee</title>
 <style>
 :root {
@@ -8856,6 +8856,41 @@ line-height:1.6;
 <link rel="shortcut icon" href="/favicon.png?v=63">
 <meta name="apple-mobile-web-app-title" content="Sky31">
 
+
+<style>
+/* V235 real fixes: performance-safe sticky controls and deterministic member dot. */
+.sky31-sticky-topbar-v235{
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 2147482000 !important;
+}
+#profileButton.profile-button::after{ pointer-events:none !important; }
+body.member-logged-out #profileButton.profile-button::after,
+#profileButton.profile-button:not(.member-logged)::after,
+#profileButton.profile-button.logged-out::after,
+#profileButton.profile-button.member-logged-out::after{
+  content:none !important;
+  display:none !important;
+  opacity:0 !important;
+}
+body.member-logged #profileButton.profile-button.member-logged:not(.member-logged-out)::after{
+  content:"" !important;
+  display:block !important;
+  opacity:1 !important;
+  width:8px !important;
+  height:8px !important;
+  right:5px !important;
+  bottom:5px !important;
+  border-radius:999px !important;
+  background:#23c45e !important;
+  box-shadow:0 0 0 2px rgba(255,255,255,.96), 0 4px 10px rgba(35,196,94,.32) !important;
+}
+html, body{ touch-action: manipulation; }
+#sky31PersistentCart{ touch-action:none !important; will-change: transform,left,top; }
+.sky31-v235-toast{ left:50% !important; top:50% !important; bottom:auto !important; transform:translate(-50%,-50%) scale(.98) !important; }
+.sky31-v235-toast.show{ transform:translate(-50%,-50%) scale(1) !important; }
+</style>
+
 </head>
 <body>
 <div id="sky31MobileBg" aria-hidden="true"></div>
@@ -10335,15 +10370,15 @@ window.addEventListener("load", function() {
     document.body.classList.toggle("sky31-menu-page", landingHidden && !appHidden);
   }
 
-  document.addEventListener("DOMContentLoaded", function(){
-    updateMenuBgClass();
-    setInterval(updateMenuBgClass, 500);
-  });
-
-  document.addEventListener("click", function(){
-    setTimeout(updateMenuBgClass, 100);
-    setTimeout(updateMenuBgClass, 500);
-  }, true);
+  function scheduleMenuBgUpdate(){
+    requestAnimationFrame(updateMenuBgClass);
+    setTimeout(updateMenuBgClass, 180);
+  }
+  document.addEventListener("DOMContentLoaded", scheduleMenuBgUpdate, {once:true});
+  document.addEventListener("click", scheduleMenuBgUpdate, true);
+  window.addEventListener("resize", scheduleMenuBgUpdate, {passive:true});
+  window.addEventListener("hashchange", scheduleMenuBgUpdate, {passive:true});
+  document.addEventListener("visibilitychange", function(){ if(!document.hidden) scheduleMenuBgUpdate(); });
 })();
 </script>
 
@@ -10581,15 +10616,12 @@ window.addEventListener("load", function() {
     });
   }
 
-  document.addEventListener("DOMContentLoaded", function(){
-    replaceConfirmedIcon();
-    setInterval(replaceConfirmedIcon, 600);
-  });
-
-  document.addEventListener("click", function(){
+  function scheduleReplaceConfirmedIcon(){
+    requestAnimationFrame(replaceConfirmedIcon);
     setTimeout(replaceConfirmedIcon, 300);
-    setTimeout(replaceConfirmedIcon, 1000);
-  }, true);
+  }
+  document.addEventListener("DOMContentLoaded", scheduleReplaceConfirmedIcon, {once:true});
+  document.addEventListener("click", scheduleReplaceConfirmedIcon, true);
 })();
 </script>
 
@@ -11210,8 +11242,15 @@ window.addEventListener("load", function() {
       document.body.appendChild(t);
     }
     t.textContent = text;
+    clearTimeout(t.__sky31HideTimer);
+    clearTimeout(t.__sky31RemoveTimer);
     t.classList.add("show");
-    setTimeout(function(){ t.classList.remove("show"); }, 1800);
+    t.__sky31HideTimer = setTimeout(function(){
+      t.classList.remove("show");
+      t.__sky31RemoveTimer = setTimeout(function(){
+        if(t && !t.classList.contains("show")) t.remove();
+      }, 260);
+    }, 1600);
   }
 
   function applyMember(member){
@@ -13081,7 +13120,7 @@ window.addEventListener("load", function() {
 
 
 <script>
-/* V117 register page logout center */
+/* V117 optimized: toast positioning is handled by CSS and one-shot JS only. */
 (function(){
   function centerMemberToast(){
     var toast = document.getElementById("memberToast");
@@ -13089,24 +13128,11 @@ window.addEventListener("load", function() {
     toast.style.left = "50%";
     toast.style.top = "50%";
     toast.style.bottom = "auto";
-    toast.style.transform = toast.classList.contains("show")
-      ? "translate(-50%, -50%) scale(1)"
-      : "translate(-50%, -50%) scale(.96)";
     toast.style.textAlign = "center";
   }
-
-  if(document.readyState === "loading"){
-    document.addEventListener("DOMContentLoaded", centerMemberToast);
-  }else{
-    centerMemberToast();
-  }
-
-  setInterval(centerMemberToast, 300);
-
-  document.addEventListener("click", function(){
-    setTimeout(centerMemberToast, 50);
-    setTimeout(centerMemberToast, 300);
-  }, true);
+  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", centerMemberToast, {once:true});
+  else centerMemberToast();
+  document.addEventListener("click", function(){ setTimeout(centerMemberToast, 50); }, true);
 })();
 </script>
 
@@ -14267,275 +14293,16 @@ window.addEventListener("load", function() {
 
 
 <script>
-/* V152 cart drag fix */
+/* V152 disabled in V235.
+   Reason: it added non-passive window touchmove/mousemove listeners on every page,
+   forcing mobile browsers to wait on JavaScript before scrolling. V150 already supplies
+   a scoped pointer-capture cart drag, so this duplicate binding is intentionally removed. */
 (function(){
-  var CART_LEFT_KEY = "sky31_persistent_cart_left";
-  var CART_TOP_KEY = "sky31_persistent_cart_top";
-  var DRAG_THRESHOLD = 5;
-
-  function $(id){ return document.getElementById(id); }
-
-  function clamp(v, min, max){
-    return Math.max(min, Math.min(max, v));
-  }
-
-  function getCart(){
-    return $("sky31PersistentCart");
-  }
-
-  function size(btn){
-    return Math.max(btn ? (btn.offsetWidth || 64) : 64, 48);
-  }
-
-  function defaultPosition(btn){
-    var s = size(btn);
-    return {
-      left: window.innerWidth - s - 18,
-      top: window.innerHeight - s - 26
-    };
-  }
-
-  function place(btn, left, top){
-    if(!btn) return;
-
-    var s = size(btn);
-    var safe = 8;
-    var maxLeft = Math.max(safe, window.innerWidth - s - safe);
-    var maxTop = Math.max(safe, window.innerHeight - s - safe);
-
-    var x = Number(left);
-    var y = Number(top);
-
-    if(!isFinite(x) || !isFinite(y)){
-      var d = defaultPosition(btn);
-      x = d.left;
-      y = d.top;
-    }
-
-    x = clamp(x, safe, maxLeft);
-    y = clamp(y, safe, maxTop);
-
-    btn.style.position = "fixed";
-    btn.style.left = x + "px";
-    btn.style.top = y + "px";
-    btn.style.right = "auto";
-    btn.style.bottom = "auto";
-    btn.style.display = "flex";
-    btn.style.visibility = "visible";
-    btn.style.opacity = "1";
-    btn.style.pointerEvents = "auto";
-    btn.classList.add("sky31-cart-position-ready");
-  }
-
-  function save(btn){
-    if(!btn) return;
-    var r = btn.getBoundingClientRect();
-    try{
-      localStorage.setItem(CART_LEFT_KEY, String(Math.round(r.left)));
-      localStorage.setItem(CART_TOP_KEY, String(Math.round(r.top)));
-    }catch(e){}
-  }
-
-  function restore(btn){
-    if(!btn) return;
-
-    var left = NaN;
-    var top = NaN;
-
-    try{
-      left = parseFloat(localStorage.getItem(CART_LEFT_KEY));
-      top = parseFloat(localStorage.getItem(CART_TOP_KEY));
-    }catch(e){}
-
-    place(btn, left, top);
-  }
-
-  function openCart(){
-    var btn = getCart();
-    if(btn){
-      btn.classList.add("sky31-cart-tap-feedback");
-      setTimeout(function(){
-        btn.classList.remove("sky31-cart-tap-feedback");
-      }, 140);
-    }
-
-    try{
-      if(typeof window.openCartModal === "function"){
-        window.openCartModal();
-        return;
-      }
-      if(typeof openCartModal === "function"){
-        openCartModal();
-        return;
-      }
-    }catch(e){}
-  }
-
-  function clientPoint(e){
-    if(e.touches && e.touches.length){
-      return {x:e.touches[0].clientX, y:e.touches[0].clientY};
-    }
-    if(e.changedTouches && e.changedTouches.length){
-      return {x:e.changedTouches[0].clientX, y:e.changedTouches[0].clientY};
-    }
-    return {x:e.clientX, y:e.clientY};
-  }
-
-  function bindCartDragV152(){
-    var btn = getCart();
-    if(!btn) return;
-
-    restore(btn);
-
-    if(btn.__sky31V152Bound) return;
-    btn.__sky31V152Bound = true;
-
-    var down = false;
-    var dragging = false;
-    var startX = 0;
-    var startY = 0;
-    var startLeft = 0;
-    var startTop = 0;
-    var downAt = 0;
-    var activePointerId = null;
-
-    function start(e){
-      if(e.type === "mousedown" && e.button !== 0) return;
-
-      var p = clientPoint(e);
-      var rect = btn.getBoundingClientRect();
-
-      down = true;
-      dragging = false;
-      startX = p.x;
-      startY = p.y;
-      startLeft = rect.left;
-      startTop = rect.top;
-      downAt = Date.now();
-
-      if(e.pointerId !== undefined){
-        activePointerId = e.pointerId;
-        try{ btn.setPointerCapture(activePointerId); }catch(err){}
-      }
-
-      btn.classList.add("sky31-v152-pressing");
-
-      if(e.cancelable) e.preventDefault();
-      if(e.stopPropagation) e.stopPropagation();
-    }
-
-    function move(e){
-      if(!down) return;
-      if(activePointerId !== null && e.pointerId !== undefined && e.pointerId !== activePointerId) return;
-
-      var p = clientPoint(e);
-      var dx = p.x - startX;
-      var dy = p.y - startY;
-
-      if(!dragging && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
-
-      dragging = true;
-      btn.classList.add("sky31-v152-dragging");
-      btn.classList.add("sky31-cart-dragging");
-
-      if(e.cancelable) e.preventDefault();
-      if(e.stopPropagation) e.stopPropagation();
-
-      place(btn, startLeft + dx, startTop + dy);
-    }
-
-    function end(e){
-      if(!down) return;
-      if(activePointerId !== null && e && e.pointerId !== undefined && e.pointerId !== activePointerId) return;
-
-      var p = e ? clientPoint(e) : {x:startX, y:startY};
-      var dx = p.x - startX;
-      var dy = p.y - startY;
-      var dist = Math.hypot(dx, dy);
-      var elapsed = Date.now() - downAt;
-
-      down = false;
-
-      btn.classList.remove("sky31-v152-pressing");
-      btn.classList.remove("sky31-v152-dragging");
-      btn.classList.remove("sky31-cart-dragging");
-
-      try{
-        if(activePointerId !== null) btn.releasePointerCapture(activePointerId);
-      }catch(err){}
-      activePointerId = null;
-
-      if(dragging){
-        dragging = false;
-        save(btn);
-        return;
-      }
-
-      if(elapsed < 550 && dist < DRAG_THRESHOLD){
-        openCart();
-      }
-    }
-
-    // Pointer events first
-    btn.addEventListener("pointerdown", start, {passive:false});
-    window.addEventListener("pointermove", move, {passive:false});
-    window.addEventListener("pointerup", end, {passive:false});
-    window.addEventListener("pointercancel", end, {passive:false});
-
-    // Fallbacks for browsers / embedded WebViews where pointer capture can be unreliable.
-    btn.addEventListener("mousedown", start, {passive:false});
-    window.addEventListener("mousemove", move, {passive:false});
-    window.addEventListener("mouseup", end, {passive:false});
-
-    btn.addEventListener("touchstart", start, {passive:false});
-    window.addEventListener("touchmove", move, {passive:false});
-    window.addEventListener("touchend", end, {passive:false});
-    window.addEventListener("touchcancel", end, {passive:false});
-
-    // Prevent native click after drag, but allow normal quick tap openCart through our own logic.
-    btn.addEventListener("click", function(e){
-      if(dragging){
-        if(e.cancelable) e.preventDefault();
-        if(e.stopPropagation) e.stopPropagation();
-      }
-    }, true);
-  }
-
-  function boot(){
-    var btn = getCart();
-    if(!btn) return;
-    restore(btn);
-    bindCartDragV152();
-  }
-
-  if(document.readyState === "loading"){
-    document.addEventListener("DOMContentLoaded", boot);
-  }else{
-    boot();
-  }
-
-  setTimeout(boot, 100);
-  setTimeout(boot, 500);
-  setTimeout(boot, 1200);
-
-  window.addEventListener("resize", function(){
-    var btn = getCart();
-    if(!btn) return;
-    var r = btn.getBoundingClientRect();
-    place(btn, r.left, r.top);
-    save(btn);
-  });
-
-  window.sky31CartDragDebug = {
-    reset:function(){
-      try{
-        localStorage.removeItem(CART_LEFT_KEY);
-        localStorage.removeItem(CART_TOP_KEY);
-      }catch(e){}
-      boot();
-    },
-    show:boot
-  };
+  window.sky31CartDragDebug = window.sky31CartDragDebug || { reset:function(){
+    try{ localStorage.removeItem("sky31_persistent_cart_left"); localStorage.removeItem("sky31_persistent_cart_top"); }catch(e){}
+    var btn = document.getElementById("sky31PersistentCart");
+    if(btn){ btn.style.left=""; btn.style.top=""; btn.style.right="18px"; btn.style.bottom="calc(24px + env(safe-area-inset-bottom))"; }
+  }};
 })();
 </script>
 
@@ -17300,24 +17067,20 @@ window.addEventListener("load", function() {
   window.SKY31_CHECK_MAINTENANCE_V218 = checkMaintenance218;
   window.SKY31_FIT_LIMITED_BEAN_NAMES_V218 = fitLandingLimitedBeanNames218;
 
-  if(document.readyState === "loading"){
-    document.addEventListener("DOMContentLoaded", function(){
-      checkMaintenance218();
-      fitLandingLimitedBeanNames218();
-      setInterval(checkMaintenance218, 5000);
-      setInterval(fitLandingLimitedBeanNames218, 1000);
-    });
-  }else{
+  function bootV218(){
     checkMaintenance218();
     fitLandingLimitedBeanNames218();
-    setInterval(checkMaintenance218, 5000);
-    setInterval(fitLandingLimitedBeanNames218, 1000);
+    // Maintenance state does not need 5-second polling on a customer order page.
+    setInterval(checkMaintenance218, 30000);
   }
-
-  const obs = new MutationObserver(function(){
-    setTimeout(fitLandingLimitedBeanNames218, 60);
-  });
-  try{ obs.observe(document.body, {childList:true, subtree:true, characterData:true}); }catch(e){}
+  function scheduleFitV218(){
+    requestAnimationFrame(fitLandingLimitedBeanNames218);
+    setTimeout(fitLandingLimitedBeanNames218, 180);
+  }
+  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", bootV218, {once:true});
+  else bootV218();
+  document.addEventListener("click", scheduleFitV218, true);
+  window.addEventListener("resize", scheduleFitV218, {passive:true});
 })();
 </script>
 
@@ -17521,10 +17284,10 @@ window.addEventListener("load", function() {
     });
   }
 
-  const observer = new MutationObserver(function(){
-    setTimeout(squashDuplicateSuccessDomV225, 20);
-  });
-  try{ observer.observe(document.documentElement || document.body, {childList:true, subtree:true, characterData:true}); }catch(e){}
+  // V235 performance: do not observe the entire document for every DOM change.
+  document.addEventListener("click", function(){ setTimeout(squashDuplicateSuccessDomV225, 80); }, true);
+  setTimeout(squashDuplicateSuccessDomV225, 300);
+  setTimeout(squashDuplicateSuccessDomV225, 1000);
 
   function hardLogoutV225(showToast){
     window.__SKY31_HARD_LOGOUT_ACTIVE_V225 = true;
@@ -17560,7 +17323,7 @@ window.addEventListener("load", function() {
 
   window.SKY31_HARD_MEMBER_LOGOUT_V225 = hardLogoutV225;
   window.SKY31_MEMBER_FORCE_LOGOUT_V224 = hardLogoutV225;
-  window.memberLogout = function(){ return hardLogoutV225(true); };
+  window.memberLogout = function(){ return (window.SKY31_REAL_MEMBER_LOGOUT_V235 || hardLogoutV225)(true); };
   window.logoutMember = window.memberLogout;
   window.logoutCurrentMember = window.memberLogout;
 
@@ -17591,7 +17354,7 @@ window.addEventListener("load", function() {
       e.preventDefault();
       e.stopPropagation();
       if(e.stopImmediatePropagation) e.stopImmediatePropagation();
-      hardLogoutV225(true);
+      (window.SKY31_REAL_MEMBER_LOGOUT_V235 || hardLogoutV225)(true);
       return false;
     }
   }, true);
@@ -17611,48 +17374,27 @@ window.addEventListener("load", function() {
 
 
 <script>
-/* V230: toast center enforcement and sticky controls refresh. */
+/* V230 optimized: no global MutationObserver / no scroll scanning. */
 (function(){
   function centerToastV230(){
-    var nodes = document.querySelectorAll(".sky31-v225-toast,#sky31V225Toast,#sky31V229Toast,#sky31V230Toast");
+    var nodes = document.querySelectorAll(".sky31-v225-toast,#sky31V225Toast,#sky31V229Toast,#sky31V230Toast,#memberToast");
     nodes.forEach(function(el){
       el.style.left = "50%";
       el.style.top = "50%";
       el.style.bottom = "auto";
       el.style.right = "auto";
-      if(el.classList.contains("show")){
-        el.style.transform = "translate(-50%,-50%) scale(1)";
-      }else{
-        el.style.transform = "translate(-50%,-50%) scale(.98)";
-      }
+      el.style.transform = el.classList.contains("show") ? "translate(-50%,-50%) scale(1)" : "translate(-50%,-50%) scale(.98)";
     });
   }
-
   function stickyControlsV230(){
     document.querySelectorAll(".member-topbar,.checkout-member-top,.cart-topbar,.cart-header,.order-topbar,.order-status-topbar,.status-topbar,.confirm-topbar,.modal-topbar,.sheet-topbar,.query-topbar").forEach(function(el){
-      el.style.position = "sticky";
-      el.style.top = "0";
-      el.style.zIndex = "9999";
+      el.classList.add("sky31-sticky-topbar-v235");
     });
   }
-
-  var obs = new MutationObserver(function(){
-    setTimeout(centerToastV230, 20);
-    setTimeout(stickyControlsV230, 20);
-  });
-  try{ obs.observe(document.documentElement || document.body, {childList:true, subtree:true, attributes:true, attributeFilter:["class","style"]}); }catch(e){}
-
-  if(document.readyState === "loading"){
-    document.addEventListener("DOMContentLoaded", function(){
-      centerToastV230();
-      stickyControlsV230();
-    });
-  }else{
-    centerToastV230();
-    stickyControlsV230();
-  }
-
-  window.addEventListener("scroll", stickyControlsV230, true);
+  function refresh(){ centerToastV230(); stickyControlsV230(); }
+  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", refresh, {once:true});
+  else refresh();
+  document.addEventListener("click", function(){ setTimeout(refresh, 40); }, true);
   window.SKY31_CENTER_TOAST_V230 = centerToastV230;
   window.SKY31_STICKY_CONTROLS_V230 = stickyControlsV230;
 })();
@@ -17661,211 +17403,239 @@ window.addEventListener("load", function() {
 
 
 <script>
-/* V233: sticky all back buttons enforcement.
-   Only applies styles/classes to existing buttons; it does not create duplicate buttons. */
+/* V233 optimized: bounded back-button refresh only, no MutationObserver / no scroll listener. */
 (function(){
   function isBackLikeV233(el){
     if(!el) return false;
     var txt = String(el.textContent || "").trim();
     var onclick = String(el.getAttribute && el.getAttribute("onclick") || "");
     var cls = String(el.className || "");
-    return (
-      /\bback\b|back-btn|返回|上一頁|←|‹/.test(cls + " " + txt) ||
-      /memberBack|closeDetail|goBack|back/i.test(onclick)
-    );
+    return (/back|back-btn|返回|上一頁|←|‹/.test(cls + " " + txt) || /memberBack|closeDetail|goBack|back/i.test(onclick));
   }
-
   function pinButtonsV233(){
     document.querySelectorAll("button,a,[role='button']").forEach(function(el){
-      if(isBackLikeV233(el)){
-        el.classList.add("sky31-sticky-back-v233");
-        el.style.zIndex = "2147483000";
-      }
+      if(isBackLikeV233(el)) el.classList.add("sky31-sticky-back-v233");
     });
-
     document.querySelectorAll(".member-topbar,.checkout-member-top,.cart-topbar,.cart-header,.order-topbar,.order-status-topbar,.status-topbar,.confirm-topbar,.modal-topbar,.sheet-topbar,.query-topbar").forEach(function(el){
-      el.style.position = "sticky";
-      el.style.top = "0";
-      el.style.zIndex = "2147482000";
+      el.classList.add("sky31-sticky-topbar-v235");
     });
   }
-
-  if(document.readyState === "loading"){
-    document.addEventListener("DOMContentLoaded", pinButtonsV233);
-  }else{
-    pinButtonsV233();
-  }
-
-  var obs = new MutationObserver(function(){
-    setTimeout(pinButtonsV233, 30);
-  });
-  try{ obs.observe(document.documentElement || document.body, {childList:true, subtree:true, attributes:true, attributeFilter:["class","style"]}); }catch(e){}
-
-  window.addEventListener("scroll", pinButtonsV233, true);
+  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", pinButtonsV233, {once:true});
+  else pinButtonsV233();
+  document.addEventListener("click", function(){ setTimeout(pinButtonsV233, 50); }, true);
   window.SKY31_STICKY_BACK_V233 = pinButtonsV233;
 })();
 </script>
 
 
 <script>
-/* V234: logout badge sync and mobile zoom lock.
-   Fixes green login dot staying after logout without refresh.
-*/
+/* V235: real member state sync + mobile performance fix.
+   - No global touchend / dblclick preventDefault.
+   - No MutationObserver scanning localStorage.
+   - Login/register actively clears hard-logout flags and shows green dot.
+   - Logout actively clears member storage/UI and hides green dot immediately. */
 (function(){
   const MEMBER_KEY = "sky31_member_v1";
+  const MEMBER_KEYS_EXACT = [
+    "sky31_member_v1","sky31_member","sky31Member","member","currentMember","memberProfile",
+    "sky31_current_member","sky31_profile_member","currentCustomer","customer","customerInfo","checkoutCustomer"
+  ];
 
-  function readMemberV234(){
+  function isMemberKey(key){
+    key = String(key || "");
+    return MEMBER_KEYS_EXACT.indexOf(key) >= 0 || /sky31.*(member|會員)|(member|會員).*sky31|birthday_blessing|member_edit|memberLogin|memberProfile/i.test(key);
+  }
+  function forEachStorageKey(storage, fn){
+    try{
+      const keys = [];
+      for(let i=0;i<storage.length;i++){ const k = storage.key(i); if(k) keys.push(k); }
+      keys.forEach(fn);
+    }catch(e){}
+  }
+  function readMember(){
     try{
       const raw = localStorage.getItem(MEMBER_KEY);
       const m = raw ? JSON.parse(raw) : null;
       return m && m.phone ? m : null;
     }catch(e){ return null; }
   }
-
-  function hasMemberStorageV234(){
-    if(readMemberV234()) return true;
+  function clearMemberStorage(){
     try{
-      for(let i=0;i<localStorage.length;i++){
-        const k = localStorage.key(i);
-        if(!k) continue;
-        if(/sky31.*member|member.*sky31/i.test(k)){
-          const v = localStorage.getItem(k);
-          if(v && /phone|電話|member|會員/i.test(v)) return true;
-        }
-      }
+      MEMBER_KEYS_EXACT.forEach(k => localStorage.removeItem(k));
+      forEachStorageKey(localStorage, k => { if(isMemberKey(k)) localStorage.removeItem(k); });
     }catch(e){}
+    try{
+      MEMBER_KEYS_EXACT.forEach(k => sessionStorage.removeItem(k));
+      forEachStorageKey(sessionStorage, k => { if(isMemberKey(k)) sessionStorage.removeItem(k); });
+    }catch(e){}
+  }
+  function setFlagsLoggedIn(){
+    window.__SKY31_FORCE_LOGGED_OUT_V234 = false;
+    window.__SKY31_HARD_LOGOUT_ACTIVE_V225 = false;
+    window.__SKY31_MEMBER_LOGGED_OUT_V224 = false;
+    window.__SKY31_REAL_LOGGED_OUT_V235 = false;
+  }
+  function setFlagsLoggedOut(){
+    window.__SKY31_FORCE_LOGGED_OUT_V234 = true;
+    window.__SKY31_HARD_LOGOUT_ACTIVE_V225 = true;
+    window.__SKY31_MEMBER_LOGGED_OUT_V224 = true;
+    window.__SKY31_REAL_LOGGED_OUT_V235 = true;
+  }
+  function updateAuthMenu(logged){
+    const modal = document.getElementById("memberModal");
+    if(modal){
+      modal.classList.toggle("member-logged-in-v213", !!logged);
+      modal.classList.toggle("member-logged-out-v213", !logged);
+    }
+    document.querySelectorAll(".member-auth-only-v213").forEach(el => { el.hidden = !!logged; el.style.display = logged ? "none" : ""; });
+    document.querySelectorAll(".member-logout-only-v213").forEach(el => { el.hidden = !logged; el.style.display = logged ? "" : "none"; });
+  }
+  function syncBadge(member){
+    member = member || readMember();
+    const logged = !!(member && member.phone);
+    const btn = document.getElementById("profileButton");
+    if(btn){
+      btn.classList.toggle("member-logged", logged);
+      btn.classList.toggle("logged-out", !logged);
+      btn.classList.toggle("member-logged-out", !logged);
+      btn.classList.remove("logged","active","is-logged","selected","is-logged-out");
+      if(logged){
+        const label = "會員：" + (member.name || member.phone);
+        btn.title = label;
+        btn.setAttribute("aria-label", label);
+        btn.setAttribute("data-member-phone", String(member.phone || ""));
+      }else{
+        btn.title = "會員中心";
+        btn.setAttribute("aria-label", "會員中心");
+        btn.removeAttribute("data-phone");
+        btn.removeAttribute("data-member-phone");
+      }
+    }
+    document.body.classList.toggle("member-logged", logged);
+    document.body.classList.toggle("member-logged-in", logged);
+    document.body.classList.toggle("member-logged-out", !logged);
+    document.body.classList.toggle("is-member", logged);
+    updateAuthMenu(logged);
+  }
+  function clearMemberFields(){
+    ["name","phone","modalName","modalPhone","memberPhone","memberName","memberBirthday","memberRegPhone","memberRegName","memberRegBirthday","memberLoginPhone","checkoutName","checkoutPhone","checkoutMemberPhone","checkoutRegPhone","checkoutRegName"].forEach(function(id){
+      const el = document.getElementById(id);
+      if(el && "value" in el) el.value = "";
+    });
+    ["memberQuickCard","memberLoggedPanel"].forEach(function(id){
+      const el = document.getElementById(id);
+      if(el){ el.innerHTML = ""; el.style.display = "none"; }
+    });
+    ["memberMsg","memberRegMsg","checkoutMemberMsg"].forEach(function(id){
+      const el = document.getElementById(id);
+      if(el){ el.textContent = ""; el.classList.remove("success","error"); }
+    });
+  }
+  function showToast(text){
+    let el = document.getElementById("sky31V235Toast");
+    if(!el){
+      el = document.createElement("div");
+      el.id = "sky31V235Toast";
+      el.className = "sky31-v225-toast sky31-v235-toast";
+      document.body.appendChild(el);
+    }
+    el.textContent = String(text || "");
+    clearTimeout(el.__hideTimer);
+    clearTimeout(el.__removeTimer);
+    el.classList.add("show");
+    el.__hideTimer = setTimeout(function(){
+      el.classList.remove("show");
+      el.__removeTimer = setTimeout(function(){ if(el && !el.classList.contains("show")) el.remove(); }, 260);
+    }, 1500);
+  }
+  function hideOldToastsSoon(){
+    setTimeout(function(){
+      document.querySelectorAll("#memberToast,#sky31V225Toast,#sky31V229Toast,#sky31V230Toast,.member-toast,.sky31-v225-toast").forEach(function(el){
+        if(el.id === "sky31V235Toast") return;
+        el.classList.remove("show");
+        setTimeout(function(){ if(el && !el.classList.contains("show")) try{ el.remove(); }catch(e){} }, 260);
+      });
+    }, 40);
+  }
+  function realLogout(showMessage){
+    setFlagsLoggedOut();
+    clearMemberStorage();
+    clearMemberFields();
+    syncBadge(null);
+    try{ if(typeof updateCheckoutCustomerInfo === "function") updateCheckoutCustomerInfo(); }catch(e){}
+    try{ if(typeof renderLoggedPanel === "function") renderLoggedPanel(null); }catch(e){}
+    try{ if(typeof renderHomeQuickCard === "function") renderHomeQuickCard(); }catch(e){}
+    try{ if(typeof showPage === "function") showPage("home"); }catch(e){}
+    hideOldToastsSoon();
+    if(showMessage !== false) showToast("已成功登出");
+    setTimeout(function(){ clearMemberStorage(); syncBadge(null); }, 120);
+    setTimeout(function(){ clearMemberStorage(); syncBadge(null); }, 600);
     return false;
   }
-
-  function setBadgeLoggedOutV234(){
-    window.__SKY31_FORCE_LOGGED_OUT_V234 = true;
-
-    const btn = document.getElementById("profileButton");
-    if(btn){
-      btn.classList.remove("member-logged","logged","active","is-logged","selected");
-      btn.classList.add("logged-out","member-logged-out");
-      btn.removeAttribute("data-phone");
-      btn.removeAttribute("data-member-phone");
-      btn.title = "會員中心";
-      btn.setAttribute("aria-label","會員中心");
-    }
-
-    try{
-      document.body.classList.remove("member-logged","member-logged-in","is-member");
-      document.body.classList.add("member-logged-out");
-      document.documentElement.removeAttribute("data-member-phone");
-      document.body.removeAttribute("data-member-phone");
-    }catch(e){}
-  }
-
-  function syncBadgeV234(){
-    const member = readMemberV234();
-    const btn = document.getElementById("profileButton");
-
-    if(!member){
-      setBadgeLoggedOutV234();
-      return;
-    }
-
-    window.__SKY31_FORCE_LOGGED_OUT_V234 = false;
-    if(btn){
-      btn.classList.add("member-logged");
-      btn.classList.remove("logged-out","member-logged-out");
-      btn.title = "會員：" + (member.name || member.phone);
-      btn.setAttribute("aria-label", btn.title);
-      btn.setAttribute("data-member-phone", String(member.phone || ""));
-    }
-
-    try{
-      document.body.classList.remove("member-logged-out");
-      document.body.classList.add("member-logged");
-    }catch(e){}
-  }
-
-  // Wrap profile updater so stale async refresh cannot show green dot after storage was cleared.
-  const oldUpdate = window.updateMemberProfileButton;
-  if(typeof oldUpdate === "function" && !oldUpdate.__sky31V234){
-    const wrapped = function(member){
-      if(window.__SKY31_FORCE_LOGGED_OUT_V234 || window.__SKY31_HARD_LOGOUT_ACTIVE_V225 || !hasMemberStorageV234()){
-        setBadgeLoggedOutV234();
-        return;
+  function wrapLogin(name){
+    const fn = window[name];
+    if(typeof fn !== "function" || fn.__sky31V235) return;
+    const wrapped = async function(){
+      setFlagsLoggedIn();
+      const result = await fn.apply(this, arguments);
+      const m = readMember();
+      if(m && m.phone){
+        setFlagsLoggedIn();
+        syncBadge(m);
+        hideOldToastsSoon();
+        if(name === "memberLoginLookup") showToast("已登入會員");
+      }else{
+        syncBadge(null);
       }
-      const result = oldUpdate.apply(this, arguments);
-      syncBadgeV234();
       return result;
     };
-    wrapped.__sky31V234 = true;
-    window.updateMemberProfileButton = wrapped;
+    wrapped.__sky31V235 = true;
+    window[name] = wrapped;
   }
 
-  const oldLogout = window.memberLogout;
-  if(typeof oldLogout === "function" && !oldLogout.__sky31V234){
-    const wrappedLogout = function(){
-      window.__SKY31_FORCE_LOGGED_OUT_V234 = true;
-      let result;
-      try{ result = oldLogout.apply(this, arguments); }catch(e){}
-      setBadgeLoggedOutV234();
-      setTimeout(setBadgeLoggedOutV234, 30);
-      setTimeout(setBadgeLoggedOutV234, 150);
-      setTimeout(setBadgeLoggedOutV234, 500);
-      setTimeout(setBadgeLoggedOutV234, 1200);
-      return result === undefined ? false : result;
-    };
-    wrappedLogout.__sky31V234 = true;
-    window.memberLogout = wrappedLogout;
-    window.logoutMember = wrappedLogout;
-    window.logoutCurrentMember = wrappedLogout;
-  }
+  // Final member-state owners.
+  window.SKY31_MEMBER_SYNC_V235 = syncBadge;
+  window.SKY31_REAL_MEMBER_LOGOUT_V235 = realLogout;
+  window.SKY31_REAL_TOAST_V235 = showToast;
+  window.memberLogout = function(){ return realLogout(true); };
+  window.logoutMember = window.memberLogout;
+  window.logoutCurrentMember = window.memberLogout;
 
-  // Capture logout click after any old UI has rendered, then force badge off immediately.
+  wrapLogin("memberLoginLookup");
+  wrapLogin("memberRegisterSave");
+  wrapLogin("registerMember");
+  wrapLogin("loginMember");
+
+  // Let success alerts reuse the self-hiding toast; errors still use the existing alert behavior if present.
+  const previousAlert = window.alert;
+  window.alert = function(msg){
+    const text = String(msg || "");
+    if(/成功|已更新|已登入|已登出|已添加|已送出|完成/i.test(text)){
+      hideOldToastsSoon();
+      showToast(text);
+      return;
+    }
+    return previousAlert ? previousAlert.call(window, msg) : showToast(text);
+  };
+
   document.addEventListener("click", function(e){
     const el = e.target && e.target.closest ? e.target.closest("button,[onclick],[role='button'],a") : null;
     if(!el) return;
     const txt = String(el.textContent || "") + " " + String(el.getAttribute("onclick") || "") + " " + String(el.getAttribute("aria-label") || "");
     if(/登出|退出|logout|memberLogout/i.test(txt)){
-      setTimeout(setBadgeLoggedOutV234, 0);
-      setTimeout(setBadgeLoggedOutV234, 80);
-      setTimeout(setBadgeLoggedOutV234, 300);
+      e.preventDefault();
+      e.stopPropagation();
+      if(e.stopImmediatePropagation) e.stopImmediatePropagation();
+      realLogout(true);
+      return false;
     }
   }, true);
 
-  window.addEventListener("storage", function(e){
-    if(e && /sky31.*member|member.*sky31|sky31_member_v1/i.test(String(e.key || ""))){
-      setTimeout(syncBadgeV234, 20);
-    }
-  });
-
-  const obs = new MutationObserver(function(){
-    if(!hasMemberStorageV234()) setTimeout(setBadgeLoggedOutV234, 20);
-  });
-  try{
-    obs.observe(document.documentElement || document.body, {subtree:true, childList:true, attributes:true, attributeFilter:["class","data-member-phone"]});
-  }catch(e){}
-
-  // Mobile zoom lock: iOS gesture events + double tap prevention.
-  document.addEventListener("gesturestart", function(e){ e.preventDefault(); }, {passive:false});
-  document.addEventListener("gesturechange", function(e){ e.preventDefault(); }, {passive:false});
-  document.addEventListener("gestureend", function(e){ e.preventDefault(); }, {passive:false});
-
-  let lastTouchEnd = 0;
-  document.addEventListener("touchend", function(e){
-    const now = Date.now();
-    if(now - lastTouchEnd <= 300){
-      e.preventDefault();
-    }
-    lastTouchEnd = now;
-  }, {passive:false});
-
-  document.addEventListener("dblclick", function(e){
-    e.preventDefault();
-  }, {passive:false});
-
-  // Initial state.
-  setTimeout(syncBadgeV234, 80);
-  setTimeout(syncBadgeV234, 500);
-
-  window.SKY31_SYNC_MEMBER_BADGE_V234 = syncBadgeV234;
-  window.SKY31_FORCE_BADGE_LOGOUT_V234 = setBadgeLoggedOutV234;
+  window.addEventListener("storage", function(e){ if(e && isMemberKey(e.key)) setTimeout(function(){ syncBadge(readMember()); }, 20); });
+  document.addEventListener("visibilitychange", function(){ if(!document.hidden) syncBadge(readMember()); });
+  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", function(){ syncBadge(readMember()); }, {once:true});
+  else syncBadge(readMember());
+  setTimeout(function(){ syncBadge(readMember()); }, 120);
 })();
 </script>
 
