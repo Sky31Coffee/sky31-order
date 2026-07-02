@@ -4304,7 +4304,7 @@ buildMemberDetailText = function(member, deleted = false) {
   }
 
   lines.push("");
-  lines.push(deleted ? "此會員已刪除。" : "可在下方修改生日 / 會員等級。");
+  lines.push(deleted ? "此會員已刪除。" : "可在下方修改會員等級。");
   return lines.join("\n").trim();
 };
 
@@ -4352,7 +4352,7 @@ async function handleMemberAdminEditActionV211(env, cq, data) {
     if (!loaded.member) return stop(env, cq, "找不到會員資料，請返回列表重新選擇");
     const rows = memberTierListV211().map(t => ([{ text: t.icon + " " + t.name + "｜" + (t.cups === 0 ? "加入即成為會員" : "累計 " + t.cups + " 杯起"), callback_data: "member_tier_set:" + phone + ":" + t.key }]));
     rows.push([{ text: "取消", callback_data: "member_edit_cancel:" + phone }]);
-    await editTelegramMessage(env, chatId, messageId, "🏅 更改會員等級\n\n請選擇要設定的會員等級。", { inline_keyboard: rows });
+    await editTelegramMessage(env, chatId, messageId, "🏅 更改會員等級\n\n請選擇要設定的會員等級。\n未滿最高等級時，之後仍會按新增杯數繼續升級。", { inline_keyboard: rows });
     return stop(env, cq, "請選擇會員等級");
   }
 
@@ -4960,42 +4960,36 @@ getMemberForTelegramView = async function(env, phone, deleted) {
 
 buildMemberDetailReplyMarkup = function(member, deleted = false) {
   const phone = normalizePhone(member && member.phone);
+  const rows = [];
   if (deleted) {
-    return {
-      inline_keyboard: [
-        [{ text: "↩️ 恢復賬號", callback_data: "member_restore:" + phone }],
-        [{ text: "🧨 永久刪除", callback_data: "member_purge:" + phone }],
-        [{ text: "📋 返回用戶列表", callback_data: "member_list:all" }]
-      ]
-    };
+    rows.push([{ text: "↩️ 恢復賬號", callback_data: "member_restore:" + phone }]);
+    rows.push([{ text: "🧨 永久刪除", callback_data: "member_purge:" + phone }]);
+  } else {
+    rows.push([{ text: "🔄 重新讀取會員資料", callback_data: "member_refresh:" + phone }]);
+    rows.push([{ text: "🏅 更改會員等級", callback_data: "member_tier_menu:" + phone }]);
+    rows.push([{ text: "🗑️ 刪除賬號", callback_data: "member_delete:" + phone }]);
+    rows.push([{ text: "🧨 永久刪除", callback_data: "member_purge:" + phone }]);
   }
-  return {
-    inline_keyboard: [
-      [{ text: "🗑️ 刪除賬號", callback_data: "member_delete:" + phone }],
-      [{ text: "🧨 永久刪除", callback_data: "member_purge:" + phone }],
-      [{ text: "📋 返回用戶列表", callback_data: "member_list:all" }]
-    ]
-  };
+  rows.push([{ text: "📋 返回用戶列表", callback_data: "member_list:all" }]);
+  rows.push([{ text: "返回功能列表", callback_data: "limited_cmd_menu:x" }]);
+  return { inline_keyboard: rows };
 };
 
 buildMemberReplyMarkup = function(member, deleted = false) {
   const phone = normalizePhone(member && member.phone);
+  const rows = [];
   if (deleted) {
-    return {
-      inline_keyboard: [
-        [{ text: "↩️ 撤回", callback_data: "member_restore:" + phone }],
-        [{ text: "🧨 永久刪除", callback_data: "member_purge:" + phone }],
-        [{ text: "📋 返回用戶列表", callback_data: "member_list:all" }]
-      ]
-    };
+    rows.push([{ text: "↩️ 撤回", callback_data: "member_restore:" + phone }]);
+    rows.push([{ text: "🧨 永久刪除", callback_data: "member_purge:" + phone }]);
+  } else {
+    rows.push([{ text: "🔄 重新讀取會員資料", callback_data: "member_refresh:" + phone }]);
+    rows.push([{ text: "🏅 更改會員等級", callback_data: "member_tier_menu:" + phone }]);
+    rows.push([{ text: "🗑️ 刪除", callback_data: "member_delete:" + phone }]);
+    rows.push([{ text: "🧨 永久刪除", callback_data: "member_purge:" + phone }]);
   }
-  return {
-    inline_keyboard: [
-      [{ text: "🗑️ 刪除", callback_data: "member_delete:" + phone }],
-      [{ text: "🧨 永久刪除", callback_data: "member_purge:" + phone }],
-      [{ text: "📋 返回用戶列表", callback_data: "member_list:all" }]
-    ]
-  };
+  rows.push([{ text: "📋 返回用戶列表", callback_data: "member_list:all" }]);
+  rows.push([{ text: "返回功能列表", callback_data: "limited_cmd_menu:x" }]);
+  return { inline_keyboard: rows };
 };
 
 const _oldHandleMemberActionV238 = handleMemberAction;
