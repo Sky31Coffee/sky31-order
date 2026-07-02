@@ -3899,6 +3899,76 @@ function memberKeyV223(phone) {
   return "member:" + canonicalPhoneV223(phone);
 }
 
+
+function memberTierOverrideKeyV262(phone) {
+  const last = phoneLast8V223(phone);
+  return last ? "member_tier_override:" + last : "";
+}
+
+async function readMemberTierOverrideV262(env, phone) {
+  const key = memberTierOverrideKeyV262(phone);
+  if (!key || !env || !env.ORDERS) return null;
+  const raw = await env.ORDERS.get(key);
+  if (!raw) return null;
+  try {
+    const data = JSON.parse(raw);
+    if (!data || !(data.manualTierKey || data.memberTierOverrideKey || data.memberTierManualKey)) return null;
+    return data;
+  } catch (_) {
+    return null;
+  }
+}
+
+function applyMemberTierOverrideV262(member, override) {
+  if (!member || !override) return member;
+  const tierKey = override.manualTierKey || override.memberTierOverrideKey || override.memberTierManualKey || "";
+  if (!tierKey) return member;
+  const out = { ...member };
+  out.manualTierKey = tierKey;
+  out.manualTierName = override.manualTierName || override.memberTierOverrideName || out.manualTierName || "";
+  out.manualTierIcon = override.manualTierIcon || override.memberTierOverrideIcon || out.manualTierIcon || "";
+  out.memberTierOverrideKey = tierKey;
+  out.memberTierOverrideName = out.manualTierName;
+  out.memberTierOverrideIcon = out.manualTierIcon;
+  out.manualTierBaseCups = Number(override.manualTierBaseCups ?? out.manualTierBaseCups ?? 0);
+  out.manualTierStartCups = Number(override.manualTierStartCups ?? override.manualTierSetAtCups ?? override.manualTierOriginalCups ?? out.manualTierStartCups ?? out.totalCups ?? 0);
+  out.manualTierSetAtCups = out.manualTierStartCups;
+  out.manualTierOriginalCups = out.manualTierStartCups;
+  out.manualTierUpdatedAt = override.manualTierUpdatedAt || out.manualTierUpdatedAt || out.updatedAt || "";
+  out.manualTierUpdatedBy = override.manualTierUpdatedBy || out.manualTierUpdatedBy || "telegram";
+  return out;
+}
+
+async function saveMemberTierOverrideV262(env, phone, member) {
+  const key = memberTierOverrideKeyV262(phone || (member && member.phone));
+  if (!key || !member) return null;
+  const tierKey = member.manualTierKey || member.memberTierOverrideKey || member.memberTierManualKey || "";
+  if (!tierKey) return null;
+  const payload = {
+    phoneLast8: phoneLast8V223(phone || member.phone),
+    manualTierKey: tierKey,
+    manualTierName: member.manualTierName || member.memberTierOverrideName || "",
+    manualTierIcon: member.manualTierIcon || member.memberTierOverrideIcon || "",
+    memberTierOverrideKey: tierKey,
+    memberTierOverrideName: member.manualTierName || member.memberTierOverrideName || "",
+    memberTierOverrideIcon: member.manualTierIcon || member.memberTierOverrideIcon || "",
+    manualTierBaseCups: Number(member.manualTierBaseCups ?? 0),
+    manualTierStartCups: Number(member.manualTierStartCups ?? member.manualTierSetAtCups ?? member.manualTierOriginalCups ?? member.totalCups ?? 0),
+    manualTierSetAtCups: Number(member.manualTierSetAtCups ?? member.manualTierStartCups ?? member.manualTierOriginalCups ?? member.totalCups ?? 0),
+    manualTierOriginalCups: Number(member.manualTierOriginalCups ?? member.manualTierStartCups ?? member.manualTierSetAtCups ?? member.totalCups ?? 0),
+    manualTierUpdatedAt: member.manualTierUpdatedAt || new Date().toISOString(),
+    manualTierUpdatedBy: member.manualTierUpdatedBy || "telegram",
+    updatedAt: new Date().toISOString()
+  };
+  await env.ORDERS.put(key, JSON.stringify(payload), { expirationTtl: 60 * 60 * 24 * 3650 });
+  return payload;
+}
+
+async function deleteMemberTierOverrideV262(env, phone) {
+  const key = memberTierOverrideKeyV262(phone);
+  if (key) await env.ORDERS.delete(key);
+}
+
 function memberTimeV223(member) {
   return Math.max(
     new Date((member && member.manualTierUpdatedAt) || 0).getTime() || 0,
@@ -3950,8 +4020,8 @@ function mergeMemberPayloadsV223(records, phoneHint) {
       base.memberTierOverrideKey = tierKey;
       base.memberTierOverrideName = base.manualTierName;
       base.memberTierOverrideIcon = base.manualTierIcon;
-      base.manualTierBaseCups = Number(m.manualTierBaseCups || base.manualTierBaseCups || 0);
-      base.manualTierStartCups = Number(m.manualTierStartCups || m.manualTierSetAtCups || m.manualTierOriginalCups || base.manualTierStartCups || m.totalCups || 0);
+      base.manualTierBaseCups = Number(m.manualTierBaseCups ?? base.manualTierBaseCups ?? 0);
+      base.manualTierStartCups = Number(m.manualTierStartCups ?? m.manualTierSetAtCups ?? m.manualTierOriginalCups ?? base.manualTierStartCups ?? m.totalCups ?? 0);
       base.manualTierSetAtCups = base.manualTierStartCups;
       base.manualTierOriginalCups = base.manualTierStartCups;
       base.manualTierUpdatedAt = m.manualTierUpdatedAt || m.updatedAt || base.manualTierUpdatedAt || "";
@@ -4013,7 +4083,8 @@ async function findActiveMemberV223(env, phone) {
 
   if (!records.length) return { key: "", member: null, records: [] };
 
-  const member = mergeMemberPayloadsV223(records, last8);
+  const override = await readMemberTierOverrideV262(env, last8);
+  const member = applyMemberTierOverrideV262(mergeMemberPayloadsV223(records, last8), override);
   const key = memberKeyV223(member.phone);
   member._kvKey = key;
   return { key, member, records };
@@ -4091,7 +4162,11 @@ async function saveActiveMemberV223(env, loaded) {
 
   // Do not create or force an 853 member key. Do not immediately delete old aliases here:
   // every existing same-phone record is synchronized to the same tier so either read path shows the same result.
-  return { key: canonicalKey, member: withLatestManualTier(records.get(canonicalKey) || member, canonicalKey), syncedAliasCount: synced };
+  const finalMember = withLatestManualTier(records.get(canonicalKey) || member, canonicalKey);
+  if (finalMember.manualTierKey || finalMember.memberTierOverrideKey || finalMember.memberTierManualKey) {
+    await saveMemberTierOverrideV262(env, last8, finalMember);
+  }
+  return { key: canonicalKey, member: finalMember, syncedAliasCount: synced };
 }
 
 function normalizeBirthdayInputV223(input) {
@@ -4147,8 +4222,8 @@ function memberDisplayTierV211(member) {
   const manualBase = memberTierByKeyV211(member.manualTierKey || member.memberTierOverrideKey || member.memberTierManualKey || "");
   if (!manualBase) return { ...memberTierByCupsV211(totalCups), manual: false };
 
-  const start = Number(member.manualTierStartCups || member.manualTierSetAtCups || member.manualTierOriginalCups || totalCups || 0);
-  const base = Number(member.manualTierBaseCups || manualBase.cups || 0);
+  const start = Number(member.manualTierStartCups ?? member.manualTierSetAtCups ?? member.manualTierOriginalCups ?? totalCups ?? 0);
+  const base = Number(member.manualTierBaseCups ?? manualBase.cups ?? 0);
   const effective = base + Math.max(0, totalCups - start);
   const tier = memberTierByCupsV211(effective);
   const next = memberTierListV211().find(t => t.cups > effective) || null;
@@ -4419,6 +4494,7 @@ async function handleMemberAdminEditActionV211(env, cq, data) {
     loaded.member.manualTierUpdatedAt = new Date().toISOString();
     loaded.member.manualTierUpdatedBy = "telegram";
 
+    await saveMemberTierOverrideV262(env, phone, loaded.member);
     const saved = await saveActiveMemberV223(env, loaded);
     const enriched = await enrichMemberStatsForTelegram(env, saved.member).catch(() => saved.member);
     await editTelegramMessage(env, chatId, messageId, buildMemberDetailText(enriched, false), buildMemberDetailReplyMarkup(enriched, false));

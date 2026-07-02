@@ -37,6 +37,51 @@ async function clearMemberRegistrationBlocksV261(env, phone) {
   }
 }
 
+
+function memberLast8V262(phone) {
+  const p = normalizePhone(phone || "");
+  return p.length >= 8 ? p.slice(-8) : p;
+}
+
+function memberTierOverrideKeyV262(phone) {
+  const last = memberLast8V262(phone);
+  return last ? "member_tier_override:" + last : "";
+}
+
+async function readMemberTierOverrideV262(env, phone) {
+  const key = memberTierOverrideKeyV262(phone);
+  if (!key || !env || !env.ORDERS) return null;
+  const raw = await env.ORDERS.get(key);
+  if (!raw) return null;
+  try {
+    const data = JSON.parse(raw);
+    if (!data || !(data.manualTierKey || data.memberTierOverrideKey || data.memberTierManualKey)) return null;
+    return data;
+  } catch (_) {
+    return null;
+  }
+}
+
+function applyMemberTierOverrideV262(member, override) {
+  if (!member || !override) return member;
+  const tierKey = override.manualTierKey || override.memberTierOverrideKey || override.memberTierManualKey || "";
+  if (!tierKey) return member;
+  const out = { ...member };
+  out.manualTierKey = tierKey;
+  out.manualTierName = override.manualTierName || override.memberTierOverrideName || out.manualTierName || "";
+  out.manualTierIcon = override.manualTierIcon || override.memberTierOverrideIcon || out.manualTierIcon || "";
+  out.memberTierOverrideKey = tierKey;
+  out.memberTierOverrideName = out.manualTierName;
+  out.memberTierOverrideIcon = out.manualTierIcon;
+  out.manualTierBaseCups = Number(override.manualTierBaseCups ?? out.manualTierBaseCups ?? sky31TierThresholdV216(tierKey));
+  out.manualTierStartCups = Number(override.manualTierStartCups ?? override.manualTierSetAtCups ?? override.manualTierOriginalCups ?? out.manualTierStartCups ?? out.totalCups ?? 0);
+  out.manualTierSetAtCups = out.manualTierStartCups;
+  out.manualTierOriginalCups = out.manualTierStartCups;
+  out.manualTierUpdatedAt = override.manualTierUpdatedAt || out.manualTierUpdatedAt || out.updatedAt || "";
+  out.manualTierUpdatedBy = override.manualTierUpdatedBy || out.manualTierUpdatedBy || "telegram";
+  return out;
+}
+
 export async function onRequestPost(context) {
   const { request, env } = context;
 
@@ -99,6 +144,7 @@ export async function onRequestPost(context) {
     };
 
     await clearMemberRegistrationBlocksV261(env, phone);
+    try { const oldTierKey = memberTierOverrideKeyV262(phone); if (oldTierKey) await env.ORDERS.delete(oldTierKey); } catch (_) {}
     await env.ORDERS.put("member:" + phone, JSON.stringify(member), { expirationTtl: 60 * 60 * 24 * 3650 });
 
     const withStats = await enrichMemberWithOrders(env, member);
@@ -139,12 +185,11 @@ async function loadMember(env, phone) {
     try { add(key, JSON.parse(raw)); } catch (_) {}
   }
 
-  // V260: always merge same-phone member records. A Telegram tier edit can be saved
-  // into a cleaned canonical member key while an older direct key still exists. If we stop
-  // after the first direct hit, the website may show the old tier. This scan does not
-  // create any 853 alias; it only reads existing member:* records and picks the latest
-  // manual tier by manualTierUpdatedAt / updatedAt below.
-  {
+  const tierOverrideV262 = await readMemberTierOverrideV262(env, phone);
+
+  // Fast path: normally direct member keys plus the manual-tier override are enough.
+  // Only fall back to scanning member:* when no direct member key exists. This keeps login fast.
+  if (!matches.length) {
     let cursor = undefined;
     let checked = 0;
     do {
@@ -206,7 +251,7 @@ async function loadMember(env, phone) {
     if (!merged.birthday && m.birthday) merged.birthday = m.birthday;
   }
 
-  return await enrichMemberWithOrders(env, merged);
+  return await enrichMemberWithOrders(env, applyMemberTierOverrideV262(merged, tierOverrideV262));
 }
 
 async function enrichMemberWithOrders(env, member) {
@@ -565,8 +610,9 @@ function memberPhoneCandidates(phone) {
   phone = normalizePhone(phone);
   const out = [];
   if (phone) out.push(phone);
-  // V260: do not auto-add 853 as a lookup candidate for normal 8-digit numbers.
-  // If the customer actually typed an old 853-prefixed number, also try the stripped form.
+  // Read-only compatibility for old records that were previously saved as 853 + 8-digit phone.
+  // This does not create, rewrite, or normalize any member phone number.
+  if (phone.length === 8) out.push("853" + phone);
   if (phone.length > 3 && phone.startsWith("853")) out.push(phone.slice(3));
   return Array.from(new Set(out.filter(Boolean)));
 }
