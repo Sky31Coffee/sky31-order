@@ -8891,6 +8891,28 @@ html, body{ touch-action: manipulation; }
 .sky31-v235-toast.show{ transform:translate(-50%,-50%) scale(1) !important; }
 </style>
 
+
+<style id="sky31-v237-cart-drag-only-style">
+/* V237: only restore shopping-cart drag; no mobile simplification or visual downgrade. */
+#sky31PersistentCart{
+  touch-action:none !important;
+  user-select:none !important;
+  -webkit-user-select:none !important;
+  will-change:transform,left,top !important;
+  transform:translate3d(var(--sky31-cart-drag-x, 0px), var(--sky31-cart-drag-y, 0px), 0) !important;
+}
+#sky31PersistentCart.sky31-v237-pressing{
+  cursor:grabbing !important;
+}
+#sky31PersistentCart.sky31-v237-dragging{
+  cursor:grabbing !important;
+  transition:none !important;
+  transform:translate3d(var(--sky31-cart-drag-x, 0px), var(--sky31-cart-drag-y, 0px), 0) scale(1.035) !important;
+}
+#sky31PersistentCart.sky31-v237-dragging .sky31-persistent-cart-shell{
+  transition:none !important;
+}
+</style>
 </head>
 <body>
 <div id="sky31MobileBg" aria-hidden="true"></div>
@@ -11641,7 +11663,8 @@ window.addEventListener("load", function() {
 
   function sky31CleanPhoneV232(phone){
     var p = String(phone || "").replace(/\D/g,"");
-    if(p.length === 11 && p.indexOf("853") === 0) p = p.slice(3);
+    // V237: display legacy forced-853 records without the forced prefix.
+    if(p.length > 3 && p.indexOf("853") === 0) p = p.slice(3);
     return p;
   }
 
@@ -14014,24 +14037,18 @@ window.addEventListener("load", function() {
 
 
 <script>
-/* V150 premium Apple-style shopping cart button */
+/* V237 premium shopping cart: restore immediate drag only. No mobile visual simplification. */
 (function(){
+  if(window.__SKY31_V237_CART__) return;
+  window.__SKY31_V237_CART__ = true;
+
   var CART_LEFT_KEY = "sky31_persistent_cart_left";
   var CART_TOP_KEY = "sky31_persistent_cart_top";
-  var HOLD_MS = 260;
-  var MOVE_THRESHOLD = 6;
+  var MOVE_THRESHOLD = 4;
+  var SAFE = 8;
 
-  function clamp(v, min, max){
-    return Math.max(min, Math.min(max, v));
-  }
-
-  function getBtn(){
-    return document.getElementById("sky31PersistentCart");
-  }
-
-  function getBadge(){
-    return document.getElementById("sky31PersistentCartBadge");
-  }
+  function $(id){ return document.getElementById(id); }
+  function clamp(v, min, max){ return Math.max(min, Math.min(max, v)); }
 
   function cartSvgMarkup(){
     return '<div class="sky31-persistent-cart-shell" aria-hidden="true">' +
@@ -14043,7 +14060,7 @@ window.addEventListener("load", function() {
   }
 
   function ensureBtn(){
-    var btn = getBtn();
+    var btn = $("sky31PersistentCart");
     if(!btn){
       btn = document.createElement("div");
       btn.id = "sky31PersistentCart";
@@ -14051,91 +14068,74 @@ window.addEventListener("load", function() {
       btn.setAttribute("role", "button");
       btn.setAttribute("aria-label", "購物車");
       btn.setAttribute("title", "購物車");
-      var orderApp = document.getElementById("orderApp");
-      if(orderApp){ orderApp.appendChild(btn); }
-      else { document.body.appendChild(btn); }
+      var orderApp = $("orderApp");
+      if(orderApp) orderApp.appendChild(btn);
+      else document.body.appendChild(btn);
     }
-    if(!btn.querySelector('.sky31-persistent-cart-icon')){
-      btn.innerHTML = cartSvgMarkup();
-    }
+    if(!btn.querySelector(".sky31-persistent-cart-icon")) btn.innerHTML = cartSvgMarkup();
     return btn;
   }
 
-  function size(btn){
-    return Math.max(btn.offsetWidth || 64, 48);
-  }
-
+  function buttonSize(btn){ return Math.max(btn.offsetWidth || 64, 48); }
   function defaultPos(btn){
-    var s = size(btn);
+    var s = buttonSize(btn);
     return { left: window.innerWidth - s - 18, top: window.innerHeight - s - 26 };
   }
-
-  function place(btn, left, top){
+  function place(btn, left, top, save){
     if(!btn) return;
-    var s = size(btn);
-    var safe = 8;
-    var maxLeft = Math.max(safe, window.innerWidth - s - safe);
-    var maxTop = Math.max(safe, window.innerHeight - s - safe);
-    var x = Number(left);
-    var y = Number(top);
+    var s = buttonSize(btn);
+    var maxLeft = Math.max(SAFE, window.innerWidth - s - SAFE);
+    var maxTop = Math.max(SAFE, window.innerHeight - s - SAFE);
+    var x = Number(left), y = Number(top);
     if(!isFinite(x) || !isFinite(y)){
       var d = defaultPos(btn); x = d.left; y = d.top;
     }
-    x = clamp(x, safe, maxLeft);
-    y = clamp(y, safe, maxTop);
-    btn.style.left = x + "px";
-    btn.style.top = y + "px";
+    x = clamp(x, SAFE, maxLeft);
+    y = clamp(y, SAFE, maxTop);
+    btn.style.left = Math.round(x) + "px";
+    btn.style.top = Math.round(y) + "px";
     btn.style.right = "auto";
     btn.style.bottom = "auto";
     btn.style.display = "flex";
     btn.style.visibility = "visible";
     btn.style.opacity = "1";
     btn.style.pointerEvents = "auto";
+    btn.style.setProperty("--sky31-cart-drag-x", "0px");
+    btn.style.setProperty("--sky31-cart-drag-y", "0px");
     btn.classList.add("sky31-cart-position-ready");
+    if(save){
+      try{
+        localStorage.setItem(CART_LEFT_KEY, String(Math.round(x)));
+        localStorage.setItem(CART_TOP_KEY, String(Math.round(y)));
+      }catch(e){}
+    }
   }
-
   function restorePosition(){
     var btn = ensureBtn();
     var left = NaN, top = NaN;
-    try{
-      left = parseFloat(localStorage.getItem(CART_LEFT_KEY));
-      top = parseFloat(localStorage.getItem(CART_TOP_KEY));
-    }catch(e){}
-    place(btn, left, top);
-  }
-
-  function savePosition(btn){
-    if(!btn) return;
-    var rect = btn.getBoundingClientRect();
-    try{
-      localStorage.setItem(CART_LEFT_KEY, String(Math.round(rect.left)));
-      localStorage.setItem(CART_TOP_KEY, String(Math.round(rect.top)));
-    }catch(e){}
+    try{ left = parseFloat(localStorage.getItem(CART_LEFT_KEY)); top = parseFloat(localStorage.getItem(CART_TOP_KEY)); }catch(e){}
+    place(btn, left, top, false);
   }
 
   function openCart(){
     var btn = ensureBtn();
     btn.classList.add("sky31-cart-tap-feedback");
     setTimeout(function(){ btn.classList.remove("sky31-cart-tap-feedback"); }, 140);
-    try{
-      if(typeof window.openCartModal === "function") return window.openCartModal();
-      if(typeof openCartModal === "function") return openCartModal();
-    }catch(e){}
+    try{ if(typeof window.openCartModal === "function") return window.openCartModal(); }catch(e){}
+    try{ if(typeof openCartModal === "function") return openCartModal(); }catch(e){}
+    try{ var modal = $("cartModal"); if(modal) modal.classList.add("show"); }catch(e){}
   }
 
   function syncBadge(){
-    var badge = getBadge();
+    var badge = $("sky31PersistentCartBadge");
     if(!badge) return;
-    var oldBadge = document.getElementById("cartBadge");
+    var oldBadge = $("cartBadge");
     var value = "0";
-    if(oldBadge){
-      value = String(oldBadge.textContent || "0").trim() || "0";
-    }else{
+    if(oldBadge) value = String(oldBadge.textContent || "0").trim() || "0";
+    else{
       try{
         if(Array.isArray(window.cart)){
-          value = String(window.cart.reduce(function(sum, item){
-            return sum + Number(item.qty || item.quantity || 1);
-          }, 0));
+          value = String(window.cart.reduce(function(sum, item){ return sum + Number(item.qty || item.quantity || 1); }, 0));
         }
       }catch(e){}
     }
@@ -14143,105 +14143,86 @@ window.addEventListener("load", function() {
   }
 
   function observeOldBadge(){
-    var oldBadge = document.getElementById("cartBadge");
-    if(!oldBadge || oldBadge.__sky31V151Observed) return;
-    oldBadge.__sky31V151Observed = true;
-    try{
-      var mo = new MutationObserver(syncBadge);
-      mo.observe(oldBadge, {childList:true, characterData:true, subtree:true});
-    }catch(e){}
+    var oldBadge = $("cartBadge");
+    if(!oldBadge || oldBadge.__sky31V237Observed) return;
+    oldBadge.__sky31V237Observed = true;
+    try{ new MutationObserver(syncBadge).observe(oldBadge, {childList:true, characterData:true, subtree:true}); }catch(e){}
+  }
+
+  function isMenuVisible(){
+    var app = $("orderApp"), landing = $("landingPage");
+    var appVisible = !!(app && !app.classList.contains("hidden") && getComputedStyle(app).display !== "none");
+    var landingVisible = !!(landing && !landing.classList.contains("hidden") && getComputedStyle(landing).display !== "none");
+    return appVisible && !landingVisible;
+  }
+  function updateVisibility(){
+    var btn = $("sky31PersistentCart");
+    if(!btn) return;
+    btn.style.display = isMenuVisible() ? "flex" : "none";
   }
 
   function bindDrag(){
     var btn = ensureBtn();
-    if(!btn || btn.__sky31V151Bound) return;
-    btn.__sky31V151Bound = true;
+    if(!btn || btn.__sky31V237Bound) return;
+    btn.__sky31V237Bound = true;
 
-    var down = false;
-    var holding = false;
-    var dragging = false;
-    var pointerId = null;
-    var sx = 0, sy = 0, sl = 0, st = 0, downAt = 0;
-    var holdTimer = null;
+    var down = false, dragging = false, pointerId = null, raf = 0;
+    var sx = 0, sy = 0, sl = 0, st = 0, dx = 0, dy = 0;
 
-    function clearHold(){
-      if(holdTimer){ clearTimeout(holdTimer); holdTimer = null; }
+    function applyDrag(){
+      raf = 0;
+      btn.style.setProperty("--sky31-cart-drag-x", Math.round(dx) + "px");
+      btn.style.setProperty("--sky31-cart-drag-y", Math.round(dy) + "px");
     }
+    function scheduleDrag(){ if(!raf) raf = requestAnimationFrame(applyDrag); }
 
-    function clearClasses(){
-      btn.classList.remove("sky31-cart-holding");
-      btn.classList.remove("sky31-cart-dragging");
+    function finish(e, cancelled){
+      if(!down) return;
+      if(e && pointerId !== null && e.pointerId !== pointerId) return;
+      if(raf){ cancelAnimationFrame(raf); raf = 0; }
+      var finalDx = dx, finalDy = dy;
+      try{ if(pointerId !== null) btn.releasePointerCapture(pointerId); }catch(err){}
+      btn.classList.remove("sky31-v237-pressing", "sky31-v237-dragging", "sky31-cart-holding", "sky31-cart-dragging", "sky31-v152-pressing", "sky31-v152-dragging");
+      btn.style.setProperty("--sky31-cart-drag-x", "0px");
+      btn.style.setProperty("--sky31-cart-drag-y", "0px");
+      var wasDragging = dragging;
+      down = false; dragging = false; pointerId = null;
+      if(wasDragging && !cancelled){
+        place(btn, sl + finalDx, st + finalDy, true);
+        setTimeout(syncBadge, 20);
+        return;
+      }
+      place(btn, sl, st, false);
+      if(!cancelled) openCart();
     }
 
     btn.addEventListener("pointerdown", function(e){
       if(e.pointerType === "mouse" && e.button !== 0) return;
-      down = true;
-      holding = false;
-      dragging = false;
-      pointerId = e.pointerId;
-      downAt = Date.now();
+      down = true; dragging = false; pointerId = e.pointerId;
       var rect = btn.getBoundingClientRect();
-      sx = e.clientX; sy = e.clientY; sl = rect.left; st = rect.top;
-      clearHold();
-      holdTimer = setTimeout(function(){
-        if(!down) return;
-        holding = true;
-        btn.classList.add("sky31-cart-holding");
-      }, HOLD_MS);
+      sx = e.clientX; sy = e.clientY; sl = rect.left; st = rect.top; dx = 0; dy = 0;
+      btn.classList.add("sky31-v237-pressing");
       try{ btn.setPointerCapture(pointerId); }catch(err){}
     }, {passive:true});
 
     btn.addEventListener("pointermove", function(e){
       if(!down || e.pointerId !== pointerId) return;
-      var dx = e.clientX - sx;
-      var dy = e.clientY - sy;
-      var dist = Math.hypot(dx, dy);
-
-      if(!holding){
-        if(dist > MOVE_THRESHOLD * 1.6){
-          clearHold();
-        }
-        return;
-      }
-      if(dist < MOVE_THRESHOLD) return;
-
+      dx = e.clientX - sx;
+      dy = e.clientY - sy;
+      if(!dragging && Math.hypot(dx, dy) < MOVE_THRESHOLD) return;
       dragging = true;
-      btn.classList.add("sky31-cart-dragging");
+      btn.classList.remove("sky31-v237-pressing");
+      btn.classList.add("sky31-v237-dragging");
       if(e.cancelable) e.preventDefault();
-      place(btn, sl + dx, st + dy);
+      scheduleDrag();
     }, {passive:false});
 
-    function finishPointer(e){
-      if(!down || (e && e.pointerId != null && e.pointerId !== pointerId)) return;
-      clearHold();
-      var dx = e ? (e.clientX - sx) : 0;
-      var dy = e ? (e.clientY - sy) : 0;
-      var dist = Math.hypot(dx, dy);
-      var elapsed = Date.now() - downAt;
-      try{ if(pointerId != null) btn.releasePointerCapture(pointerId); }catch(err){}
-      down = false; pointerId = null;
-      clearClasses();
-      if(dragging){
-        dragging = false; holding = false;
-        savePosition(btn);
-        return;
-      }
-      holding = false;
-      if(elapsed < 520 && dist < MOVE_THRESHOLD){
-        openCart();
-      }
-    }
-
-    btn.addEventListener("pointerup", finishPointer, {passive:false});
-    btn.addEventListener("pointercancel", function(){
-      clearHold();
-      down = false; holding = false; dragging = false; pointerId = null;
-      clearClasses();
-    }, {passive:true});
+    btn.addEventListener("pointerup", function(e){ finish(e, false); }, {passive:false});
+    btn.addEventListener("pointercancel", function(e){ finish(e, true); }, {passive:true});
   }
 
   function hideOldFloatCart(){
-    var old = document.getElementById("floatCart");
+    var old = $("floatCart");
     if(old){
       old.style.display = "none";
       old.style.visibility = "hidden";
@@ -14257,35 +14238,23 @@ window.addEventListener("load", function() {
     bindDrag();
     syncBadge();
     observeOldBadge();
+    updateVisibility();
   }
 
-  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot, {once:true});
   else boot();
-
   setTimeout(boot, 80);
-  setTimeout(boot, 300);
-  setTimeout(boot, 1000);
+  setTimeout(boot, 400);
+  document.addEventListener("click", function(){ setTimeout(function(){ syncBadge(); updateVisibility(); }, 40); }, true);
+  window.addEventListener("resize", function(){ var btn = ensureBtn(); var r = btn.getBoundingClientRect(); place(btn, r.left, r.top, true); }, {passive:true});
 
-  document.addEventListener("click", function(){
-    setTimeout(syncBadge, 50);
-    setTimeout(syncBadge, 250);
-  }, true);
-
-  window.addEventListener("resize", function(){
-    var btn = ensureBtn();
-    var rect = btn.getBoundingClientRect();
-    place(btn, rect.left, rect.top);
-    savePosition(btn);
-  });
-
-  window.sky31CartDebug = {
+  window.sky31CartDebug = window.sky31CartDragDebug = {
     show: boot,
+    sync: syncBadge,
     reset: function(){
-      try{
-        localStorage.removeItem(CART_LEFT_KEY);
-        localStorage.removeItem(CART_TOP_KEY);
-      }catch(e){}
+      try{ localStorage.removeItem(CART_LEFT_KEY); localStorage.removeItem(CART_TOP_KEY); }catch(e){}
       restorePosition();
+      updateVisibility();
     }
   };
 })();
