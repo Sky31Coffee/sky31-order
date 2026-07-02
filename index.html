@@ -11965,6 +11965,7 @@ window.addEventListener("load", function() {
         '<div class="member-order-detail">' +
           '<div class="member-row"><span>取餐時間</span><strong>' + esc(o.pickupTime || "-") + '</strong></div>' +
           '<div class="member-row"><span>狀態</span><strong>' + esc(statusText(o.status)) + '</strong></div>' +
+          (window.SKY31_ORDER_DISCOUNT_DETAIL_V241 ? window.SKY31_ORDER_DISCOUNT_DETAIL_V241(o, "member-row") : '') +
           itemHtml +
         '</div>' +
       '</div>';
@@ -16115,7 +16116,6 @@ window.addEventListener("load", function() {
         '<div class="line"><span>本次兌換</span><strong>' + calc.useRewards + ' 杯</strong></div>' +
         '<div class="line"><span>獎賞扣減</span><strong>-' + money201(calc.rewardDiscount) + '</strong></div>' +
         '<div class="line v201-final-total"><span>應付總額</span><strong>' + money201(calc.finalTotal) + '</strong></div>' +
-        '<div class="note">免費飲品：' + esc201(names || "飲品") + '。兌換只會扣可用免單次數，不會扣總累計杯數。</div>' +
       '</div>';
     }
 
@@ -17147,10 +17147,11 @@ window.addEventListener("load", function() {
     el.className = "sky31-maintenance-lock-v218";
     el.innerHTML =
       '<div class="sky31-maintenance-card-v218">' +
-        '<div class="icon">🛠️</div>' +
-        '<h2>系統維護，暫停使用</h2>' +
-        '<p id="sky31MaintenanceMsgV218">網站正在進行系統維護，暫時未能下單或查詢會員資料。</p>' +
-        '<div class="small">請稍後再試，維護完成後會自動恢復。</div>' +
+        '<div class="sky31-maintenance-brand-v241">Sky31</div>' +
+        '<div class="icon">☕</div>' +
+        '<h2>Sky31 正在短暫維護</h2>' +
+        '<p id="sky31MaintenanceMsgV218">我們正在更新點餐系統及會員資料，暫時未能下單或查詢訂單。</p>' +
+        '<div class="small">系統恢復後將會自動重新開放，感謝你的耐心等候。</div>' +
       '</div>';
     document.body.appendChild(el);
     return el;
@@ -17159,7 +17160,9 @@ window.addEventListener("load", function() {
   function setMaintenance218(active, msg){
     const el = ensureMaintenanceDom218();
     const p = document.getElementById("sky31MaintenanceMsgV218");
-    if(p) p.textContent = msg || "網站正在進行系統維護，暫時未能下單或查詢會員資料。";
+    msg = String(msg || "").trim();
+    if(!msg || msg === "系統維護，暫停使用。" || msg === "系統維護，暫停使用") msg = "我們正在更新點餐系統及會員資料，暫時未能下單或查詢訂單。";
+    if(p) p.textContent = msg;
     el.classList.toggle("show", !!active);
     document.body.classList.toggle("sky31-maintenance-active-v218", !!active);
   }
@@ -17169,7 +17172,7 @@ window.addEventListener("load", function() {
       const res = await fetch("/api/menu?_maintenance=1&t=" + Date.now(), {cache:"no-store", headers:{"Cache-Control":"no-cache"}});
       const data = await res.json().catch(() => ({}));
       const m = data && data.maintenance;
-      setMaintenance218(!!(m && m.active), (m && m.message) || "系統維護，暫停使用。");
+      setMaintenance218(!!(m && m.active), (m && m.message) || "我們正在更新點餐系統及會員資料，暫時未能下單或查詢訂單。");
     }catch(e){
       // Do not lock the website if the status check fails.
     }
@@ -17675,6 +17678,15 @@ window.addEventListener("load", function() {
     });
   }
   function showToast(text){
+    const rawText = String(text || "").trim();
+    if(!rawText) return;
+    const now = Date.now();
+    const type = /登入|login/i.test(rawText) ? "login" : (/登出|logout/i.test(rawText) ? "logout" : rawText);
+    // V241: prevent duplicate success prompts caused by legacy alert() + V235 login wrapper firing together.
+    if(window.__SKY31_LAST_TOAST_V241 && window.__SKY31_LAST_TOAST_V241.type === type && now - window.__SKY31_LAST_TOAST_V241.at < 1800){
+      return;
+    }
+    window.__SKY31_LAST_TOAST_V241 = {type:type, at:now};
     let el = document.getElementById("sky31V235Toast");
     if(!el){
       el = document.createElement("div");
@@ -17682,7 +17694,7 @@ window.addEventListener("load", function() {
       el.className = "sky31-v225-toast sky31-v235-toast";
       document.body.appendChild(el);
     }
-    el.textContent = String(text || "");
+    el.textContent = rawText;
     clearTimeout(el.__hideTimer);
     clearTimeout(el.__removeTimer);
     el.classList.add("show");
@@ -17726,7 +17738,7 @@ window.addEventListener("load", function() {
         setFlagsLoggedIn();
         syncBadge(m);
         hideOldToastsSoon();
-        if(name === "memberLoginLookup") showToast("已登入會員");
+        // V241: original login flow already triggers one success toast; avoid duplicate overlay.
       }else{
         syncBadge(null);
       }
@@ -17985,7 +17997,6 @@ window.addEventListener("load", function() {
         '<div class="line"><span>目前可用免單</span><strong>' + calc.available + ' 次</strong></div>' +
         '<div class="line"><span>本次兌換</span><strong>' + calc.useRewards + ' 杯</strong></div>' +
         '<div class="line"><span>免單扣減</span><strong>-' + money240(calc.rewardDiscount) + '</strong></div>' +
-        '<div class="note">免費飲品：' + esc240(names || "飲品") + '。免單按等級優惠後的飲品價扣減，不會重複扣同一個豆子加價。</div>' +
       '</div>';
     }
     return '<div class="v201-checkout-reward">' +
@@ -18002,7 +18013,6 @@ window.addEventListener("load", function() {
       '<div class="line"><span>目前等級</span><strong>' + esc240(calc.tier.name) + ' ' + esc240(calc.tier.icon) + '</strong></div>' +
       '<div class="line"><span>等級優惠</span><strong>' + (calc.tierDiscount > 0 ? '-' + money240(calc.tierDiscount) : '暫無可套用') + '</strong></div>' +
       (calc.tierDetails.length ? '<div class="line"><span>優惠內容</span><strong>' + esc240(calc.tierDetails.join("、")) + '</strong></div>' : '') +
-      '<div class="line"><span>計算方式</span><strong>先扣豆子加價，再套用免單</strong></div>' +
     '</div>';
   }
 
@@ -18155,6 +18165,169 @@ window.addEventListener("load", function() {
     const text = String(t.textContent || "") + String(t.getAttribute("onclick") || "") + String(t.getAttribute("aria-label") || "");
     if(/查詢訂單|openOrderStatusModal|確認訂單|sendOrder|submitOrder/i.test(text)) setTimeout(fixCheckoutClose240, 80);
   }, true);
+})();
+</script>
+
+
+
+<style id="sky31-v241-ui-polish">
+/* V241: Sky31 maintenance glass design + cleaner checkout discount display. */
+.sky31-maintenance-lock-v218{
+  background:
+    radial-gradient(circle at 18% 12%, rgba(255,255,255,.86), rgba(255,255,255,.18) 34%, transparent 56%),
+    radial-gradient(circle at 82% 18%, rgba(160,190,230,.42), transparent 42%),
+    linear-gradient(135deg, rgba(244,248,255,.82), rgba(221,231,246,.72)) !important;
+  backdrop-filter: blur(28px) saturate(1.22) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(1.22) !important;
+}
+.sky31-maintenance-card-v218{
+  position:relative !important;
+  overflow:hidden !important;
+  width:min(430px,calc(100vw - 42px)) !important;
+  padding:30px 24px 26px !important;
+  border-radius:34px !important;
+  background:linear-gradient(145deg, rgba(255,255,255,.72), rgba(255,255,255,.42)) !important;
+  border:1px solid rgba(255,255,255,.78) !important;
+  box-shadow:0 34px 95px rgba(38,58,88,.24), inset 0 1px 0 rgba(255,255,255,.95), inset 0 -1px 0 rgba(255,255,255,.28) !important;
+  backdrop-filter: blur(24px) saturate(1.26) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(1.26) !important;
+}
+.sky31-maintenance-card-v218:before{
+  content:"";
+  position:absolute;
+  inset:-40% -20% auto -20%;
+  height:180px;
+  background:radial-gradient(circle, rgba(255,255,255,.82), rgba(255,255,255,0) 66%);
+  pointer-events:none;
+}
+.sky31-maintenance-brand-v241{
+  position:relative !important;
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  min-width:86px !important;
+  height:28px !important;
+  margin:0 auto 12px !important;
+  border-radius:999px !important;
+  background:rgba(255,255,255,.56) !important;
+  border:1px solid rgba(255,255,255,.78) !important;
+  color:rgba(30,38,50,.72) !important;
+  font-size:12px !important;
+  font-weight:950 !important;
+  letter-spacing:.16em !important;
+  text-transform:uppercase !important;
+}
+.sky31-maintenance-card-v218 .icon{
+  position:relative !important;
+  width:66px !important;
+  height:66px !important;
+  margin:0 auto 15px !important;
+  border-radius:26px !important;
+  background:linear-gradient(145deg, rgba(255,255,255,.88), rgba(255,255,255,.46)) !important;
+  border:1px solid rgba(255,255,255,.82) !important;
+  box-shadow:0 18px 40px rgba(45,65,95,.14), inset 0 1px 0 rgba(255,255,255,.95) !important;
+}
+.sky31-maintenance-card-v218 h2{
+  position:relative !important;
+  margin-bottom:10px !important;
+  color:#1f2733 !important;
+  font-size:23px !important;
+  letter-spacing:-.03em !important;
+}
+.sky31-maintenance-card-v218 p{
+  position:relative !important;
+  max-width:330px !important;
+  margin:0 auto !important;
+  color:rgba(31,39,51,.68) !important;
+  font-size:14px !important;
+  line-height:1.75 !important;
+  font-weight:760 !important;
+}
+.sky31-maintenance-card-v218 .small{
+  position:relative !important;
+  max-width:330px !important;
+  margin:16px auto 0 !important;
+  padding-top:14px !important;
+  border-top:1px solid rgba(31,39,51,.08) !important;
+  color:rgba(31,39,51,.52) !important;
+  font-size:12px !important;
+  line-height:1.6 !important;
+  font-weight:700 !important;
+}
+</style>
+
+<script id="sky31-v241-history-detail-patch">
+/* V241: richer order history / status detail display and maintenance fallback text. */
+(function(){
+  function esc241(s){
+    return String(s == null ? "" : s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});
+  }
+  function money241(n){
+    n = Math.round(Number(n || 0) * 100) / 100;
+    return "MOP " + n.toString();
+  }
+  function date241(s){
+    if(!s) return "-";
+    try{
+      var d = new Date(s);
+      if(isNaN(d.getTime())) return String(s);
+      return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")+" "+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
+    }catch(e){ return String(s); }
+  }
+  function detailRows241(o, cls){
+    cls = cls || "member-row";
+    var rows = [];
+    var subtotal = Number(o.subtotalBeforeReward || o.totalBeforeTierDiscount || 0);
+    var tierDiscount = Number(o.tierDiscount || 0);
+    var rewardDiscount = Number(o.rewardDiscount || 0);
+    var rewardUse = Number(o.rewardUse || o.rewardUseRequested || 0);
+    var birthday = Number(o.birthdayVoucherCount || 0);
+    var total = Number(o.totalAmount || 0);
+    var tierName = String(o.memberTierName || "會員等級優惠");
+    var tierDetail = Array.isArray(o.tierDiscountDetails) && o.tierDiscountDetails.length ? "（" + o.tierDiscountDetails.join("、") + "）" : "";
+    var freeNames = Array.isArray(o.rewardFreeItems) && o.rewardFreeItems.length ? o.rewardFreeItems.map(function(x){return x.title || x.name || "飲品";}).slice(0,4).join("、") : "";
+    function row(label, value){ rows.push('<div class="' + cls + '"><span>' + esc241(label) + '</span><strong>' + esc241(value) + '</strong></div>'); }
+    if(subtotal > 0) row("原本總額", money241(subtotal));
+    if(tierDiscount > 0) row(tierName + "優惠", "-" + money241(tierDiscount) + tierDetail);
+    if(rewardDiscount > 0) row("會員免單券", "-" + money241(rewardDiscount) + (rewardUse ? "（使用 " + rewardUse + " 張" + (freeNames ? "｜" + freeNames : "") + "）" : ""));
+    if(birthday > 0) row("生日月飲品券", birthday + " 張已計入可用免單");
+    if(subtotal > 0 || tierDiscount > 0 || rewardDiscount > 0) row("實付金額", money241(total));
+    return rows.length ? '<div class="sky31-order-discount-detail-v241">' + rows.join("") + '</div>' : "";
+  }
+  window.SKY31_ORDER_DISCOUNT_DETAIL_V241 = detailRows241;
+
+  var oldSetMaint = window.SKY31_CHECK_MAINTENANCE_V218;
+  window.SKY31_MAINTENANCE_TEXT_V241 = {
+    title:"Sky31 正在短暫維護",
+    message:"我們正在更新點餐系統及會員資料，暫時未能下單或查詢訂單。",
+    small:"系統恢復後將會自動重新開放，感謝你的耐心等候。"
+  };
+
+  function addDiscountToBb(html, o){
+    var extra = detailRows241(o, "bb-time-row");
+    if(!extra) return html;
+    return html.replace('<div class="bb-section-title">訂單內容</div>', '<div class="bb-section-title">優惠明細</div>' + extra + '<div class="bb-section-title">訂單內容</div>');
+  }
+  function addDiscountToStatus(html, o){
+    var extra = detailRows241(o, "status-time-row");
+    if(!extra) return html;
+    return html.replace('<div class="status-section-title">訂單內容</div>', '<div class="status-section-title">優惠明細</div>' + extra + '<div class="status-section-title">訂單內容</div>');
+  }
+  function patchCards(){
+    if(typeof window.bbOrderCard === "function" && !window.bbOrderCard.__sky31V241){
+      var oldBb = window.bbOrderCard;
+      window.bbOrderCard = function(o){ return addDiscountToBb(oldBb(o), o || {}); };
+      window.bbOrderCard.__sky31V241 = true;
+    }
+    if(typeof window.sky31OrderStatusCard === "function" && !window.sky31OrderStatusCard.__sky31V241){
+      var oldStatus = window.sky31OrderStatusCard;
+      window.sky31OrderStatusCard = function(o){ return addDiscountToStatus(oldStatus(o), o || {}); };
+      window.sky31OrderStatusCard.__sky31V241 = true;
+    }
+  }
+  patchCards();
+  document.addEventListener("DOMContentLoaded", function(){ setTimeout(patchCards, 120); setTimeout(patchCards, 800); });
+  setTimeout(patchCards, 1500);
 })();
 </script>
 
