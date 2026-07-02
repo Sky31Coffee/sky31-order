@@ -8250,6 +8250,25 @@ body.sky31-maintenance-active-v218{
   font-weight:850 !important;
 }
 
+
+/* V227: member UI cleanup */
+#memberPageLogin .member-hero p,
+#memberPageHome .member-hero p{
+  display:none !important;
+}
+#memberModal.member-logged-in-v213 .member-auth-only-v213{
+  display:none !important;
+}
+#memberModal.member-logged-in-v213 .member-logout-only-v213{
+  display:flex !important;
+}
+#memberModal.member-logged-out-v213 .member-auth-only-v213{
+  display:flex !important;
+}
+#memberModal.member-logged-out-v213 .member-logout-only-v213{
+  display:none !important;
+}
+
 </style>
 
 <style>
@@ -10925,7 +10944,7 @@ window.addEventListener("load", function() {
         '<div class="member-body">' +
 
           '<section id="memberPageHome" class="member-page">' +
-            '<div class="member-hero"><h2>Sky31 會員中心</h2><p>登入會員、註冊會員、查看歷史訂單。</p></div>' +
+            '<div class="member-hero"><h2>Sky31 會員中心</h2></div>' +
             '<div id="memberQuickCard" class="member-card" style="display:none;"></div>' +
             '<div class="member-menu">' +
               '<button class="member-menu-card member-auth-only-v213" type="button" onclick="memberGoPage(\'login\')">' +
@@ -10947,7 +10966,7 @@ window.addEventListener("load", function() {
           '</section>' +
 
           '<section id="memberPageLogin" class="member-page">' +
-            '<div class="member-hero"><h2>會員登入</h2><p>輸入已註冊電話號碼登入會員。登入後會隱藏手機輸入框。</p></div>' +
+            '<div class="member-hero"><h2>會員登入</h2></div>' +
             '<div id="memberLoggedPanel" class="member-card" style="display:none;"></div>' +
             '<div class="member-form">' +
               '<label>手機 Phone</label>' +
@@ -17504,6 +17523,215 @@ window.addEventListener("load", function() {
   }
 
   window.SKY31_SHOW_MEMBER_HOME_V226 = showMemberHomeV226;
+})();
+</script>
+
+
+<script>
+/* V227: member UI login/logout/phone cleanup.
+   This block only controls display/state. It does not change backend member keys.
+*/
+(function(){
+  const MEMBER_KEY = "sky31_member_v1";
+
+  function strip853V227(phone){
+    const p = String(phone || "").replace(/\D/g, "");
+    if(p.length === 11 && p.indexOf("853") === 0) return p.slice(3);
+    return p;
+  }
+
+  function memberV227(){
+    try{
+      const raw = localStorage.getItem(MEMBER_KEY);
+      return raw ? JSON.parse(raw) : null;
+    }catch(e){ return null; }
+  }
+
+  function saveMemberV227(member){
+    try{
+      if(member && member.phone) localStorage.setItem(MEMBER_KEY, JSON.stringify(member));
+    }catch(e){}
+  }
+
+  function isLoggedInV227(){
+    const m = memberV227();
+    return !!(m && m.phone);
+  }
+
+  function normalizeVisiblePhonesV227(member){
+    member = member || memberV227();
+    const visible = strip853V227(member && member.phone);
+    if(!visible) return;
+    [
+      "phone",
+      "modalPhone",
+      "memberPhone",
+      "memberLoginPhone",
+      "checkoutPhone"
+    ].forEach(function(id){
+      const el = document.getElementById(id);
+      if(el && "value" in el) el.value = visible;
+    });
+
+    // Text nodes in member cards may show 853; keep backend data unchanged, only presentation changed.
+    document.querySelectorAll(".member-row strong, .member-card strong, #memberQuickCard, #memberLoggedPanel").forEach(function(el){
+      try{
+        if(!el || !el.childNodes || el.querySelector && el.querySelector("input,button,select,textarea")) return;
+        const txt = String(el.textContent || "");
+        if(txt.indexOf("853" + visible) >= 0 && txt.length < 500){
+          el.textContent = txt.replaceAll("853" + visible, visible);
+        }
+      }catch(e){}
+    });
+  }
+
+  function setMemberLoggedStateV227(member){
+    member = member || memberV227();
+    const logged = !!(member && member.phone);
+    const modal = document.getElementById("memberModal");
+    if(modal){
+      modal.classList.toggle("member-logged-in-v213", logged);
+      modal.classList.toggle("member-logged-out-v213", !logged);
+    }
+
+    document.querySelectorAll(".member-auth-only-v213").forEach(function(el){
+      el.style.display = logged ? "none" : "";
+      el.hidden = !!logged;
+    });
+    document.querySelectorAll(".member-logout-only-v213").forEach(function(el){
+      el.style.display = logged ? "" : "none";
+      el.hidden = !logged;
+    });
+
+    try{ if(typeof updateMemberProfileButton === "function") updateMemberProfileButton(logged ? member : null); }catch(e){}
+    normalizeVisiblePhonesV227(member);
+  }
+
+  function showMemberHomeV227(member){
+    member = member || memberV227();
+    if(!member || !member.phone) {
+      setMemberLoggedStateV227(null);
+      return false;
+    }
+
+    // Keep backend-compatible phone internally; only fields are shown without 853.
+    saveMemberV227(member);
+
+    try{ if(typeof applyMember === "function") applyMember(member); }catch(e){}
+    try{ if(typeof renderHomeQuickCard === "function") renderHomeQuickCard(); }catch(e){}
+    try{ if(typeof renderLoggedPanel === "function") renderLoggedPanel(member); }catch(e){}
+    try{ if(typeof showPage === "function") showPage("home"); }catch(e){}
+
+    setMemberLoggedStateV227(member);
+    normalizeVisiblePhonesV227(member);
+    return true;
+  }
+
+  function clearLoginTextsV227(){
+    document.querySelectorAll("#memberPageLogin .member-hero p,#memberPageHome .member-hero p").forEach(function(el){
+      el.remove();
+    });
+    document.querySelectorAll("#memberPageLogin .member-hero,#memberPageHome .member-hero").forEach(function(el){
+      const text = String(el.textContent || "");
+      if(text.indexOf("輸入已註冊電話號碼") >= 0 || text.indexOf("登入會員、註冊會員、查看歷史訂單") >= 0){
+        el.childNodes.forEach(function(node){
+          if(node.nodeType === 3) node.textContent = node.textContent.replace(("輸入已註冊電話號碼" + "登入會員。登入後會隱藏手機輸入框。"),"").replace(("登入會員、註冊會員、" + "查看歷史訂單。"),"");
+        });
+      }
+    });
+  }
+
+  const oldLogin = window.memberLoginLookup;
+  if(typeof oldLogin === "function" && !oldLogin.__sky31V227LoginHome){
+    const wrapped = async function(){
+      const result = await oldLogin.apply(this, arguments);
+
+      let member = null;
+      if(result && result.phone) member = result;
+      if(!member) member = memberV227();
+
+      for(let i=0;i<10 && !(member && member.phone);i++){
+        await new Promise(r => setTimeout(r, 100));
+        member = memberV227();
+      }
+
+      if(member && member.phone){
+        window.__SKY31_HARD_LOGOUT_ACTIVE_V225 = false;
+        window.__SKY31_MEMBER_LOGGED_OUT_V224 = false;
+        showMemberHomeV227(member);
+        setTimeout(function(){ showMemberHomeV227(memberV227()); }, 150);
+        setTimeout(function(){ showMemberHomeV227(memberV227()); }, 500);
+      }
+      return result;
+    };
+    wrapped.__sky31V227LoginHome = true;
+    window.memberLoginLookup = wrapped;
+  }
+
+  // Reinforce state after opening member modal. This brings back the logout button after login.
+  const oldOpen = window.openMemberModal;
+  if(typeof oldOpen === "function" && !oldOpen.__sky31V227Open){
+    const wrappedOpen = async function(){
+      const result = await oldOpen.apply(this, arguments);
+      setTimeout(function(){
+        clearLoginTextsV227();
+        setMemberLoggedStateV227(memberV227());
+        if(isLoggedInV227()) showMemberHomeV227(memberV227());
+      }, 80);
+      return result;
+    };
+    wrappedOpen.__sky31V227Open = true;
+    window.openMemberModal = wrappedOpen;
+  }
+
+  const oldShowPage = window.showPage;
+  if(typeof oldShowPage === "function" && !oldShowPage.__sky31V227Show){
+    const wrappedShow = function(page){
+      if(page === "login" && isLoggedInV227()){
+        page = "home";
+      }
+      const result = oldShowPage.apply(this, arguments);
+      setTimeout(function(){
+        clearLoginTextsV227();
+        setMemberLoggedStateV227(memberV227());
+        normalizeVisiblePhonesV227(memberV227());
+      }, 50);
+      return result;
+    };
+    wrappedShow.__sky31V227Show = true;
+    window.showPage = wrappedShow;
+  }
+
+  // Preserve hard logout behavior from V225 but update UI after it.
+  const oldLogout = window.memberLogout;
+  if(typeof oldLogout === "function" && !oldLogout.__sky31V227Logout){
+    const wrappedLogout = function(){
+      const result = oldLogout.apply(this, arguments);
+      setTimeout(function(){ setMemberLoggedStateV227(null); clearLoginTextsV227(); }, 80);
+      setTimeout(function(){ setMemberLoggedStateV227(null); clearLoginTextsV227(); }, 400);
+      return result;
+    };
+    wrappedLogout.__sky31V227Logout = true;
+    window.memberLogout = wrappedLogout;
+  }
+
+  function bootV227(){
+    clearLoginTextsV227();
+    setMemberLoggedStateV227(memberV227());
+    normalizeVisiblePhonesV227(memberV227());
+  }
+
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", bootV227);
+  }else{
+    bootV227();
+  }
+  setTimeout(bootV227, 250);
+  setTimeout(bootV227, 900);
+  document.addEventListener("click", function(){ setTimeout(bootV227, 80); }, true);
+
+  window.SKY31_SHOW_MEMBER_HOME_V227 = showMemberHomeV227;
+  window.SKY31_STRIP_853_V227 = strip853V227;
 })();
 </script>
 
