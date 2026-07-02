@@ -20,11 +20,9 @@ export async function onRequestPost(context) {
     const cart = normalizeCart(rawCart);
 
     
-    const sky31MemberForRewardV192 = await sky31LoadMemberForRewardV192(context.env || env, body.phone || body.customerPhone || (body.member && body.member.phone));
+    const sky31MemberForRewardV192 = await sky31LoadMemberForRewardV192(context.env || env, phone || body.phone || body.customerPhone || (body.member && body.member.phone));
     const sky31RewardInfoV192 = sky31RewardsFromMemberV192(sky31MemberForRewardV192 || {});
     const birthdayVoucherCountV217 = sky31BirthdayVoucherCountOrderV217(activeMember || sky31MemberForRewardV192 || {});
-    const sky31RewardCalcV192 = sky31RewardDiscountForItemsV192(cart, Number(sky31RewardInfoV192.availableRewards || 0) + birthdayVoucherCountV217);
-    const sky31RewardAppliedV192 = sky31RewardCalcV192.useRewards > 0;
 if (!cart.length && !String(body.orderText || "").trim()) {
       return json({ ok: false, error: "請先選擇飲品" }, 400);
     }
@@ -33,15 +31,19 @@ if (!cart.length && !String(body.orderText || "").trim()) {
     const createdAt = new Date();
     const pickup = body.pickup || getPickupFromCart(cart) || "Now 即取";
     const pickupTime = resolvePickupTime(pickup, createdAt);
-    const subtotalBeforeRewardV199 = cartTotal(cart);
-    const rewardUseV199 = Math.max(0, Number((typeof sky31RewardCalcV192 !== "undefined" && sky31RewardCalcV192.useRewards) || 0));
-    const rawRewardDiscountV199 = Math.max(0, Number((typeof sky31RewardCalcV192 !== "undefined" && sky31RewardCalcV192.rewardDiscount) || 0));
-    const rewardDiscountV199 = Math.min(subtotalBeforeRewardV199, rawRewardDiscountV199);
-    const rewardFreeItemsV199 = (typeof sky31RewardCalcV192 !== "undefined" && sky31RewardCalcV192.freeItems) || [];
-    const totalAfterRewardV199 = Math.max(0, subtotalBeforeRewardV199 - rewardDiscountV199);
-    const tierDiscountCalcV213 = sky31OrderTierDiscountV213(activeMember, cart, totalAfterRewardV199);
-    const tierDiscountV213 = Math.min(totalAfterRewardV199, Math.max(0, Number(tierDiscountCalcV213.discount || 0)));
-    const totalAfterTierV213 = Math.max(0, totalAfterRewardV199 - tierDiscountV213);
+    const sky31DiscountCalcV240 = sky31CalculateOrderDiscountsV240(
+      activeMember,
+      cart,
+      Number(sky31RewardInfoV192.availableRewards || 0) + birthdayVoucherCountV217
+    );
+    const subtotalBeforeRewardV199 = sky31DiscountCalcV240.subtotal;
+    const tierDiscountCalcV213 = sky31DiscountCalcV240.tierCalc;
+    const tierDiscountV213 = sky31DiscountCalcV240.tierDiscount;
+    const totalAfterTierV213 = sky31DiscountCalcV240.totalAfterTier;
+    const rewardUseV199 = sky31DiscountCalcV240.rewardUse;
+    const rewardDiscountV199 = sky31DiscountCalcV240.rewardDiscount;
+    const rewardFreeItemsV199 = sky31DiscountCalcV240.rewardFreeItems;
+    const totalAfterTierAndRewardV240 = sky31DiscountCalcV240.totalAmount;
 
 
     const order = {
@@ -66,8 +68,10 @@ if (!cart.length && !String(body.orderText || "").trim()) {
       memberTierManual: !!tierDiscountCalcV213.tier.manual,
       tierDiscount: tierDiscountV213,
       tierDiscountDetails: tierDiscountCalcV213.details,
-      totalBeforeTierDiscount: totalAfterRewardV199,
-      totalAmount: totalAfterTierV213,
+      discountCalculationOrder: "tier_first_reward_after",
+      totalBeforeTierDiscount: subtotalBeforeRewardV199,
+      totalAfterTierDiscount: totalAfterTierV213,
+      totalAmount: totalAfterTierAndRewardV240,
       currency: "MOP",
       cart,
       orderNote: String(body.orderNote || body.note || "").trim(),
@@ -100,7 +104,7 @@ if (!cart.length && !String(body.orderText || "").trim()) {
 
     if (context.waitUntil) context.waitUntil(bg);
 
-    return json({ ok: true, orderNo, status: order.status, pickupTime, totalAmount: order.totalAmount, subtotalBeforeReward: order.subtotalBeforeReward, rewardUse: order.rewardUse, rewardDiscount: order.rewardDiscount, currency: order.currency });
+    return json({ ok: true, orderNo, status: order.status, pickupTime, totalAmount: order.totalAmount, subtotalBeforeReward: order.subtotalBeforeReward, tierDiscount: order.tierDiscount, rewardUse: order.rewardUse, rewardDiscount: order.rewardDiscount, currency: order.currency });
   } catch (e) {
     return json({ ok: false, error: e.message || "提交失敗，請稍後再試" }, 500);
   }
@@ -366,6 +370,93 @@ function sky31OrderTierDiscountV213(member, cart, afterReward) {
   return { tier, discount, details };
 }
 
+
+/* V240: apply stackable benefits without double-discounting the same surcharge.
+   Calculation order: member tier bean-surcharge waiver first, then free-drink voucher on the discounted cup price. */
+function sky31ExpandedOrderUnitsV240(cart) {
+  const units = [];
+  (Array.isArray(cart) ? cart : []).forEach((item, itemIndex) => {
+    const qty = Math.max(1, Number(item.qty || item.quantity || 1));
+    const unit = Number(calcUnitPrice(item) || item.unitPrice || item.price || 0);
+    const surcharge = Math.max(0, Number(item.beanSurcharge || item.limitedSurcharge || (isLimitedBeanOrder(item.bean) ? V182_LIMITED_BEAN_SURCHARGE : 0) || 0));
+    for (let i = 0; i < qty; i++) {
+      units.push({
+        itemIndex,
+        cupIndex: i,
+        title: item.title || item.name || item.cn || "飲品",
+        unit,
+        surcharge: Math.min(unit, surcharge),
+        tierWaiver: 0,
+        rewardUnit: unit
+      });
+    }
+  });
+  return units;
+}
+
+function sky31TierDiscountPlanV240(member, cart, subtotal) {
+  const tier = sky31OrderDisplayTierV213(member);
+  const units = sky31ExpandedOrderUnitsV240(cart);
+  const details = [];
+  let discount = 0;
+
+  if (tier.key === "silver" || tier.key === "gold" || tier.key === "diamond") {
+    const maxCount = tier.key === "silver" ? 1 : (tier.key === "gold" ? 2 : Infinity);
+    let used = 0;
+    for (const u of units) {
+      if (used >= maxCount) break;
+      if (u.surcharge <= 0) continue;
+      u.tierWaiver = Math.min(u.surcharge, V182_LIMITED_BEAN_SURCHARGE);
+      u.rewardUnit = Math.max(0, u.unit - u.tierWaiver);
+      discount += u.tierWaiver;
+      used += 1;
+    }
+    if (discount > 0) details.push(tier.key === "diamond" ? "限定豆子加價全數豁免" : "限定豆子加價豁免 ×" + used);
+  } else if (tier.key === "blackgold") {
+    const d = Math.min(15, Math.max(0, Number(subtotal || 0)));
+    if (d > 0) {
+      discount += d;
+      details.push("黑金會員 MOP 15 優惠");
+    }
+  }
+
+  discount = Math.min(Math.max(0, Number(subtotal || 0)), Math.round(discount * 100) / 100);
+  return { tier, discount, details, units };
+}
+
+function sky31RewardDiscountForUnitsV240(units, availableRewards, capAmount) {
+  const rewards = Math.max(0, Number(availableRewards || 0));
+  const expanded = (Array.isArray(units) ? units : []).map(u => ({
+    title: u.title || "飲品",
+    unit: Math.max(0, Number(u.rewardUnit ?? u.unit ?? 0))
+  })).sort((a, b) => b.unit - a.unit);
+  const use = Math.min(rewards, expanded.length);
+  const selected = expanded.slice(0, use);
+  const rawDiscount = selected.reduce((sum, x) => sum + Number(x.unit || 0), 0);
+  const discount = Math.min(Math.max(0, Number(capAmount || 0)), Math.round(rawDiscount * 100) / 100);
+  return { useRewards: use, rewardDiscount: discount, freeItems: selected };
+}
+
+function sky31CalculateOrderDiscountsV240(member, cart, availableRewards) {
+  const subtotal = Math.round(cartTotal(cart) * 100) / 100;
+  const tierCalc = sky31TierDiscountPlanV240(member, cart, subtotal);
+  const tierDiscount = Number(tierCalc.discount || 0);
+  const totalAfterTier = Math.max(0, Math.round((subtotal - tierDiscount) * 100) / 100);
+  const rewardCalc = sky31RewardDiscountForUnitsV240(tierCalc.units, availableRewards, totalAfterTier);
+  const rewardDiscount = Number(rewardCalc.rewardDiscount || 0);
+  const totalAmount = Math.max(0, Math.round((totalAfterTier - rewardDiscount) * 100) / 100);
+  return {
+    subtotal,
+    tierCalc,
+    tierDiscount,
+    totalAfterTier,
+    rewardUse: Number(rewardCalc.useRewards || 0),
+    rewardDiscount,
+    rewardFreeItems: rewardCalc.freeItems || [],
+    totalAmount
+  };
+}
+
 function money(n) {
   return "MOP " + String(Math.round(Number(n || 0) * 100) / 100);
 }
@@ -439,12 +530,13 @@ function buildTelegramText(order) {
 
   lines.push("────────────");
   if (Number(order.birthdayVoucherCount || 0) > 0) lines.push("生日月飲品券：" + Number(order.birthdayVoucherCount || 0) + " 張");
-  if (Number(order.rewardDiscount || 0) > 0) lines.push("會員免單扣減：-" + money(order.rewardDiscount));
   if (Number(order.tierDiscount || 0) > 0) {
     const tierName = order.memberTierName || "會員等級";
     const detail = Array.isArray(order.tierDiscountDetails) && order.tierDiscountDetails.length ? "（" + order.tierDiscountDetails.join("、") + "）" : "";
     lines.push(tierName + "優惠" + detail + "：-" + money(order.tierDiscount));
   }
+  if (Number(order.rewardDiscount || 0) > 0) lines.push("會員免單扣減：-" + money(order.rewardDiscount));
+  if (order.discountCalculationOrder === "tier_first_reward_after") lines.push("計算：先扣會員等級優惠，再套用免單");
   lines.push("總額：" + money(order.totalAmount || cartTotal(order.cart)));
   if (order.orderNote) lines.push("整張訂單備註：" + order.orderNote);
   lines.push("客人：" + (order.customerName || ""));

@@ -15,7 +15,7 @@ export async function onRequestGet(context) {
     if (!raw) return json({ ok: false, error: "查詢不到此訂單號" }, 404);
 
     const order = JSON.parse(raw);
-    if (normalizePhone(order.phone) !== phone) {
+    if (![order.phone, order.memberPhone, order.submittedPhone].some(p => samePhone(p, phone))) {
       return json({ ok: false, error: "手機號碼不正確" }, 403);
     }
 
@@ -119,7 +119,8 @@ function phoneCandidates(phone) {
 
 function phoneWithoutMacauCode(phone) {
   phone = normalizePhone(phone);
-  if (phone.length === 11 && phone.startsWith("853")) return phone.slice(3);
+  // V237: support old records accidentally saved with 853 prefix of any length.
+  if (phone.length > 3 && phone.startsWith("853")) return phone.slice(3);
   return phone;
 }
 
