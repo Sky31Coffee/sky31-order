@@ -3831,30 +3831,6 @@ input.input-error{
 }
 
 
-/* V112 pickup evening login only */
-/* Member login page becomes login-only. If already logged in, hide phone input until logout. */
-
-.member-login-locked #memberPageLogin .member-form,
-.member-login-locked #memberPageLogin .member-actions{
-  display:none !important;
-}
-
-.member-login-locked #memberPageLogin #memberLoggedPanel{
-  display:block !important;
-}
-
-.member-login-hint{
-  margin-top:12px;
-  padding:12px 14px;
-  border-radius:16px;
-  background:rgba(255,255,255,.56);
-  color:rgba(47,42,36,.68);
-  font-size:13px;
-  line-height:1.45;
-  font-weight:680;
-}
-
-
 /* V114 pickup display no time */
 /* Website pickup option only shows label + English translation. Telegram/order backend still maps Tomorrow Evening to 20:00-21:00. */
 .pickup-grid .chip[data-value="Tomorrow Evening 明天晚上"] small{
@@ -8269,6 +8245,64 @@ body.sky31-maintenance-active-v218{
   display:none !important;
 }
 
+
+/* V228: clean member center, no login overlay, no duplicate arrows */
+#memberPageLogin #memberLoggedPanel,
+#memberPageLogin .member-login-hint{
+  display:none !important;
+}
+#memberPageLogin.member-page.active ~ .member-login-hint,
+.member-login-hint{
+  display:none !important;
+}
+.member-menu-card > div:last-child:empty{
+  display:none !important;
+}
+.member-menu-card::after{
+  content:none !important;
+  display:none !important;
+}
+#memberQuickCard.member-card,
+#memberLoggedPanel.member-card{
+  line-height:1.35 !important;
+}
+#memberQuickCard .member-row,
+#memberLoggedPanel .member-row{
+  display:flex !important;
+  justify-content:space-between !important;
+  align-items:center !important;
+  gap:12px !important;
+  padding:6px 0 !important;
+  border-bottom:1px solid rgba(47,42,36,.07) !important;
+}
+#memberQuickCard .member-row:last-child,
+#memberLoggedPanel .member-row:last-child{
+  border-bottom:0 !important;
+}
+#memberQuickCard .member-row span,
+#memberLoggedPanel .member-row span{
+  color:rgba(47,42,36,.55) !important;
+  font-size:12px !important;
+  font-weight:800 !important;
+  white-space:nowrap !important;
+}
+#memberQuickCard .member-row strong,
+#memberLoggedPanel .member-row strong{
+  color:rgba(47,42,36,.95) !important;
+  font-size:14px !important;
+  font-weight:950 !important;
+  text-align:right !important;
+  overflow-wrap:anywhere !important;
+}
+#memberQuickCard .member-reward-card,
+#memberLoggedPanel .member-reward-card{
+  margin-top:10px !important;
+}
+#memberPageLogin .member-hero p,
+#memberPageHome .member-hero p{
+  display:none !important;
+}
+
 </style>
 
 <style>
@@ -10948,19 +10982,19 @@ window.addEventListener("load", function() {
             '<div id="memberQuickCard" class="member-card" style="display:none;"></div>' +
             '<div class="member-menu">' +
               '<button class="member-menu-card member-auth-only-v213" type="button" onclick="memberGoPage(\'login\')">' +
-                '<div class="member-menu-icon">🔐</div><div><div class="member-menu-title">會員登入</div><div class="member-menu-sub">用電話號碼登入會員</div></div><div>›</div>' +
+                '<div class="member-menu-icon">🔐</div><div><div class="member-menu-title">會員登入</div><div class="member-menu-sub">用電話號碼登入會員</div></div>' +
               '</button>' +
               '<button class="member-menu-card member-auth-only-v213" type="button" onclick="memberGoPage(\'register\')">' +
-                '<div class="member-menu-icon">👤</div><div><div class="member-menu-title">會員註冊</div><div class="member-menu-sub">新會員建立資料</div></div><div>›</div>' +
+                '<div class="member-menu-icon">👤</div><div><div class="member-menu-title">會員註冊</div><div class="member-menu-sub">新會員建立資料</div></div>' +
               '</button>' +
               '<button class="member-menu-card" type="button" onclick="memberGoPage(\'history\')">' +
-                '<div class="member-menu-icon">🧾</div><div><div class="member-menu-title">歷史訂單查詢</div><div class="member-menu-sub">查看最近訂單、累積杯數與消費</div></div><div>›</div>' +
+                '<div class="member-menu-icon">🧾</div><div><div class="member-menu-title">歷史訂單查詢</div><div class="member-menu-sub">查看最近訂單、累積杯數與消費</div></div>' +
               '</button>' +
               '<button class="member-menu-card" type="button" onclick="memberGoPage(\'tier\')">' +
-                '<div class="member-menu-icon">🏅</div><div><div class="member-menu-title">會員等級</div><div class="member-menu-sub">查看等級門檻與等級優惠等資訊</div></div><div>›</div>' +
+                '<div class="member-menu-icon">🏅</div><div><div class="member-menu-title">會員等級</div><div class="member-menu-sub">查看等級門檻與等級優惠等資訊</div></div>' +
               '</button>' +
               '<button class="member-menu-card member-logout-only-v213" type="button" onclick="memberLogout()">' +
-                '<div class="member-menu-icon">↩︎</div><div><div class="member-menu-title">登出</div><div class="member-menu-sub">登出目前會員帳號</div></div><div>›</div>' +
+                '<div class="member-menu-icon">↩︎</div><div><div class="member-menu-title">登出</div><div class="member-menu-sub">登出目前會員帳號</div></div>' +
               '</button>' +
             '</div>' +
           '</section>' +
@@ -11261,51 +11295,42 @@ window.addEventListener("load", function() {
     setTimeout(function(){ if(m) m.remove(); }, 220);
   };
 
+  function sky31CompactMemberHtmlV228(member){
+    member = member || {};
+    var phone = String(member.phone || "").replace(/\D/g,"");
+    if(phone.length === 11 && phone.indexOf("853") === 0) phone = phone.slice(3);
+    var tierName = member.memberTier || member.memberTierName || "普通會員";
+    var tierIcon = member.memberTierIcon || "🌱";
+    return '' +
+      '<div class="member-row"><span>會員</span><strong>' + esc(member.name || "-") + '</strong></div>' +
+      '<div class="member-row"><span>電話</span><strong>' + esc(phone || "-") + '</strong></div>' +
+      (member.birthday ? '<div class="member-row"><span>生日</span><strong>' + esc(member.birthday) + '</strong></div>' : '') +
+      '<div class="member-row"><span>目前等級</span><strong>' + esc(tierName + " " + tierIcon) + '</strong></div>' +
+      '<div class="member-row"><span>累計杯數</span><strong>' + Number(member.totalCups || 0) + ' 杯</strong></div>' +
+      '<div class="member-row"><span>可用免單</span><strong>' + Number(member.availableRewards || (member.rewards && member.rewards.availableRewards) || 0) + ' 次</strong></div>' +
+      sky31MemberRewardHtml(member);
+  }
+
   function renderHomeQuickCard(){
     var card = $("memberQuickCard");
     if(!card) return;
     var member = storedMember();
-
     if(!member || !member.phone){
       card.style.display = "none";
       card.innerHTML = "";
       return;
     }
-
     card.style.display = "block";
-    card.innerHTML =
-      '<div class="member-row"><span>已登入</span><strong>' + esc(member.name || "-") + '</strong></div>' +
-      '<div class="member-row"><span>電話</span><strong>' + esc(member.phone || "-") + '</strong></div>' +
-      memberBirthdayRowV211(member) +
-      '<div class="member-grid">' +
-        '<div class="member-stat"><b>' + Number(member.totalOrders || 0) + '</b><span>總累計<br>訂單</span></div>' +
-        '<div class="member-stat"><b>' + Number(member.totalCups || 0) + '</b><span>總累計<br>杯數</span></div>' +
-        '<div class="member-stat"><b>' + money(member.totalSpent || 0).replace("MOP ","") + '</b><span>總消費<br>MOP</span></div>' +
-      '</div>' + sky31MemberRewardHtml(member);
+    card.innerHTML = sky31CompactMemberHtmlV228(member);
   }
 
   function renderLoggedPanel(member){
     var panel = $("memberLoggedPanel");
     if(!panel) return;
-
-    if(!member || !member.phone){
-      panel.style.display = "none";
-      panel.innerHTML = "";
-      return;
-    }
-
-    panel.style.display = "block";
-    panel.innerHTML =
-      '<div class="member-row"><span>會員</span><strong>' + esc(member.name || "-") + '</strong></div>' +
-      '<div class="member-row"><span>電話</span><strong>' + esc(member.phone || "-") + '</strong></div>' +
-      memberBirthdayRowV211(member) +
-      '<div class="member-grid">' +
-        '<div class="member-stat"><b>' + Number(member.totalOrders || 0) + '</b><span>總累計<br>訂單</span></div>' +
-        '<div class="member-stat"><b>' + Number(member.totalCups || 0) + '</b><span>總累計<br>杯數</span></div>' +
-        '<div class="member-stat"><b>' + money(member.totalSpent || 0).replace("MOP ","") + '</b><span>總消費<br>MOP</span></div>' +
-      '</div>' + sky31MemberRewardHtml(member);
+    // V228: logged-in member data should not be shown on the login page.
+    panel.style.display = "none";
+    panel.innerHTML = "";
   }
-
 
   function memberTierInfoV210(cups, member){
     cups = Number(cups || 0);
@@ -12130,173 +12155,8 @@ window.addEventListener("load", function() {
 </script>
 
 
-<script>
-/* V112 pickup evening login only */
-(function(){
-  var MEMBER_KEY = "sky31_member_v1";
 
-  function getMember(){
-    try{
-      var raw = localStorage.getItem(MEMBER_KEY);
-      return raw ? JSON.parse(raw) : null;
-    }catch(e){
-      return null;
-    }
-  }
 
-  function hasMember(){
-    var m = getMember();
-    return !!(m && m.phone);
-  }
-
-  function ensureTomorrowEveningPickup(){
-    document.querySelectorAll(".pickup-grid").forEach(function(grid){
-      if(grid.querySelector('[data-value="Tomorrow Evening 明天晚上"]')) return;
-
-      var chip = document.createElement("div");
-      chip.className = "chip";
-      chip.setAttribute("data-value", "Tomorrow Evening 明天晚上");
-      chip.innerHTML = '明天晚上<small>Tomorrow Evening</small>';
-
-      // Match existing chip click behavior by copying the same pattern used by other chips.
-      chip.addEventListener("click", function(){
-        grid.querySelectorAll(".chip").forEach(function(c){ c.classList.remove("active"); });
-        chip.classList.add("active");
-      });
-
-      grid.appendChild(chip);
-    });
-  }
-
-  function setMemberText(){
-    document.querySelectorAll(".member-menu-title, .member-topbar-title, .member-hero h2, button").forEach(function(el){
-      if(el.textContent && el.textContent.trim() === "會員登入 / 查詢") el.textContent = "會員登入";
-      if(el.textContent && el.textContent.trim() === "登入 / 查詢") el.textContent = "登入";
-    });
-
-    document.querySelectorAll(".member-menu-sub, .member-hero p").forEach(function(el){
-      if(el.textContent && el.textContent.indexOf("登入並查詢會員資料") >= 0){
-        el.textContent = "用電話號碼登入會員";
-      }
-    });
-  }
-
-  function renderLoginOnlyState(){
-    var modal = document.getElementById("memberModal");
-    if(!modal) return;
-
-    setMemberText();
-
-    var logged = hasMember();
-    modal.classList.toggle("member-login-locked", logged);
-
-    var page = document.getElementById("memberPageLogin");
-    if(!page) return;
-
-    var oldHint = page.querySelector(".member-login-hint");
-    if(oldHint) oldHint.remove();
-
-    if(logged){
-      var m = getMember() || {};
-      var panel = document.getElementById("memberLoggedPanel");
-      if(panel){
-        panel.style.display = "block";
-      }
-
-      var hint = document.createElement("div");
-      hint.className = "member-login-hint";
-      hint.innerHTML = "目前已登入會員：" + (m.name || m.phone || "-") + "<br>如需登入其他帳號，請先返回會員中心登出。";
-
-      if(panel && panel.parentNode){
-        panel.parentNode.insertBefore(hint, panel.nextSibling);
-      }else{
-        page.appendChild(hint);
-      }
-    }else{
-      var phone = document.getElementById("memberPhone");
-      if(phone) phone.value = "";
-    }
-  }
-
-  function patchMemberLogin(){
-    if(window.__sky31V112MemberLoginPatched) return;
-    window.__sky31V112MemberLoginPatched = true;
-
-    var oldLogin = window.memberLoginLookup;
-    if(typeof oldLogin === "function"){
-      window.memberLoginLookup = async function(){
-        if(hasMember()){
-          renderLoginOnlyState();
-          return;
-        }
-        var result = await oldLogin.apply(this, arguments);
-        setTimeout(renderLoginOnlyState, 120);
-        setTimeout(renderLoginOnlyState, 500);
-        return result;
-      };
-    }
-
-    var oldGoPage = window.memberGoPage;
-    if(typeof oldGoPage === "function"){
-      window.memberGoPage = function(page){
-        var result = oldGoPage.apply(this, arguments);
-        setTimeout(function(){
-          setMemberText();
-          renderLoginOnlyState();
-        }, 80);
-        return result;
-      };
-    }
-
-    var oldOpen = window.openMemberModal;
-    if(typeof oldOpen === "function"){
-      window.openMemberModal = async function(){
-        var result = await oldOpen.apply(this, arguments);
-        setTimeout(function(){
-          setMemberText();
-          renderLoginOnlyState();
-        }, 120);
-        setTimeout(function(){
-          setMemberText();
-          renderLoginOnlyState();
-        }, 500);
-        return result;
-      };
-    }
-
-    var oldLogout = window.memberLogout;
-    if(typeof oldLogout === "function"){
-      window.memberLogout = function(){
-        var result = oldLogout.apply(this, arguments);
-        setTimeout(renderLoginOnlyState, 100);
-        setTimeout(renderLoginOnlyState, 500);
-        return result;
-      };
-    }
-  }
-
-  function boot(){
-    ensureTomorrowEveningPickup();
-    setMemberText();
-    patchMemberLogin();
-    renderLoginOnlyState();
-  }
-
-  if(document.readyState === "loading"){
-    document.addEventListener("DOMContentLoaded", boot);
-  }else{
-    boot();
-  }
-
-  setTimeout(boot, 300);
-  setTimeout(boot, 1000);
-
-  document.addEventListener("click", function(){
-    setTimeout(boot, 80);
-    setTimeout(renderLoginOnlyState, 300);
-  }, true);
-})();
-</script>
 
 
 <script>
@@ -17416,184 +17276,69 @@ window.addEventListener("load", function() {
 </script>
 
 
+
 <script>
-/* V226: login redirect + refresh throttle.
-   After login, leave the login form and show the member center home automatically.
-*/
+/* V228: clean member UI state only. No overlay stacking. */
 (function(){
   const MEMBER_KEY = "sky31_member_v1";
 
-  function getMemberV226(){
+  function memberV228(){
     try{
       const raw = localStorage.getItem(MEMBER_KEY);
       return raw ? JSON.parse(raw) : null;
     }catch(e){ return null; }
   }
 
-  function setMemberV226(member){
-    try{
-      if(member && member.phone) localStorage.setItem(MEMBER_KEY, JSON.stringify(member));
-    }catch(e){}
-  }
-
-  function showMemberHomeV226(member){
-    member = member || getMemberV226();
-    if(!member || !member.phone) return false;
-
-    try{ if(typeof applyMember === "function") applyMember(member); }catch(e){}
-    try{ if(typeof updateMemberProfileButton === "function") updateMemberProfileButton(member); }catch(e){}
-    try{ if(typeof renderHomeQuickCard === "function") renderHomeQuickCard(); }catch(e){}
-    try{ if(typeof renderLoggedPanel === "function") renderLoggedPanel(member); }catch(e){}
-    try{ if(typeof showPage === "function") showPage("home"); }catch(e){}
-
-    const modal = document.getElementById("memberModal");
-    if(modal){
-      modal.classList.add("member-logged-in-v213");
-      modal.classList.remove("member-logged-out-v213");
-    }
-
-    const msg = document.getElementById("memberMsg");
-    if(msg) msg.textContent = "";
-
-    const quick = document.getElementById("memberQuickCard");
-    if(quick && !quick.querySelector(".member-login-redirect-note-v226")){
-      const div = document.createElement("div");
-      div.className = "member-login-redirect-note-v226";
-      div.textContent = "已登入，歡迎回到會員中心。";
-      quick.appendChild(div);
-      setTimeout(function(){ try{ div.remove(); }catch(e){} }, 1600);
-    }
-    return true;
-  }
-
-  // Throttle member refresh, because older scripts call refresh on open/show/cart/focus.
-  let refreshPromise = null;
-  let lastRefreshAt = 0;
-  function wrapRefreshV226(fn){
-    if(typeof fn !== "function" || fn.__sky31V226Wrapped) return fn;
-    const wrapped = async function(reason){
-      const now = Date.now();
-      const current = getMemberV226();
-      if(!current || !current.phone) return null;
-
-      if(refreshPromise && now - lastRefreshAt < 1200) return refreshPromise;
-      if(now - lastRefreshAt < 800) return current;
-
-      lastRefreshAt = now;
-      refreshPromise = Promise.resolve(fn.apply(this, arguments)).finally(function(){
-        setTimeout(function(){ refreshPromise = null; }, 200);
-      });
-      return refreshPromise;
-    };
-    wrapped.__sky31V226Wrapped = true;
-    return wrapped;
-  }
-
-  if(typeof window.SKY31_REFRESH_MEMBER_V213 === "function") window.SKY31_REFRESH_MEMBER_V213 = wrapRefreshV226(window.SKY31_REFRESH_MEMBER_V213);
-  if(typeof window.SKY31_REFRESH_MEMBER_V214 === "function") window.SKY31_REFRESH_MEMBER_V214 = wrapRefreshV226(window.SKY31_REFRESH_MEMBER_V214);
-
-  const oldLogin = window.memberLoginLookup;
-  if(typeof oldLogin === "function" && !oldLogin.__sky31V226LoginRedirect){
-    const wrappedLogin = async function(){
-      const result = await oldLogin.apply(this, arguments);
-
-      // Login function may save member async; check a few times then redirect.
-      let member = getMemberV226();
-      if(result && result.phone) {
-        member = result;
-        setMemberV226(member);
-      }
-
-      for(let i=0;i<8 && !(member && member.phone);i++){
-        await new Promise(r => setTimeout(r, 120));
-        member = getMemberV226();
-      }
-
-      if(member && member.phone){
-        window.__SKY31_HARD_LOGOUT_ACTIVE_V225 = false;
-        window.__SKY31_MEMBER_LOGGED_OUT_V224 = false;
-        showMemberHomeV226(member);
-        setTimeout(function(){ showMemberHomeV226(getMemberV226()); }, 250);
-        setTimeout(function(){ showMemberHomeV226(getMemberV226()); }, 900);
-      }
-      return result;
-    };
-    wrappedLogin.__sky31V226LoginRedirect = true;
-    window.memberLoginLookup = wrappedLogin;
-  }
-
-  window.SKY31_SHOW_MEMBER_HOME_V226 = showMemberHomeV226;
-})();
-</script>
-
-
-<script>
-/* V227: member UI login/logout/phone cleanup.
-   This block only controls display/state. It does not change backend member keys.
-*/
-(function(){
-  const MEMBER_KEY = "sky31_member_v1";
-
-  function strip853V227(phone){
-    const p = String(phone || "").replace(/\D/g, "");
-    if(p.length === 11 && p.indexOf("853") === 0) return p.slice(3);
-    return p;
-  }
-
-  function memberV227(){
-    try{
-      const raw = localStorage.getItem(MEMBER_KEY);
-      return raw ? JSON.parse(raw) : null;
-    }catch(e){ return null; }
-  }
-
-  function saveMemberV227(member){
-    try{
-      if(member && member.phone) localStorage.setItem(MEMBER_KEY, JSON.stringify(member));
-    }catch(e){}
-  }
-
-  function isLoggedInV227(){
-    const m = memberV227();
+  function loggedV228(){
+    const m = memberV228();
     return !!(m && m.phone);
   }
 
-  function normalizeVisiblePhonesV227(member){
-    member = member || memberV227();
-    const visible = strip853V227(member && member.phone);
-    if(!visible) return;
-    [
-      "phone",
-      "modalPhone",
-      "memberPhone",
-      "memberLoginPhone",
-      "checkoutPhone"
-    ].forEach(function(id){
-      const el = document.getElementById(id);
-      if(el && "value" in el) el.value = visible;
-    });
+  function strip853V228(phone){
+    const p = String(phone || "").replace(/\D/g,"");
+    return (p.length === 11 && p.indexOf("853") === 0) ? p.slice(3) : p;
+  }
 
-    // Text nodes in member cards may show 853; keep backend data unchanged, only presentation changed.
-    document.querySelectorAll(".member-row strong, .member-card strong, #memberQuickCard, #memberLoggedPanel").forEach(function(el){
-      try{
-        if(!el || !el.childNodes || el.querySelector && el.querySelector("input,button,select,textarea")) return;
-        const txt = String(el.textContent || "");
-        if(txt.indexOf("853" + visible) >= 0 && txt.length < 500){
-          el.textContent = txt.replaceAll("853" + visible, visible);
+  function cleanLoginPageV228(){
+    document.querySelectorAll(".member-login-hint").forEach(el => el.remove());
+    const panel = document.getElementById("memberLoggedPanel");
+    if(panel){
+      panel.innerHTML = "";
+      panel.style.display = "none";
+    }
+    document.querySelectorAll("#memberPageLogin .member-hero p,#memberPageHome .member-hero p").forEach(el => el.remove());
+  }
+
+  function removeMenuArrowsV228(){
+    document.querySelectorAll(".member-menu-card").forEach(function(btn){
+      Array.from(btn.children).forEach(function(child){
+        const txt = String(child.textContent || "").trim();
+        if(txt === "›" || txt === ">"){
+          child.remove();
         }
-      }catch(e){}
+      });
     });
   }
 
-  function setMemberLoggedStateV227(member){
-    member = member || memberV227();
-    const logged = !!(member && member.phone);
+  function normalizePhonesV228(){
+    const m = memberV228();
+    const visible = strip853V228(m && m.phone);
+    if(!visible) return;
+    ["phone","modalPhone","memberPhone","memberLoginPhone","checkoutPhone"].forEach(function(id){
+      const el = document.getElementById(id);
+      if(el && "value" in el && String(el.value || "").replace(/\D/g,"").indexOf("853") === 0){
+        el.value = visible;
+      }
+    });
+  }
+
+  function applyLoggedStateV228(){
+    const logged = loggedV228();
     const modal = document.getElementById("memberModal");
     if(modal){
       modal.classList.toggle("member-logged-in-v213", logged);
       modal.classList.toggle("member-logged-out-v213", !logged);
     }
-
     document.querySelectorAll(".member-auth-only-v213").forEach(function(el){
       el.style.display = logged ? "none" : "";
       el.hidden = !!logged;
@@ -17602,136 +17347,89 @@ window.addEventListener("load", function() {
       el.style.display = logged ? "" : "none";
       el.hidden = !logged;
     });
-
-    try{ if(typeof updateMemberProfileButton === "function") updateMemberProfileButton(logged ? member : null); }catch(e){}
-    normalizeVisiblePhonesV227(member);
+    cleanLoginPageV228();
+    removeMenuArrowsV228();
+    normalizePhonesV228();
   }
 
-  function showMemberHomeV227(member){
-    member = member || memberV227();
-    if(!member || !member.phone) {
-      setMemberLoggedStateV227(null);
-      return false;
-    }
-
-    // Keep backend-compatible phone internally; only fields are shown without 853.
-    saveMemberV227(member);
-
+  function showHomeAfterLoginV228(member){
+    member = member || memberV228();
+    if(!member || !member.phone) return false;
     try{ if(typeof applyMember === "function") applyMember(member); }catch(e){}
     try{ if(typeof renderHomeQuickCard === "function") renderHomeQuickCard(); }catch(e){}
-    try{ if(typeof renderLoggedPanel === "function") renderLoggedPanel(member); }catch(e){}
     try{ if(typeof showPage === "function") showPage("home"); }catch(e){}
-
-    setMemberLoggedStateV227(member);
-    normalizeVisiblePhonesV227(member);
+    applyLoggedStateV228();
     return true;
   }
 
-  function clearLoginTextsV227(){
-    document.querySelectorAll("#memberPageLogin .member-hero p,#memberPageHome .member-hero p").forEach(function(el){
-      el.remove();
-    });
-    document.querySelectorAll("#memberPageLogin .member-hero,#memberPageHome .member-hero").forEach(function(el){
-      const text = String(el.textContent || "");
-      if(text.indexOf("輸入已註冊電話號碼") >= 0 || text.indexOf("登入會員、註冊會員、查看歷史訂單") >= 0){
-        el.childNodes.forEach(function(node){
-          if(node.nodeType === 3) node.textContent = node.textContent.replace(("輸入已註冊電話號碼" + "登入會員。登入後會隱藏手機輸入框。"),"").replace(("登入會員、註冊會員、" + "查看歷史訂單。"),"");
-        });
-      }
-    });
-  }
-
   const oldLogin = window.memberLoginLookup;
-  if(typeof oldLogin === "function" && !oldLogin.__sky31V227LoginHome){
+  if(typeof oldLogin === "function" && !oldLogin.__sky31V228){
     const wrapped = async function(){
       const result = await oldLogin.apply(this, arguments);
-
-      let member = null;
-      if(result && result.phone) member = result;
-      if(!member) member = memberV227();
-
-      for(let i=0;i<10 && !(member && member.phone);i++){
-        await new Promise(r => setTimeout(r, 100));
-        member = memberV227();
+      let m = (result && result.phone) ? result : memberV228();
+      for(let i=0;i<8 && !(m && m.phone);i++){
+        await new Promise(r => setTimeout(r,100));
+        m = memberV228();
       }
-
-      if(member && member.phone){
-        window.__SKY31_HARD_LOGOUT_ACTIVE_V225 = false;
-        window.__SKY31_MEMBER_LOGGED_OUT_V224 = false;
-        showMemberHomeV227(member);
-        setTimeout(function(){ showMemberHomeV227(memberV227()); }, 150);
-        setTimeout(function(){ showMemberHomeV227(memberV227()); }, 500);
+      if(m && m.phone){
+        showHomeAfterLoginV228(m);
+        setTimeout(function(){ showHomeAfterLoginV228(memberV228()); }, 200);
+        setTimeout(function(){ showHomeAfterLoginV228(memberV228()); }, 700);
       }
       return result;
     };
-    wrapped.__sky31V227LoginHome = true;
+    wrapped.__sky31V228 = true;
     window.memberLoginLookup = wrapped;
   }
 
-  // Reinforce state after opening member modal. This brings back the logout button after login.
+  const oldGoPage = window.memberGoPage;
+  if(typeof oldGoPage === "function" && !oldGoPage.__sky31V228){
+    const wrappedGo = function(page){
+      if(page === "login" && loggedV228()) page = "home";
+      const result = oldGoPage.apply(this, arguments);
+      setTimeout(applyLoggedStateV228, 50);
+      return result;
+    };
+    wrappedGo.__sky31V228 = true;
+    window.memberGoPage = wrappedGo;
+  }
+
   const oldOpen = window.openMemberModal;
-  if(typeof oldOpen === "function" && !oldOpen.__sky31V227Open){
+  if(typeof oldOpen === "function" && !oldOpen.__sky31V228){
     const wrappedOpen = async function(){
       const result = await oldOpen.apply(this, arguments);
       setTimeout(function(){
-        clearLoginTextsV227();
-        setMemberLoggedStateV227(memberV227());
-        if(isLoggedInV227()) showMemberHomeV227(memberV227());
+        if(loggedV228()) showHomeAfterLoginV228(memberV228());
+        applyLoggedStateV228();
       }, 80);
       return result;
     };
-    wrappedOpen.__sky31V227Open = true;
+    wrappedOpen.__sky31V228 = true;
     window.openMemberModal = wrappedOpen;
   }
 
-  const oldShowPage = window.showPage;
-  if(typeof oldShowPage === "function" && !oldShowPage.__sky31V227Show){
-    const wrappedShow = function(page){
-      if(page === "login" && isLoggedInV227()){
-        page = "home";
-      }
-      const result = oldShowPage.apply(this, arguments);
-      setTimeout(function(){
-        clearLoginTextsV227();
-        setMemberLoggedStateV227(memberV227());
-        normalizeVisiblePhonesV227(memberV227());
-      }, 50);
-      return result;
-    };
-    wrappedShow.__sky31V227Show = true;
-    window.showPage = wrappedShow;
-  }
-
-  // Preserve hard logout behavior from V225 but update UI after it.
   const oldLogout = window.memberLogout;
-  if(typeof oldLogout === "function" && !oldLogout.__sky31V227Logout){
+  if(typeof oldLogout === "function" && !oldLogout.__sky31V228){
     const wrappedLogout = function(){
       const result = oldLogout.apply(this, arguments);
-      setTimeout(function(){ setMemberLoggedStateV227(null); clearLoginTextsV227(); }, 80);
-      setTimeout(function(){ setMemberLoggedStateV227(null); clearLoginTextsV227(); }, 400);
+      setTimeout(applyLoggedStateV228, 80);
+      setTimeout(applyLoggedStateV228, 350);
       return result;
     };
-    wrappedLogout.__sky31V227Logout = true;
+    wrappedLogout.__sky31V228 = true;
     window.memberLogout = wrappedLogout;
   }
 
-  function bootV227(){
-    clearLoginTextsV227();
-    setMemberLoggedStateV227(memberV227());
-    normalizeVisiblePhonesV227(memberV227());
+  function boot(){
+    applyLoggedStateV228();
   }
+  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
+  setTimeout(boot, 250);
+  setTimeout(boot, 900);
+  document.addEventListener("click", function(){ setTimeout(boot, 60); }, true);
 
-  if(document.readyState === "loading"){
-    document.addEventListener("DOMContentLoaded", bootV227);
-  }else{
-    bootV227();
-  }
-  setTimeout(bootV227, 250);
-  setTimeout(bootV227, 900);
-  document.addEventListener("click", function(){ setTimeout(bootV227, 80); }, true);
-
-  window.SKY31_SHOW_MEMBER_HOME_V227 = showMemberHomeV227;
-  window.SKY31_STRIP_853_V227 = strip853V227;
+  window.SKY31_MEMBER_UI_CLEAN_V228 = boot;
 })();
 </script>
 
