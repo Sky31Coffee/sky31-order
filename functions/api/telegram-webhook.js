@@ -7,7 +7,7 @@ export async function onRequest(context) {
     return json({
       ok: true,
       endpoint: "telegram-webhook",
-      version: "V228",
+      version: "V230",
       method,
       message: "Webhook endpoint reachable. Telegram sends POST updates here."
     });

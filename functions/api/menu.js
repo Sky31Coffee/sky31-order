@@ -23,7 +23,7 @@ export async function onRequest(context) {
     const maintenanceV218 = await getMaintenanceConfigV218(context.env);
     return json({
       ok: true,
-      version: "V228",
+      version: "V230",
       limitedItems: visible,
       currentLimitedBeanId: visible[0] ? visible[0].id : "",
       currentLimitedBeanIds: visible.map(item => item.id),
