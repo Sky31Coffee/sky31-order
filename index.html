@@ -8418,6 +8418,127 @@ button[onclick*="back"]{
   visibility:visible !important;
 }
 
+
+/* V233: sticky all back buttons */
+:root{
+  --sky31-sticky-top: calc(10px + env(safe-area-inset-top));
+}
+
+/* Product/menu detail page: earlier legacy CSS accidentally changed .back to relative.
+   Force it to stay visible inside the scrolling sheet. */
+#overlay .sheet > button.back,
+.sheet > button.back,
+button.back[onclick*="closeDetail"]{
+  position: sticky !important;
+  top: var(--sky31-sticky-top) !important;
+  left: 0 !important;
+  margin: 10px 0 0 0 !important;
+  width: 44px !important;
+  height: 44px !important;
+  min-width: 44px !important;
+  min-height: 44px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: rgba(255,255,255,.88) !important;
+  color: #2f2a24 !important;
+  font-size: 26px !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+  box-shadow: 0 12px 28px rgba(0,0,0,.14), inset 0 1px 0 rgba(255,255,255,.86) !important;
+  backdrop-filter: blur(18px) saturate(1.18) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(1.18) !important;
+  z-index: 2147483000 !important;
+  overflow: hidden !important;
+}
+
+/* Member sub-pages: back and close stay in the top-left/top-right of the member box while content scrolls. */
+#memberModal .member-topbar,
+.member-topbar{
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 2147482000 !important;
+}
+#memberModal .member-nav-btn.back,
+.member-nav-btn.back,
+#memberBackBtn{
+  position: absolute !important;
+  left: 12px !important;
+  top: 8px !important;
+  z-index: 2147483000 !important;
+}
+#memberModal .member-nav-btn.close,
+.member-nav-btn.close{
+  position: absolute !important;
+  right: 12px !important;
+  top: 8px !important;
+  z-index: 2147483000 !important;
+}
+
+/* Checkout/order/cart/query modal topbars. */
+.checkout-member-top,
+.cart-topbar,
+.cart-header,
+.order-topbar,
+.order-status-topbar,
+.status-topbar,
+.confirm-topbar,
+.modal-topbar,
+.sheet-topbar,
+.query-topbar{
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 2147482000 !important;
+  backdrop-filter: blur(20px) saturate(1.12) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(1.12) !important;
+}
+
+/* Any explicit back / close button in order and modal pages stays touchable above content. */
+.checkout-member-close,
+.cart-close,
+.order-close,
+.status-close,
+.modal-close,
+.close-btn,
+.back-btn,
+button[onclick*="closeCart"],
+button[onclick*="closeOrder"],
+button[onclick*="closeOrderStatus"],
+button[onclick*="closeStatus"],
+button[onclick*="memberBack"],
+button[onclick*="closeMemberModal"]{
+  z-index: 2147483000 !important;
+  flex-shrink: 0 !important;
+}
+
+/* If a back button is in a scrollable modal body rather than a topbar, pin it in the top-left of that body. */
+.cart-sheet button.back,
+.order-status-sheet button.back,
+.checkout-member-card button.back,
+.modal-sheet button.back,
+.member-sheet button.back,
+.cart-sheet .back-btn,
+.order-status-sheet .back-btn,
+.checkout-member-card .back-btn,
+.modal-sheet .back-btn{
+  position: sticky !important;
+  top: var(--sky31-sticky-top) !important;
+  left: 10px !important;
+  z-index: 2147483000 !important;
+}
+
+/* Keep scrollable modal containers isolated so sticky controls are not covered by cards. */
+.sheet,
+.member-sheet,
+.cart-sheet,
+.order-status-sheet,
+.checkout-member-card,
+.modal-sheet{
+  isolation: isolate !important;
+}
+
 </style>
 
 <style>
@@ -17468,6 +17589,53 @@ window.addEventListener("load", function() {
 })();
 </script>
 
+
+
+<script>
+/* V233: sticky all back buttons enforcement.
+   Only applies styles/classes to existing buttons; it does not create duplicate buttons. */
+(function(){
+  function isBackLikeV233(el){
+    if(!el) return false;
+    var txt = String(el.textContent || "").trim();
+    var onclick = String(el.getAttribute && el.getAttribute("onclick") || "");
+    var cls = String(el.className || "");
+    return (
+      /\bback\b|back-btn|返回|上一頁|←|‹/.test(cls + " " + txt) ||
+      /memberBack|closeDetail|goBack|back/i.test(onclick)
+    );
+  }
+
+  function pinButtonsV233(){
+    document.querySelectorAll("button,a,[role='button']").forEach(function(el){
+      if(isBackLikeV233(el)){
+        el.classList.add("sky31-sticky-back-v233");
+        el.style.zIndex = "2147483000";
+      }
+    });
+
+    document.querySelectorAll(".member-topbar,.checkout-member-top,.cart-topbar,.cart-header,.order-topbar,.order-status-topbar,.status-topbar,.confirm-topbar,.modal-topbar,.sheet-topbar,.query-topbar").forEach(function(el){
+      el.style.position = "sticky";
+      el.style.top = "0";
+      el.style.zIndex = "2147482000";
+    });
+  }
+
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", pinButtonsV233);
+  }else{
+    pinButtonsV233();
+  }
+
+  var obs = new MutationObserver(function(){
+    setTimeout(pinButtonsV233, 30);
+  });
+  try{ obs.observe(document.documentElement || document.body, {childList:true, subtree:true, attributes:true, attributeFilter:["class","style"]}); }catch(e){}
+
+  window.addEventListener("scroll", pinButtonsV233, true);
+  window.SKY31_STICKY_BACK_V233 = pinButtonsV233;
+})();
+</script>
 
 </body>
 </html>
