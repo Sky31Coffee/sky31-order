@@ -6024,9 +6024,13 @@ body:has(#orderApp.hidden) #sky31PersistentCart.sky31-cart-body-level{
   align-items:flex-start;
   padding:12px;
   border-radius:20px;
-  background:rgba(255,255,255,.48);
-  border:1px solid rgba(255,255,255,.66);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.72);
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255,232,150,.46), rgba(255,232,150,0) 58%),
+    linear-gradient(135deg, rgba(255,255,255,.68), rgba(255,247,221,.58));
+  border:1px solid rgba(255,232,166,.78);
+  box-shadow:
+    0 12px 28px rgba(166,115,22,.10),
+    inset 0 1px 0 rgba(255,255,255,.78);
 }
 .limited-bean-preview-v177 > div::before{
   content:"🌟";
@@ -6050,8 +6054,9 @@ body:has(#orderApp.hidden) #sky31PersistentCart.sky31-cart-body-level{
   display:flex;
   align-items:center;
   justify-content:center;
-  background:rgba(255,255,255,.60);
-  border:1px solid rgba(255,255,255,.68);
+  background:linear-gradient(135deg, rgba(255,255,255,.78), rgba(255,240,190,.66));
+  border:1px solid rgba(255,232,166,.82);
+  box-shadow:0 6px 14px rgba(166,115,22,.10);
   font-size:16px;
 }
 .landing-bean-copy{
@@ -7004,9 +7009,11 @@ body:has(#orderApp.hidden) #sky31PersistentCart.sky31-cart-body-level{
   min-height:68px !important;
   padding:10px 11px !important;
   border-radius:18px !important;
-  background:rgba(255,255,255,.52) !important;
-  border:1px solid rgba(255,255,255,.70) !important;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.74), 0 10px 24px rgba(120,82,20,.07) !important;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255,232,150,.46), rgba(255,232,150,0) 58%),
+    linear-gradient(135deg, rgba(255,255,255,.70), rgba(255,247,221,.62)) !important;
+  border:1px solid rgba(255,232,166,.78) !important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.78), 0 10px 24px rgba(166,115,22,.10) !important;
   overflow:hidden !important;
 }
 
@@ -7197,9 +7204,11 @@ body:has(#orderApp.hidden) #sky31PersistentCart.sky31-cart-body-level{
   align-items:flex-start !important;
   padding:12px !important;
   border-radius:20px !important;
-  background:rgba(255,255,255,.48) !important;
-  border:1px solid rgba(255,255,255,.66) !important;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.72) !important;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255,232,150,.48), rgba(255,232,150,0) 58%),
+    linear-gradient(135deg, rgba(255,255,255,.70), rgba(255,247,221,.62)) !important;
+  border:1px solid rgba(255,232,166,.80) !important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.78), 0 12px 28px rgba(166,115,22,.10) !important;
   min-height:auto !important;
   overflow:hidden !important;
 }
@@ -7211,8 +7220,9 @@ body:has(#orderApp.hidden) #sky31PersistentCart.sky31-cart-body-level{
   display:flex !important;
   align-items:center !important;
   justify-content:center !important;
-  background:rgba(255,255,255,.60) !important;
-  border:1px solid rgba(255,255,255,.68) !important;
+  background:linear-gradient(135deg, rgba(255,255,255,.78), rgba(255,240,190,.66)) !important;
+  border:1px solid rgba(255,232,166,.82) !important;
+  box-shadow:0 6px 14px rgba(166,115,22,.10) !important;
   font-size:16px !important;
 }
 #limitedBeanPreview.v198-limited-grid .landing-bean-copy{
@@ -7220,36 +7230,37 @@ body:has(#orderApp.hidden) #sky31PersistentCart.sky31-cart-body-level{
   flex:1 !important;
 }
 #limitedBeanPreview.v198-limited-grid .landing-bean-topline{
-  display:block !important;
-  align-items:flex-start !important;
-  justify-content:flex-start !important;
-  gap:0 !important;
+  display:flex !important;
+  align-items:baseline !important;
+  justify-content:space-between !important;
+  gap:8px !important;
   margin-bottom:6px !important;
 }
 #limitedBeanPreview.v198-limited-grid .landing-bean-topline span{
   display:block !important;
-  width:100% !important;
-  max-width:100% !important;
+  flex:0 1 44% !important;
+  min-width:0 !important;
+  max-width:44% !important;
   font-size:12px !important;
-  letter-spacing:.02em !important;
-  text-transform:none !important;
-  color:rgba(50,66,92,.76) !important;
+  letter-spacing:.08em !important;
+  text-transform:uppercase !important;
+  color:rgba(86,65,24,.70) !important;
   font-weight:920 !important;
-  white-space:normal !important;
-  overflow:visible !important;
-  text-overflow:clip !important;
-  margin-bottom:3px !important;
+  white-space:nowrap !important;
+  overflow:hidden !important;
+  text-overflow:ellipsis !important;
+  margin-bottom:0 !important;
 }
 #limitedBeanPreview.v198-limited-grid .landing-bean-topline b{
   min-width:0 !important;
-  width:100% !important;
-  max-width:100% !important;
+  flex:1 1 auto !important;
+  max-width:56% !important;
   display:block !important;
   font-size:15px !important;
   color:rgba(20,32,50,.96) !important;
   font-weight:950 !important;
   line-height:1.28 !important;
-  text-align:left !important;
+  text-align:right !important;
   white-space:normal !important;
   overflow:visible !important;
   text-overflow:clip !important;
@@ -7664,18 +7675,22 @@ body:has(#orderApp.hidden) #sky31PersistentCart.sky31-cart-body-level{
 
 /* V207: stable Limited Bean name/description from Telegram data */
 #limitedBeanPreview.v198-limited-grid .landing-bean-topline span{
-  text-transform:none !important;
-  letter-spacing:0 !important;
-  font-size:12.5px !important;
+  text-transform:uppercase !important;
+  letter-spacing:.08em !important;
+  font-size:12px !important;
   font-weight:920 !important;
-  color:rgba(50,66,92,.76) !important;
-  max-width:100% !important;
-  overflow:visible !important;
-  text-overflow:clip !important;
-  white-space:normal !important;
+  color:rgba(86,65,24,.70) !important;
+  flex:0 1 44% !important;
+  max-width:44% !important;
+  min-width:0 !important;
+  overflow:hidden !important;
+  text-overflow:ellipsis !important;
+  white-space:nowrap !important;
 }
 #limitedBeanPreview.v198-limited-grid .landing-bean-topline b{
-  max-width:100% !important;
+  flex:1 1 auto !important;
+  max-width:56% !important;
+  text-align:right !important;
   white-space:normal !important;
   overflow:visible !important;
   text-overflow:clip !important;
@@ -8128,11 +8143,16 @@ body:has(#orderApp.hidden) #sky31PersistentCart.sky31-cart-body-level{
 
 /* V218: landing limited bean name auto-fit + maintenance overlay */
 #limitedBeanPreview.v198-limited-grid .landing-bean-topline{
-  display:block !important;
-  align-items:start !important;
+  display:flex !important;
+  align-items:baseline !important;
+  justify-content:space-between !important;
+  gap:8px !important;
   margin-bottom:6px !important;
 }
 #limitedBeanPreview.v198-limited-grid .landing-bean-topline b{
+  flex:1 1 auto !important;
+  max-width:56% !important;
+  text-align:right !important;
   white-space:normal !important;
   overflow:visible !important;
   text-overflow:clip !important;
