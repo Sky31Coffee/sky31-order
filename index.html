@@ -7202,85 +7202,100 @@ body:has(#orderApp.hidden) #sky31PersistentCart.sky31-cart-body-level{
   display:grid !important;
   grid-template-columns:1fr 1fr !important;
   gap:10px !important;
+  align-items:stretch !important;
+  grid-auto-rows:1fr !important;
 }
 #limitedBeanPreview.v198-limited-grid:has(.landing-bean-panel:only-child){
   grid-template-columns:1fr !important;
 }
 #limitedBeanPreview.v198-limited-grid .landing-bean-panel{
-  display:flex !important;
-  gap:10px !important;
+  display:grid !important;
+  grid-template-columns:36px minmax(0,1fr) !important;
+  gap:11px !important;
   align-items:flex-start !important;
-  padding:12px !important;
+  align-self:stretch !important;
+  height:100% !important;
+  padding:13px !important;
   border-radius:20px !important;
   background:
     radial-gradient(circle at 50% 0%, rgba(255,232,150,.48), rgba(255,232,150,0) 58%),
     linear-gradient(135deg, rgba(255,255,255,.70), rgba(255,247,221,.62)) !important;
   border:1px solid rgba(255,232,166,.80) !important;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.78), 0 12px 28px rgba(166,115,22,.10) !important;
-  min-height:auto !important;
-  overflow:hidden !important;
+  min-height:148px !important;
+  overflow:visible !important;
+  box-sizing:border-box !important;
 }
 #limitedBeanPreview.v198-limited-grid .landing-bean-icon{
-  flex:0 0 30px !important;
-  width:30px !important;
-  height:30px !important;
-  border-radius:13px !important;
+  width:36px !important;
+  height:36px !important;
+  border-radius:15px !important;
   display:flex !important;
   align-items:center !important;
   justify-content:center !important;
   background:linear-gradient(135deg, rgba(255,255,255,.78), rgba(255,240,190,.66)) !important;
   border:1px solid rgba(255,232,166,.82) !important;
   box-shadow:0 6px 14px rgba(166,115,22,.10) !important;
-  font-size:16px !important;
+  font-size:18px !important;
 }
 #limitedBeanPreview.v198-limited-grid .landing-bean-copy{
   min-width:0 !important;
-  flex:1 !important;
+  width:100% !important;
+  display:flex !important;
+  flex-direction:column !important;
+  justify-content:flex-start !important;
 }
 #limitedBeanPreview.v198-limited-grid .landing-bean-topline{
-  display:flex !important;
-  align-items:baseline !important;
-  justify-content:space-between !important;
+  display:grid !important;
+  grid-template-columns:minmax(0,.82fr) minmax(0,1.18fr) !important;
+  align-items:start !important;
   gap:8px !important;
-  margin-bottom:6px !important;
+  margin-bottom:0 !important;
 }
 #limitedBeanPreview.v198-limited-grid .landing-bean-topline span{
   display:block !important;
-  flex:0 1 44% !important;
   min-width:0 !important;
-  max-width:44% !important;
+  max-width:100% !important;
   font-size:12px !important;
   letter-spacing:.08em !important;
   text-transform:uppercase !important;
   color:rgba(86,65,24,.70) !important;
   font-weight:920 !important;
-  white-space:nowrap !important;
-  overflow:hidden !important;
-  text-overflow:ellipsis !important;
+  white-space:normal !important;
+  overflow:visible !important;
+  text-overflow:clip !important;
+  overflow-wrap:anywhere !important;
+  word-break:break-word !important;
   margin-bottom:0 !important;
+  line-height:1.24 !important;
 }
 #limitedBeanPreview.v198-limited-grid .landing-bean-topline b{
   min-width:0 !important;
-  flex:1 1 auto !important;
-  max-width:56% !important;
+  max-width:100% !important;
   display:block !important;
-  font-size:18px !important;
+  font-size:19.5px !important;
   color:rgba(20,32,50,.96) !important;
   font-weight:950 !important;
-  line-height:1.28 !important;
+  line-height:1.24 !important;
   text-align:right !important;
   white-space:normal !important;
   overflow:visible !important;
   text-overflow:clip !important;
+  overflow-wrap:anywhere !important;
+  word-break:break-word !important;
 }
 #limitedBeanPreview.v198-limited-grid .landing-bean-flavor{
   display:block !important;
-  margin-top:12px !important;
+  margin-top:14px !important;
   font-size:14px !important;
-  line-height:1.55 !important;
+  line-height:1.58 !important;
   color:rgba(31,48,72,.84) !important;
   font-weight:760 !important;
   white-space:normal !important;
+  overflow:visible !important;
+  text-overflow:clip !important;
+  overflow-wrap:anywhere !important;
+  word-break:break-word !important;
 }
 #limitedBeanPreview .v197-limited-card,
 #limitedBeanPreview .v194-limited-landing-meta,
@@ -7319,10 +7334,11 @@ body:has(#orderApp.hidden) #sky31PersistentCart.sky31-cart-body-level{
     grid-template-columns:1fr !important;
   }
   #limitedBeanPreview.v198-limited-grid .landing-bean-panel{
-    padding:11px 12px !important;
+    padding:12px !important;
+    min-height:142px !important;
   }
   #limitedBeanPreview.v198-limited-grid .landing-bean-topline b{
-    font-size:17px !important;
+    font-size:18px !important;
   }
 }
 
@@ -7668,16 +7684,20 @@ body:has(#orderApp.hidden) #sky31PersistentCart.sky31-cart-body-level{
   white-space:normal !important;
 }
 #limitedBeanPreview.v198-limited-grid .landing-bean-topline span{
-  max-width:52% !important;
-  overflow:hidden !important;
-  text-overflow:ellipsis !important;
-  white-space:nowrap !important;
+  max-width:100% !important;
+  overflow:visible !important;
+  text-overflow:clip !important;
+  white-space:normal !important;
+  overflow-wrap:anywhere !important;
+  word-break:break-word !important;
   text-transform:none !important;
   letter-spacing:0 !important;
   font-size:12px !important;
 }
 #limitedBeanPreview.v198-limited-grid .landing-bean-topline b{
   max-width:100% !important;
+  overflow:visible !important;
+  text-overflow:clip !important;
 }
 
 
@@ -7688,20 +7708,22 @@ body:has(#orderApp.hidden) #sky31PersistentCart.sky31-cart-body-level{
   font-size:12px !important;
   font-weight:920 !important;
   color:rgba(86,65,24,.70) !important;
-  flex:0 1 44% !important;
-  max-width:44% !important;
+  max-width:100% !important;
   min-width:0 !important;
-  overflow:hidden !important;
-  text-overflow:ellipsis !important;
-  white-space:nowrap !important;
+  overflow:visible !important;
+  text-overflow:clip !important;
+  white-space:normal !important;
+  overflow-wrap:anywhere !important;
+  word-break:break-word !important;
 }
 #limitedBeanPreview.v198-limited-grid .landing-bean-topline b{
-  flex:1 1 auto !important;
-  max-width:56% !important;
+  max-width:100% !important;
   text-align:right !important;
   white-space:normal !important;
   overflow:visible !important;
   text-overflow:clip !important;
+  overflow-wrap:anywhere !important;
+  word-break:break-word !important;
 }
 #beanChips .bean-chip.limited-bean-option.v207-limited-bean-option b,
 #beanChips .bean-chip.limited-bean-option.v198-limited-bean-option b{
@@ -8151,23 +8173,22 @@ body:has(#orderApp.hidden) #sky31PersistentCart.sky31-cart-body-level{
 
 /* V218: landing limited bean name auto-fit + maintenance overlay */
 #limitedBeanPreview.v198-limited-grid .landing-bean-topline{
-  display:flex !important;
-  align-items:baseline !important;
-  justify-content:space-between !important;
+  display:grid !important;
+  grid-template-columns:minmax(0,.82fr) minmax(0,1.18fr) !important;
+  align-items:start !important;
   gap:8px !important;
-  margin-bottom:6px !important;
+  margin-bottom:0 !important;
 }
 #limitedBeanPreview.v198-limited-grid .landing-bean-topline b{
-  flex:1 1 auto !important;
-  max-width:56% !important;
+  max-width:100% !important;
   text-align:right !important;
   white-space:normal !important;
   overflow:visible !important;
   text-overflow:clip !important;
   word-break:break-word !important;
   overflow-wrap:anywhere !important;
-  line-height:1.28 !important;
-  min-height:1.28em !important;
+  line-height:1.24 !important;
+  min-height:1.24em !important;
   max-height:none !important;
   display:block !important;
 }
@@ -16399,6 +16420,7 @@ window.addEventListener("load", function() {
 
     if(!beans.length){
       box.innerHTML = '<div class="landing-bean-panel v198-limited-empty"><div class="landing-bean-icon">✨</div><div class="landing-bean-copy"><div class="landing-bean-topline"><span>期間限定</span><b>期間限定</b></div><div class="landing-bean-flavor">暫時未上架，請留意 Sky31 最新更新。</div></div></div>';
+      requestAnimationFrame(function(){ if(typeof window.SKY31_FIT_LIMITED_BEAN_NAMES_V218 === "function") window.SKY31_FIT_LIMITED_BEAN_NAMES_V218(); });
       return;
     }
 
@@ -16416,6 +16438,9 @@ window.addEventListener("load", function() {
           '</div>' +
         '</div>';
     }).join("");
+    requestAnimationFrame(function(){
+      if(typeof window.SKY31_FIT_LIMITED_BEAN_NAMES_V218 === "function") window.SKY31_FIT_LIMITED_BEAN_NAMES_V218();
+    });
   }
 
   function currentProduct207(){
@@ -17291,35 +17316,31 @@ window.addEventListener("load", function() {
   }
 
   function fitLandingLimitedBeanNames218(){
-    const nodes = document.querySelectorAll('#limitedBeanPreview.v198-limited-grid .landing-bean-topline b');
-    nodes.forEach(function(el){
-      const text = (el.textContent || "").trim();
-      if(!text) return;
+    const box = document.getElementById("limitedBeanPreview");
+    if(!box || !box.classList.contains("v198-limited-grid")) return;
 
+    const names = box.querySelectorAll(".landing-bean-topline b, .landing-bean-topline span, .landing-bean-flavor");
+    names.forEach(function(el){
       el.style.whiteSpace = "normal";
       el.style.overflow = "visible";
       el.style.textOverflow = "clip";
       el.style.wordBreak = "break-word";
       el.style.overflowWrap = "anywhere";
-      el.style.lineHeight = "1.12";
-
-      // Auto-fit font size down only when the name is very long.
-      let size = 12.8;
-      if(text.length >= 12) size = 12.1;
-      if(text.length >= 16) size = 11.4;
-      if(text.length >= 20) size = 10.8;
-      if(text.length >= 26) size = 10.2;
-      el.style.fontSize = size + "px";
-
-      // If still too tall for its card, shrink a little more.
-      const card = el.closest(".landing-bean-card") || el.parentElement;
-      let guard = 0;
-      while(card && el.scrollHeight > card.clientHeight * 0.46 && size > 9.2 && guard < 8){
-        size -= 0.35;
-        el.style.fontSize = size + "px";
-        guard++;
-      }
+      el.style.removeProperty("font-size");
+      el.style.removeProperty("max-height");
     });
+
+    const cards = Array.from(box.querySelectorAll(".landing-bean-panel"));
+    cards.forEach(function(card){
+      card.style.minHeight = "";
+      card.style.height = "";
+    });
+    if(cards.length > 1){
+      const maxH = Math.max.apply(null, cards.map(function(card){ return Math.ceil(card.getBoundingClientRect().height); }));
+      if(Number.isFinite(maxH) && maxH > 0){
+        cards.forEach(function(card){ card.style.minHeight = maxH + "px"; });
+      }
+    }
   }
 
   window.SKY31_CHECK_MAINTENANCE_V218 = checkMaintenance218;
