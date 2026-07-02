@@ -11024,33 +11024,44 @@ window.addEventListener("load", function() {
 
     function tierByCups(c){
       c = Number(c || 0);
-      if(c >= 180) return { key:"blackgold", name:"黑金會員", icon:"👑", next:null, nextName:null, nextIcon:null };
-      if(c >= 100) return { key:"diamond", name:"鑽石會員", icon:"💎", next:180, nextName:"黑金會員", nextIcon:"👑" };
-      if(c >= 60) return { key:"gold", name:"金卡會員", icon:"🥇", next:100, nextName:"鑽石會員", nextIcon:"💎" };
-      if(c >= 30) return { key:"silver", name:"銀卡會員", icon:"🥈", next:60, nextName:"金卡會員", nextIcon:"🥇" };
-      return { key:"regular", name:"普通會員", icon:"🌱", next:30, nextName:"銀卡會員", nextIcon:"🥈" };
+      if(c >= 180) return { key:"blackgold", name:"黑金會員", icon:"👑", cups:180, next:null, nextName:null, nextIcon:null };
+      if(c >= 100) return { key:"diamond", name:"鑽石會員", icon:"💎", cups:100, next:180, nextName:"黑金會員", nextIcon:"👑" };
+      if(c >= 60) return { key:"gold", name:"金卡會員", icon:"🥇", cups:60, next:100, nextName:"鑽石會員", nextIcon:"💎" };
+      if(c >= 30) return { key:"silver", name:"銀卡會員", icon:"🥈", cups:30, next:60, nextName:"金卡會員", nextIcon:"🥇" };
+      return { key:"regular", name:"普通會員", icon:"🌱", cups:0, next:30, nextName:"銀卡會員", nextIcon:"🥈" };
     }
 
     function tierByKey(key){
       key = String(key || "").toLowerCase();
       var map = {
-        regular:{ key:"regular", name:"普通會員", icon:"🌱", next:30, nextName:"銀卡會員", nextIcon:"🥈" },
-        silver:{ key:"silver", name:"銀卡會員", icon:"🥈", next:60, nextName:"金卡會員", nextIcon:"🥇" },
-        gold:{ key:"gold", name:"金卡會員", icon:"🥇", next:100, nextName:"鑽石會員", nextIcon:"💎" },
-        diamond:{ key:"diamond", name:"鑽石會員", icon:"💎", next:180, nextName:"黑金會員", nextIcon:"👑" },
-        blackgold:{ key:"blackgold", name:"黑金會員", icon:"👑", next:null, nextName:null, nextIcon:null },
-        vip:{ key:"blackgold", name:"黑金會員", icon:"👑", next:null, nextName:null, nextIcon:null }
+        regular:{ key:"regular", name:"普通會員", icon:"🌱", cups:0, next:30, nextName:"銀卡會員", nextIcon:"🥈" },
+        silver:{ key:"silver", name:"銀卡會員", icon:"🥈", cups:30, next:60, nextName:"金卡會員", nextIcon:"🥇" },
+        gold:{ key:"gold", name:"金卡會員", icon:"🥇", cups:60, next:100, nextName:"鑽石會員", nextIcon:"💎" },
+        diamond:{ key:"diamond", name:"鑽石會員", icon:"💎", cups:100, next:180, nextName:"黑金會員", nextIcon:"👑" },
+        blackgold:{ key:"blackgold", name:"黑金會員", icon:"👑", cups:180, next:null, nextName:null, nextIcon:null },
+        vip:{ key:"blackgold", name:"黑金會員", icon:"👑", cups:180, next:null, nextName:null, nextIcon:null }
       };
       return map[key] || null;
     }
 
-    var manual = tierByKey(member.manualTierKey || member.memberTierOverrideKey || member.memberTierManualKey || "");
-    var natural = tierByCups(cups);
-    var t = manual || natural;
+    function displayInfo(m){
+      m = m || {};
+      var manualBase = tierByKey(m.manualTierKey || m.memberTierOverrideKey || m.memberTierManualKey || "");
+      if(!manualBase) {
+        var natural = tierByCups(cups);
+        return { tier:natural, effectiveCups:cups, manual:false };
+      }
 
-    var upgradeText = manual
-      ? ("店方設定：" + t.name + " " + t.icon)
-      : (t.next ? ("還差 " + Math.max(0, Number(t.next) - cups) + " 杯升級 " + t.nextName + " " + t.nextIcon) : "已達最高等級");
+      var hasStart = m.manualTierStartCups !== undefined || m.manualTierSetAtCups !== undefined || m.manualTierOriginalCups !== undefined;
+      var base = Number(m.manualTierBaseCups || manualBase.cups || 0);
+      var start = hasStart ? Number(m.manualTierStartCups ?? m.manualTierSetAtCups ?? m.manualTierOriginalCups ?? 0) : null;
+      var effective = hasStart ? (base + Math.max(0, cups - Number(start || 0))) : Math.max(cups, base);
+      return { tier:tierByCups(effective), effectiveCups:effective, manual:true };
+    }
+
+    var info = displayInfo(member);
+    var t = info.tier;
+    var upgradeText = t.next ? ("還差 " + Math.max(0, Number(t.next) - Number(info.effectiveCups || 0)) + " 杯升級 " + t.nextName + " " + t.nextIcon) : "已達最高等級";
 
     var rewardText = available > 0
       ? ("你目前有 " + available + " 次免費兌換，可於確認訂單時自動扣減。")
@@ -11060,7 +11071,7 @@ window.addEventListener("load", function() {
       '<div class="member-reward-card member-reward-card-v196">' +
         '<div class="member-reward-head-v196">' +
           '<div>' +
-            '<div class="member-reward-title-v196"><span class="member-tier-fixed-icon-v200">👤</span> ' + esc(t.name || "普通會員") + (manual ? '<span class="member-tier-manual-v211">店方設定</span>' : '') + '</div>' +
+            '<div class="member-reward-title-v196"><span class="member-tier-fixed-icon-v200">👤</span> ' + esc(t.name || "普通會員") + '</div>' +
             '<div class="member-tier-upgrade-v205">🚀 ' + esc(upgradeText) + '</div>' +
           '</div>' +
           '<div class="member-reward-icon-v196" title="目前等級">' + esc(t.icon || "🌱") + '</div>' +
@@ -11249,21 +11260,31 @@ window.addEventListener("load", function() {
       }
       return null;
     }
-
-    var manual = byKey(member.manualTierKey || member.memberTierOverrideKey || member.memberTierManualKey || "");
-    var current = tiers[0];
-    for(var i=0;i<tiers.length;i++){
-      if(cups >= tiers[i].cups) current = tiers[i];
-    }
-    if(manual) current = Object.assign({}, manual, { manual:true });
-
-    var next = null;
-    if(!manual){
-      for(var j=0;j<tiers.length;j++){
-        if(tiers[j].cups > cups){ next = tiers[j]; break; }
+    function byCups(c){
+      var current = tiers[0];
+      for(var i=0;i<tiers.length;i++){
+        if(Number(c || 0) >= tiers[i].cups) current = tiers[i];
       }
+      return current;
     }
-    return { current: current, next: next, tiers: tiers, manual: !!manual };
+
+    var manualBase = byKey(member.manualTierKey || member.memberTierOverrideKey || member.memberTierManualKey || "");
+    var effectiveCups = cups;
+    var manual = false;
+    if(manualBase){
+      manual = true;
+      var hasStart = member.manualTierStartCups !== undefined || member.manualTierSetAtCups !== undefined || member.manualTierOriginalCups !== undefined;
+      var base = Number(member.manualTierBaseCups || manualBase.cups || 0);
+      var start = hasStart ? Number(member.manualTierStartCups ?? member.manualTierSetAtCups ?? member.manualTierOriginalCups ?? 0) : null;
+      effectiveCups = hasStart ? (base + Math.max(0, cups - Number(start || 0))) : Math.max(cups, base);
+    }
+
+    var current = byCups(effectiveCups);
+    var next = null;
+    for(var j=0;j<tiers.length;j++){
+      if(tiers[j].cups > effectiveCups){ next = tiers[j]; break; }
+    }
+    return { current: current, next: next, tiers: tiers, manual: manual, effectiveCups: effectiveCups };
   }
 
   function memberTierListV210(){
@@ -16656,9 +16677,19 @@ window.addEventListener("load", function() {
   }
   function displayTier214(member){
     member = member || {};
-    const manual = tierByKey214(member.manualTierKey || member.memberTierOverrideKey || member.memberTierManualKey || "");
-    const tier = manual || tierByKey214(member.memberTierKey || "") || tierByCups214(member.totalCups || member.cups || 0);
-    return Object.assign({}, tier, {manual: !!manual});
+    const manualBase = tierByKey214(member.manualTierKey || member.memberTierOverrideKey || member.memberTierManualKey || "");
+    if(!manualBase){
+      const tier = tierByKey214(member.memberTierKey || "") || tierByCups214(member.totalCups || member.cups || 0);
+      return Object.assign({}, tier, {manual:false, effectiveCups:Number(member.totalCups || member.cups || 0)});
+    }
+    const cups = Number(member.totalCups || member.cups || member.totalItems || 0);
+    const baseMap = {regular:0, silver:30, gold:60, diamond:100, blackgold:180, vip:180};
+    const hasStart = member.manualTierStartCups !== undefined || member.manualTierSetAtCups !== undefined || member.manualTierOriginalCups !== undefined;
+    const base = Number(member.manualTierBaseCups || baseMap[manualBase.key] || 0);
+    const start = hasStart ? Number(member.manualTierStartCups ?? member.manualTierSetAtCups ?? member.manualTierOriginalCups ?? 0) : null;
+    const effective = hasStart ? (base + Math.max(0, cups - Number(start || 0))) : Math.max(cups, base);
+    const tier = tierByCups214(effective);
+    return Object.assign({}, tier, {manual:true, manualBase:manualBase, effectiveCups:effective});
   }
   function updateAuth214(){
     const modal = document.getElementById("memberModal");
@@ -17038,5 +17069,123 @@ window.addEventListener("load", function() {
 </script>
 
 <!-- V220: Manual tier upgrade hint uses same customer-facing wording as normal tiers. -->
+
+<script>
+/* V224: member logout one-click stabilization and no stale auto-refresh after logout. */
+(function(){
+  const MEMBER_KEY = "sky31_member_v1";
+
+  function removeMemberStorageV224(){
+    try{
+      const remove = [];
+      for(let i=0;i<localStorage.length;i++){
+        const k = localStorage.key(i);
+        if(!k) continue;
+        if(/sky31.*member|member.*sky31|birthday_blessing|member_edit/i.test(k)) remove.push(k);
+      }
+      remove.forEach(k => localStorage.removeItem(k));
+      localStorage.removeItem(MEMBER_KEY);
+    }catch(e){}
+    try{
+      const remove = [];
+      for(let i=0;i<sessionStorage.length;i++){
+        const k = sessionStorage.key(i);
+        if(!k) continue;
+        if(/sky31.*member|member.*sky31|birthday_blessing|member_edit/i.test(k)) remove.push(k);
+      }
+      remove.forEach(k => sessionStorage.removeItem(k));
+    }catch(e){}
+  }
+
+  function clearMemberFieldsV224(){
+    ["name","phone","modalName","modalPhone","memberPhone","memberName","memberBirthday","memberRegPhone","memberRegName","memberRegBirthday"].forEach(function(id){
+      const el = document.getElementById(id);
+      if(el) el.value = "";
+    });
+  }
+
+  function updateLoggedOutUIV224(){
+    try{ if(typeof updateMemberProfileButton === "function") updateMemberProfileButton(null); }catch(e){}
+    try{ if(typeof updateCheckoutCustomerInfo === "function") updateCheckoutCustomerInfo(); }catch(e){}
+    try{ if(typeof renderLoggedPanel === "function") renderLoggedPanel(null); }catch(e){}
+    try{ if(typeof renderHomeQuickCard === "function") renderHomeQuickCard(); }catch(e){}
+    const modal = document.getElementById("memberModal");
+    if(modal){
+      modal.classList.remove("member-logged-in-v213");
+      modal.classList.add("member-logged-out-v213");
+    }
+    document.querySelectorAll("#memberQuickCard,#memberLoggedPanel").forEach(function(el){
+      if(el) { el.innerHTML = ""; el.style.display = "none"; }
+    });
+  }
+
+  function toastV224(text){
+    try{
+      if(typeof toast === "function") { toast(text); return; }
+    }catch(e){}
+    try{ alert(text); }catch(e){}
+  }
+
+  window.SKY31_MEMBER_FORCE_LOGOUT_V224 = function(showToast){
+    window.__SKY31_MEMBER_LOGGED_OUT_V224 = true;
+    window.__SKY31_MEMBER_LOGOUT_AT_V224 = Date.now();
+    removeMemberStorageV224();
+    clearMemberFieldsV224();
+    updateLoggedOutUIV224();
+    try{ if(typeof showPage === "function") showPage("home"); }catch(e){}
+    if(showToast !== false) toastV224("已成功登出");
+    setTimeout(updateLoggedOutUIV224, 50);
+    setTimeout(updateLoggedOutUIV224, 250);
+    setTimeout(updateLoggedOutUIV224, 800);
+    return false;
+  };
+
+  window.memberLogout = function(){
+    return window.SKY31_MEMBER_FORCE_LOGOUT_V224(true);
+  };
+
+  const oldRefresh213 = window.SKY31_REFRESH_MEMBER_V213;
+  const oldRefresh214 = window.SKY31_REFRESH_MEMBER_V214;
+  const guardedRefresh = async function(reason){
+    if(window.__SKY31_MEMBER_LOGGED_OUT_V224 || !localStorage.getItem(MEMBER_KEY)){
+      updateLoggedOutUIV224();
+      return null;
+    }
+    const fn = oldRefresh214 || oldRefresh213;
+    if(typeof fn === "function") return await fn(reason);
+    return null;
+  };
+  window.SKY31_REFRESH_MEMBER_V213 = guardedRefresh;
+  window.SKY31_REFRESH_MEMBER_V214 = guardedRefresh;
+
+  const oldLogin = window.memberLoginLookup;
+  if(typeof oldLogin === "function"){
+    window.memberLoginLookup = async function(){
+      window.__SKY31_MEMBER_LOGGED_OUT_V224 = false;
+      return await oldLogin.apply(this, arguments);
+    };
+  }
+  const oldReg = window.memberRegisterSave;
+  if(typeof oldReg === "function"){
+    window.memberRegisterSave = async function(){
+      window.__SKY31_MEMBER_LOGGED_OUT_V224 = false;
+      return await oldReg.apply(this, arguments);
+    };
+  }
+
+  document.addEventListener("click", function(e){
+    const el = e.target && e.target.closest ? e.target.closest("button,[onclick],[role='button'],a") : null;
+    if(!el) return;
+    const txt = String(el.textContent || "") + " " + String(el.getAttribute("onclick") || "");
+    if(/登出|logout|memberLogout/i.test(txt)){
+      e.preventDefault();
+      e.stopPropagation();
+      if(e.stopImmediatePropagation) e.stopImmediatePropagation();
+      window.SKY31_MEMBER_FORCE_LOGOUT_V224(true);
+    }
+  }, true);
+})();
+</script>
+
 </body>
 </html>
