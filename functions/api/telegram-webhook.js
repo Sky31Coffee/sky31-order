@@ -2275,8 +2275,9 @@ handleLimitedMenuAction = async function(env, cq, data) {
     const draft = await getLimitedDraftV183(env, chatId);
     if (!draft) return stop(env, cq, "沒有正在編輯的豆子");
     const step = LIMITED_BEAN_STEPS_V183[Number(draft.step || 0)];
-    if (!step || step.required) return stop(env, cq, "此欄必填");
-    draft.data[step.key] = "";
+    if (!step || (draft.mode !== "edit" && step.required)) return stop(env, cq, "此欄必填");
+    draft.data = draft.data || {};
+    if (!Object.prototype.hasOwnProperty.call(draft.data, step.key)) draft.data[step.key] = "";
     draft.step = Number(draft.step || 0) + 1;
     await saveLimitedDraftV183(env, chatId, draft);
     await sendLimitedWizardPromptV183(env, chatId, draft);
@@ -2413,6 +2414,7 @@ function buildLimitedStepTextV183(draft) {
   lines.push(step.title);
   lines.push("");
   lines.push(step.hint);
+  if (draft.mode === "edit") lines.push("按「略過」會保留目前這一項內容；直接輸入新內容會取代舊內容。");
   lines.push("");
   lines.push("目前資料：");
   lines.push(buildLimitedDraftSummaryV183(draft, false));
@@ -2425,7 +2427,7 @@ function buildLimitedStepMarkupV183(draft) {
   const rows = [];
   const firstRow = [];
   if (stepNo > 0) firstRow.push({ text: "⬅️ 上一步", callback_data: "limited_wizard_back:x" });
-  if (step && !step.required) firstRow.push({ text: "略過", callback_data: "limited_wizard_skip:x" });
+  if (step && (draft.mode === "edit" || !step.required)) firstRow.push({ text: "略過", callback_data: "limited_wizard_skip:x" });
   if (firstRow.length) rows.push(firstRow);
   rows.push([{ text: "取消", callback_data: "limited_wizard_cancel:x" }]);
   return { inline_keyboard: rows };
@@ -2472,7 +2474,7 @@ async function saveLimitedDraftToMenuV183(env, chatId, draft) {
     type: "bean",
     active: true,
     name,
-    cn: String(data.cn || name).trim(),
+    cn: String(Object.prototype.hasOwnProperty.call(data, "cn") ? data.cn : name).trim(),
     bean: name,
     flavor: String(data.flavor || "").trim(),
     desc: String(data.desc || "").trim(),
@@ -2883,8 +2885,9 @@ handleLimitedMenuAction = async function(env, cq, data) {
     const draft = await getLimitedDraftV183(env, chatId);
     if (!draft) return stop(env, cq, "沒有正在編輯的豆子");
     const step = LIMITED_BEAN_STEPS_V183[Number(draft.step || 0)];
-    if (!step || step.required) return stop(env, cq, "此欄必填");
-    draft.data[step.key] = "";
+    if (!step || (draft.mode !== "edit" && step.required)) return stop(env, cq, "此欄必填");
+    draft.data = draft.data || {};
+    if (!Object.prototype.hasOwnProperty.call(draft.data, step.key)) draft.data[step.key] = "";
     draft.step = Number(draft.step || 0) + 1;
     await saveLimitedDraftV183(env, chatId, draft);
     await sendLimitedWizardPromptV183(env, chatId, draft);
@@ -2959,7 +2962,7 @@ saveLimitedDraftToMenuV183 = async function(env, chatId, draft) {
     type: "bean",
     active: true,
     name,
-    cn: String(data.cn || name).trim(),
+    cn: String(Object.prototype.hasOwnProperty.call(data, "cn") ? data.cn : name).trim(),
     bean: name,
     flavor: String(data.flavor || "").trim(),
     desc: String(data.desc || "").trim(),
@@ -3161,7 +3164,7 @@ saveLimitedDraftToMenuV183 = async function(env, chatId, draft) {
     active: true,
     deleted: false,
     name,
-    cn: String(data.cn || name).trim(),
+    cn: String(Object.prototype.hasOwnProperty.call(data, "cn") ? data.cn : name).trim(),
     bean: name,
     flavor: String(data.flavor || "").trim(),
     desc: String(data.desc || "").trim(),
@@ -3416,8 +3419,9 @@ handleLimitedMenuAction = async function(env, cq, data) {
     const draft = await getLimitedDraftV183(env, chatId);
     if (!draft) return stop(env, cq, "沒有正在編輯的豆子");
     const step = LIMITED_BEAN_STEPS_V183[Number(draft.step || 0)];
-    if (!step || step.required) return stop(env, cq, "此欄必填");
-    draft.data[step.key] = "";
+    if (!step || (draft.mode !== "edit" && step.required)) return stop(env, cq, "此欄必填");
+    draft.data = draft.data || {};
+    if (!Object.prototype.hasOwnProperty.call(draft.data, step.key)) draft.data[step.key] = "";
     draft.step = Number(draft.step || 0) + 1;
     await saveLimitedDraftV183(env, chatId, draft);
     await sendLimitedWizardPromptV183(env, chatId, draft);
@@ -3526,7 +3530,7 @@ saveLimitedDraftToMenuV183 = async function(env, chatId, draft) {
     active: true,
     deleted: false,
     name,
-    cn: String(data.cn || name).trim(),
+    cn: String(Object.prototype.hasOwnProperty.call(data, "cn") ? data.cn : name).trim(),
     bean: name,
     flavor: String(data.flavor || "").trim(),
     desc: String(data.desc || "").trim(),
