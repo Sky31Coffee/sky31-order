@@ -17148,10 +17148,10 @@ window.addEventListener("load", function() {
     el.innerHTML =
       '<div class="sky31-maintenance-card-v218">' +
         '<div class="sky31-maintenance-brand-v241">Sky31</div>' +
-        '<div class="icon">☕</div>' +
-        '<h2>Sky31 正在短暫維護</h2>' +
-        '<p id="sky31MaintenanceMsgV218">我們正在更新點餐系統及會員資料，暫時未能下單或查詢訂單。</p>' +
-        '<div class="small">系統恢復後將會自動重新開放，感謝你的耐心等候。</div>' +
+        '<div class="icon">⚠️</div>' +
+        '<h2><strong>正在維護</strong></h2>' +
+        '<p id="sky31MaintenanceMsgV218">我們正在維護升級，系統會儘快恢復，感謝你的耐心等候。</p>' +
+        '<div class="small">Sky31 點餐及查詢功能將於維護完成後自動恢復，敬請稍候。</div>' +
       '</div>';
     document.body.appendChild(el);
     return el;
@@ -17161,7 +17161,7 @@ window.addEventListener("load", function() {
     const el = ensureMaintenanceDom218();
     const p = document.getElementById("sky31MaintenanceMsgV218");
     msg = String(msg || "").trim();
-    if(!msg || msg === "系統維護，暫停使用。" || msg === "系統維護，暫停使用") msg = "我們正在更新點餐系統及會員資料，暫時未能下單或查詢訂單。";
+    if(!msg || msg === "系統維護，暫停使用。" || msg === "系統維護，暫停使用") msg = "我們正在維護升級，系統會儘快恢復，感謝你的耐心等候。";
     if(p) p.textContent = msg;
     el.classList.toggle("show", !!active);
     document.body.classList.toggle("sky31-maintenance-active-v218", !!active);
@@ -17172,7 +17172,7 @@ window.addEventListener("load", function() {
       const res = await fetch("/api/menu?_maintenance=1&t=" + Date.now(), {cache:"no-store", headers:{"Cache-Control":"no-cache"}});
       const data = await res.json().catch(() => ({}));
       const m = data && data.maintenance;
-      setMaintenance218(!!(m && m.active), (m && m.message) || "我們正在更新點餐系統及會員資料，暫時未能下單或查詢訂單。");
+      setMaintenance218(!!(m && m.active), (m && m.message) || "我們正在維護升級，系統會儘快恢復，感謝你的耐心等候。");
     }catch(e){
       // Do not lock the website if the status check fails.
     }
@@ -18240,6 +18240,10 @@ window.addEventListener("load", function() {
   background:linear-gradient(145deg, rgba(255,255,255,.88), rgba(255,255,255,.46)) !important;
   border:1px solid rgba(255,255,255,.82) !important;
   box-shadow:0 18px 40px rgba(45,65,95,.14), inset 0 1px 0 rgba(255,255,255,.95) !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  font-size:31px !important;
 }
 .sky31-maintenance-card-v218 h2{
   position:relative !important;
@@ -18247,6 +18251,7 @@ window.addEventListener("load", function() {
   color:#1f2733 !important;
   font-size:23px !important;
   letter-spacing:-.03em !important;
+  font-weight:900 !important;
 }
 .sky31-maintenance-card-v218 p{
   position:relative !important;
@@ -18312,9 +18317,9 @@ window.addEventListener("load", function() {
 
   var oldSetMaint = window.SKY31_CHECK_MAINTENANCE_V218;
   window.SKY31_MAINTENANCE_TEXT_V241 = {
-    title:"Sky31 正在短暫維護",
-    message:"我們正在更新點餐系統及會員資料，暫時未能下單或查詢訂單。",
-    small:"系統恢復後將會自動重新開放，感謝你的耐心等候。"
+    title:"正在維護",
+    message:"我們正在維護升級，系統會儘快恢復，感謝你的耐心等候。",
+    small:"Sky31 點餐及查詢功能將於維護完成後自動恢復，敬請稍候。"
   };
 
   function addDiscountToBb(html, o){
