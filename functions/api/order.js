@@ -316,17 +316,20 @@ function sky31OrderDisplayTierV213(member) {
   member = member || {};
   const totalCups = Number(member.totalCups || member.cups || member.totalItems || 0);
   const manualBase = sky31OrderTierByKeyV213(member.manualTierKey || member.memberTierOverrideKey || member.memberTierManualKey || "");
+
   if (!manualBase) {
     const natural = sky31OrderTierByKeyV213(member.memberTierKey || "") || sky31OrderTierByCupsV213(totalCups);
     return { ...(natural || sky31OrderTierByKeyV213("regular")), manual: false, effectiveCups: totalCups };
   }
 
-  const startCups = Number(member.manualTierStartCups || member.manualTierSetAtCups || member.manualTierOriginalCups || totalCups || 0);
   const baseCups = Number(member.manualTierBaseCups || sky31OrderTierThresholdV216(manualBase.key));
-  const gained = Math.max(0, totalCups - startCups);
-  const effectiveCups = baseCups + gained;
+  const hasStart = member.manualTierStartCups != null || member.manualTierSetAtCups != null || member.manualTierOriginalCups != null;
+  const startCups = hasStart ? Number(member.manualTierStartCups ?? member.manualTierSetAtCups ?? member.manualTierOriginalCups ?? 0) : null;
+  const gained = hasStart ? Math.max(0, totalCups - Number(startCups || 0)) : 0;
+  const effectiveCups = hasStart ? (baseCups + gained) : Math.max(totalCups, baseCups);
   const tier = sky31OrderTierByCupsV213(effectiveCups);
-  return { ...tier, manual: true, manualBase, manualBaseCups: baseCups, manualStartCups: startCups, gainedSinceManualTier: gained, effectiveCups };
+
+  return { ...tier, manual: true, manualBase, manualBaseCups: baseCups, manualStartCups: hasStart ? Number(startCups || 0) : totalCups, gainedSinceManualTier: hasStart ? gained : Math.max(0, totalCups - baseCups), effectiveCups };
 }
 
 function sky31OrderLimitedSurchargeTotalV213(cart) {

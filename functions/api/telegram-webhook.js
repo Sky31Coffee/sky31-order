@@ -7,7 +7,7 @@ export async function onRequest(context) {
     return json({
       ok: true,
       endpoint: "telegram-webhook",
-      version: "V223",
+      version: "V224",
       method,
       message: "Webhook endpoint reachable. Telegram sends POST updates here."
     });
@@ -4271,7 +4271,6 @@ buildMemberDetailReplyMarkup = function(member, deleted = false) {
     rows.push([{ text: "↩️ 恢復賬號", callback_data: "member_restore:" + phone }]);
   } else {
     rows.push([{ text: "🔄 重新讀取會員資料", callback_data: "member_refresh:" + phone }]);
-    rows.push([{ text: "🎂 更改生日", callback_data: "member_edit_birthday:" + phone }]);
     rows.push([{ text: "🏅 更改會員等級", callback_data: "member_tier_menu:" + phone }]);
     rows.push([{ text: "🗑️ 刪除賬號", callback_data: "member_delete:" + phone }]);
   }
@@ -4300,11 +4299,8 @@ async function handleMemberAdminEditActionV211(env, cq, data) {
   }
 
   if (action === "member_edit_birthday") {
-    const loaded = await findActiveMemberV223(env, phone);
-    if (!loaded.member) return stop(env, cq, "找不到會員資料，請返回列表重新選擇");
-    await saveMemberEditDraftV211(env, chatId, { type: "birthday", phone, createdAt: new Date().toISOString() });
-    await editTelegramMessage(env, chatId, messageId, "🎂 更改會員生日\n\n請直接傳送生日日期。\n可接受格式：\n1990-08-18\n1990/08/18\n1990.08.18\n1990年8月18日\n\n輸入「取消」可取消操作。", { inline_keyboard: [[{ text: "取消", callback_data: "member_edit_cancel:" + phone }]] });
-    return stop(env, cq, "請輸入生日日期");
+    await clearMemberEditDraftV211(env, chatId);
+    return stop(env, cq, "後台修改生日功能已停用，請由會員本人於會員中心設定。");
   }
 
   if (action === "member_tier_menu") {
@@ -4362,28 +4358,8 @@ async function handleMemberEditDraftTextV211(env, message, text, draft) {
   }
 
   if (draft && draft.type === "birthday") {
-    const birthday = normalizeBirthdayInputV223(raw);
-    if (!birthday) {
-      await sendTelegramMessage(env, chatId, "生日格式不正確，請重新輸入。\n\n可接受格式：\n1990-08-18\n1990/08/18\n1990.08.18\n1990年8月18日\n\n輸入「取消」可取消操作。", null);
-      return json({ ok: true });
-    }
-
-    const loaded = await findActiveMemberV223(env, draft.phone);
-    if (!loaded.member) {
-      await clearMemberEditDraftV211(env, chatId);
-      await sendTelegramMessage(env, chatId, "找不到會員資料，生日未能更改。請返回會員列表重新選擇。", buildCommandMenuMarkupV183 ? buildCommandMenuMarkupV183() : null);
-      return json({ ok: true });
-    }
-
-    loaded.member.birthday = birthday;
-    loaded.member.birthdayUpdatedAt = new Date().toISOString();
-    loaded.member.birthdayUpdatedBy = "telegram";
-    const saved = await saveActiveMemberV223(env, loaded);
     await clearMemberEditDraftV211(env, chatId);
-
-    const enriched = await enrichMemberStatsForTelegram(env, saved.member).catch(() => saved.member);
-    const birthdayMonthNow = Number(birthday.split("-")[1]) === (new Date().getUTCMonth() + 1);
-    await sendTelegramMessage(env, chatId, "✅ 已更新會員生日：" + birthday + (birthdayMonthNow ? "\n🎂 生日月優惠已觸發，客人在會員中心會看到生日祝福和生日月飲品券。" : "") + "\n\n" + buildMemberDetailText(enriched, false), buildMemberDetailReplyMarkup(enriched, false));
+    await sendTelegramMessage(env, chatId, "後台修改生日功能已停用，請由會員本人於會員中心設定。", buildCommandMenuMarkupV183 ? buildCommandMenuMarkupV183() : null);
     return json({ ok: true });
   }
 
