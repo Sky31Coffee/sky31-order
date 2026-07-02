@@ -710,7 +710,6 @@ async function listMembersByPrefix(env, prefix, deleted) {
         member._deleted = !!deleted;
         member._kvKey = key.name;
         out.push(member);
-        if (out.length >= V128_MEMBER_LIST_LIMIT) return out;
       } catch (_) {}
     }
 
@@ -4042,131 +4041,42 @@ function mergeMemberPayloadsV223(records, phoneHint) {
 }
 
 async function findActiveMemberV223(env, phone) {
-  const last8 = phoneLast8V223(phone);
-  if (!last8) return { key: "", member: null, records: [] };
+  phone = canonicalPhoneV223(phone);
+  if (!phone) return { key: "", member: null, records: [] };
 
-  const records = [];
-  const seen = new Set();
-  async function tryKey(key) {
-    if (!key || seen.has(key)) return;
-    seen.add(key);
-    const raw = await env.ORDERS.get(key);
-    if (!raw) return;
-    try {
-      const member = JSON.parse(raw);
-      if (!member || member.deletedAt) return;
-      const p = normalizePhone(member.phone || key.replace("member:", ""));
-      if (p.slice(-8) === last8 || normalizePhone(key).slice(-8) === last8) {
-        member.phone = p || canonicalPhoneV223(last8);
-        member._kvKey = key;
-        records.push({ key, member });
-      }
-    } catch (_) {}
-  }
+  const key = memberKeyV223(phone);
+  const raw = await env.ORDERS.get(key);
+  if (!raw) return { key: "", member: null, records: [] };
 
-  await tryKey("member:" + last8);
-  await tryKey("member:853" + last8);
-  await tryKey("member:" + normalizePhone(phone));
+  let member = null;
+  try { member = JSON.parse(raw); } catch (_) { member = null; }
+  if (!member || member.deletedAt) return { key: "", member: null, records: [] };
 
-  let cursor = undefined;
-  let checked = 0;
-  do {
-    const page = await env.ORDERS.list({ prefix: "member:", cursor });
-    for (const key of (page.keys || [])) {
-      checked += 1;
-      if (checked > 8000) break;
-      await tryKey(key.name);
-    }
-    cursor = page.cursor;
-    if (page.list_complete !== false) break;
-  } while (cursor && checked <= 8000);
-
-  if (!records.length) return { key: "", member: null, records: [] };
-
-  const override = await readMemberTierOverrideV262(env, last8);
-  const member = applyMemberTierOverrideV262(mergeMemberPayloadsV223(records, last8), override);
-  const key = memberKeyV223(member.phone);
+  member.phone = canonicalPhoneV223(member.phone || phone) || phone;
+  if (member.phone !== phone) member.phone = phone;
   member._kvKey = key;
-  return { key, member, records };
+
+  const override = await readMemberTierOverrideV262(env, phone);
+  member = applyMemberTierOverrideV262(member, override);
+
+  return { key, member, records: [{ key, member }] };
 }
 
 async function saveActiveMemberV223(env, loaded) {
   if (!loaded || !loaded.member) return null;
   const member = { ...loaded.member };
-  const last8 = phoneLast8V223(member.phone || (loaded.key || "").replace(/^member:/, ""));
-  member.phone = canonicalPhoneV223(member.phone || last8);
+  member.phone = canonicalPhoneV223(member.phone || (loaded.key || "").replace(/^member:/, ""));
+  if (!member.phone) return null;
   member.updatedAt = new Date().toISOString();
 
-  const canonicalKey = memberKeyV223(member.phone);
-  const ttl = 60 * 60 * 24 * 3650;
+  const key = memberKeyV223(member.phone);
+  await env.ORDERS.put(key, JSON.stringify(member), { expirationTtl: 60 * 60 * 24 * 3650 });
 
-  function isSameActiveMemberRecord(keyName, oldMember) {
-    const keyPhone = normalizePhone(String(keyName || "").replace(/^member:/, ""));
-    const storedPhone = normalizePhone((oldMember && oldMember.phone) || keyPhone);
-    if (oldMember && oldMember.deletedAt) return false;
-    return phoneLast8V223(storedPhone || keyPhone) === last8;
+  if (member.manualTierKey || member.memberTierOverrideKey || member.memberTierManualKey) {
+    await saveMemberTierOverrideV262(env, member.phone, member);
   }
 
-  function withLatestManualTier(oldMember, keyName) {
-    const base = oldMember && typeof oldMember === "object" ? { ...oldMember } : {};
-    const keyPhone = normalizePhone(String(keyName || "").replace(/^member:/, ""));
-    return {
-      ...base,
-      ...member,
-      phone: normalizePhone(base.phone || keyPhone || member.phone || last8),
-      manualTierKey: member.manualTierKey || member.memberTierOverrideKey || member.memberTierManualKey || "",
-      manualTierName: member.manualTierName || member.memberTierOverrideName || "",
-      manualTierIcon: member.manualTierIcon || member.memberTierOverrideIcon || "",
-      memberTierOverrideKey: member.memberTierOverrideKey || member.manualTierKey || "",
-      memberTierOverrideName: member.memberTierOverrideName || member.manualTierName || "",
-      memberTierOverrideIcon: member.memberTierOverrideIcon || member.manualTierIcon || "",
-      manualTierBaseCups: Number(member.manualTierBaseCups ?? 0),
-      manualTierStartCups: Number(member.manualTierStartCups ?? member.manualTierSetAtCups ?? member.manualTierOriginalCups ?? 0),
-      manualTierSetAtCups: Number(member.manualTierSetAtCups ?? member.manualTierStartCups ?? member.manualTierOriginalCups ?? 0),
-      manualTierOriginalCups: Number(member.manualTierOriginalCups ?? member.manualTierStartCups ?? member.manualTierSetAtCups ?? 0),
-      manualTierUpdatedAt: member.manualTierUpdatedAt || member.updatedAt || new Date().toISOString(),
-      manualTierUpdatedBy: member.manualTierUpdatedBy || "telegram",
-      updatedAt: member.updatedAt
-    };
-  }
-
-  const records = new Map();
-  (Array.isArray(loaded.records) ? loaded.records : []).forEach(rec => {
-    if (rec && rec.key) records.set(rec.key, rec.member || {});
-  });
-
-  let cursor = undefined;
-  do {
-    const page = await env.ORDERS.list({ prefix: "member:", cursor });
-    for (const key of (page.keys || [])) {
-      if (records.has(key.name)) continue;
-      try {
-        const raw = await env.ORDERS.get(key.name);
-        const oldMember = raw ? JSON.parse(raw) : {};
-        if (isSameActiveMemberRecord(key.name, oldMember)) records.set(key.name, oldMember);
-      } catch (_) {}
-    }
-    cursor = page.cursor;
-    if (page.list_complete !== false) break;
-  } while (cursor);
-
-  records.set(canonicalKey, records.get(canonicalKey) || member);
-
-  let synced = 0;
-  for (const [key, oldMember] of records.entries()) {
-    if (!key || !key.startsWith("member:")) continue;
-    const nextMember = withLatestManualTier(oldMember, key);
-    await env.ORDERS.put(key, JSON.stringify(nextMember), { expirationTtl: ttl });
-    synced += 1;
-  }
-
-  // Do not create or force an 853 member key. Do not immediately delete old aliases here:
-  // every existing same-phone record is synchronized to the same tier so either read path shows the same result.
-  const finalMember = withLatestManualTier(records.get(canonicalKey) || member, canonicalKey);
-  if (finalMember.manualTierKey || finalMember.memberTierOverrideKey || finalMember.memberTierManualKey) {
-    await saveMemberTierOverrideV262(env, last8, finalMember);
-  }
-  return { key: canonicalKey, member: finalMember, syncedAliasCount: synced };
+  return { key, member, syncedAliasCount: 1 };
 }
 
 function normalizeBirthdayInputV223(input) {

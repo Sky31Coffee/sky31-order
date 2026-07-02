@@ -21,13 +21,31 @@ function memberRegistrationPurgeKeysV261(phone) {
   phone = normalizePhone(phone || "");
   const out = new Set();
   if (!phone) return [];
-  out.add("member_purged:" + phone);
   const last = phone.length >= 8 ? phone.slice(-8) : phone;
-  if (last) out.add("member_purged:last8:" + last);
-  if (phone.length > 3 && phone.startsWith("853")) out.add("member_purged:" + phone.slice(3));
-  // Only remove old tombstones if they already exist. This does not create or normalize a new 853 member record.
-  if (phone.length === 8) out.add("member_purged:853" + phone);
-  return Array.from(out);
+
+  out.add("member_deleted:" + phone);
+  out.add("member_purged:" + phone);
+  if (last) {
+    out.add("member_tier_override:" + last);
+    out.add("member_purged:last8:" + last);
+  }
+
+  // Clean existing legacy blocks only; this does not create or normalize any 853 member.
+  if (phone.length === 8) {
+    out.add("member:" + "853" + phone);
+    out.add("member_deleted:" + "853" + phone);
+    out.add("member_purged:" + "853" + phone);
+  }
+  if (phone.length > 3 && phone.startsWith("853")) {
+    const local = phone.slice(3);
+    out.add("member:" + local);
+    out.add("member_deleted:" + local);
+    out.add("member_purged:" + local);
+    out.add("member_tier_override:" + local.slice(-8));
+    out.add("member_purged:last8:" + local.slice(-8));
+  }
+
+  return Array.from(out).filter(Boolean);
 }
 
 async function clearMemberRegistrationBlocksV261(env, phone) {
@@ -106,7 +124,7 @@ export async function onRequestPost(context) {
       member.birthdayUpdatedBy = "customer";
       member.updatedAt = now;
 
-      await env.ORDERS.put("member:" + normalizePhone(member.phone || phoneForBirthday), JSON.stringify(member));
+      await env.ORDERS.put("member:" + phoneForBirthday, JSON.stringify(member), { expirationTtl: 60 * 60 * 24 * 3650 });
 
       const withStats = await enrichMemberWithOrders(env, member);
       return json({ ok: true, member: sky31DecorateMemberV196(withStats) });
@@ -164,94 +182,18 @@ async function loadMember(env, phone) {
   phone = normalizePhone(phone);
   if (!phone) throw new Error("請輸入手機號碼");
 
-  const matches = [];
-  const seen = new Set();
+  const raw = await env.ORDERS.get("member:" + phone);
+  if (!raw) throw new Error("會員資料不存在或已被刪除，請重新登入或重新註冊");
 
-  function add(key, member) {
-    if (!member || member.deletedAt || seen.has(key)) return;
-    const keyPhone = normalizePhone(String(key || "").replace(/^member:/, ""));
-    const storedPhone = normalizePhone(member.phone || keyPhone);
-    if (!samePhoneForMemberLookup(storedPhone, phone) && !samePhoneForMemberLookup(keyPhone, phone)) return;
-    seen.add(key);
-    member.phone = storedPhone || keyPhone || phone;
-    matches.push({ key, member });
-  }
+  let member = null;
+  try { member = JSON.parse(raw); } catch (_) { member = null; }
+  if (!member || member.deletedAt) throw new Error("會員資料不存在或已被刪除，請重新登入或重新註冊");
 
-  // V226 fast path: try exact/canonical phone candidates first.
-  for (const candidate of memberPhoneCandidates(phone)) {
-    const key = "member:" + candidate;
-    const raw = await env.ORDERS.get(key);
-    if (!raw) continue;
-    try { add(key, JSON.parse(raw)); } catch (_) {}
-  }
+  member.phone = normalizePhone(member.phone || phone) || phone;
+  if (member.phone !== phone) member.phone = phone;
 
-  const tierOverrideV262 = await readMemberTierOverrideV262(env, phone);
-
-  // Fast path: normally direct member keys plus the manual-tier override are enough.
-  // Only fall back to scanning member:* when no direct member key exists. This keeps login fast.
-  if (!matches.length) {
-    let cursor = undefined;
-    let checked = 0;
-    do {
-      const page = await env.ORDERS.list({ prefix: "member:", cursor });
-      for (const key of (page.keys || [])) {
-        checked += 1;
-        if (checked > 8000) break;
-        const raw = await env.ORDERS.get(key.name);
-        if (!raw) continue;
-        try { add(key.name, JSON.parse(raw)); } catch (_) {}
-      }
-      cursor = page.cursor;
-      if (page.list_complete !== false) break;
-    } while (cursor && checked <= 8000);
-  }
-
-  if (!matches.length) throw new Error("會員資料不存在或已被刪除，請重新登入或重新註冊");
-
-  function manualKeyOf(member) {
-    return String(member.manualTierKey || member.memberTierOverrideKey || member.memberTierManualKey || "").trim();
-  }
-  function timeOf(member) {
-    return Math.max(
-      new Date(member.manualTierUpdatedAt || 0).getTime() || 0,
-      new Date(member.birthdayUpdatedAt || 0).getTime() || 0,
-      new Date(member.updatedAt || 0).getTime() || 0,
-      new Date(member.createdAt || 0).getTime() || 0
-    );
-  }
-
-  matches.sort((a, b) => {
-    const am = manualKeyOf(a.member) ? 1 : 0;
-    const bm = manualKeyOf(b.member) ? 1 : 0;
-    if (bm !== am) return bm - am;
-    return timeOf(b.member) - timeOf(a.member);
-  });
-
-  const merged = { ...matches[matches.length - 1].member, ...matches[0].member };
-  const manualSource = matches.find(x => manualKeyOf(x.member));
-  if (manualSource) {
-    merged.manualTierKey = manualSource.member.manualTierKey || manualSource.member.memberTierOverrideKey || manualSource.member.memberTierManualKey || "";
-    merged.manualTierName = manualSource.member.manualTierName || manualSource.member.memberTierOverrideName || "";
-    merged.manualTierIcon = manualSource.member.manualTierIcon || manualSource.member.memberTierOverrideIcon || "";
-    merged.memberTierOverrideKey = merged.manualTierKey;
-    merged.memberTierOverrideName = merged.manualTierName;
-    merged.memberTierOverrideIcon = merged.manualTierIcon;
-    merged.manualTierUpdatedAt = manualSource.member.manualTierUpdatedAt || "";
-    merged.manualTierUpdatedBy = manualSource.member.manualTierUpdatedBy || "";
-    merged.manualTierStartCups = Number(manualSource.member.manualTierStartCups ?? manualSource.member.manualTierSetAtCups ?? manualSource.member.manualTierOriginalCups ?? manualSource.member.totalCups ?? 0);
-    merged.manualTierBaseCups = Number(manualSource.member.manualTierBaseCups ?? sky31TierThresholdV216(merged.manualTierKey));
-  }
-
-  for (const m of matches.map(x => x.member)) {
-    merged.totalOrders = Math.max(Number(merged.totalOrders || 0), Number(m.totalOrders || 0));
-    merged.totalCups = Math.max(Number(merged.totalCups || 0), Number(m.totalCups || 0));
-    merged.totalSpent = Math.max(Number(merged.totalSpent || 0), Number(m.totalSpent || 0));
-    merged.rewardRedeemed = Math.max(Number(merged.rewardRedeemed || merged.rewardsRedeemed || 0), Number(m.rewardRedeemed || m.rewardsRedeemed || 0));
-    merged.rewardsRedeemed = merged.rewardRedeemed;
-    if (!merged.birthday && m.birthday) merged.birthday = m.birthday;
-  }
-
-  return await enrichMemberWithOrders(env, applyMemberTierOverrideV262(merged, tierOverrideV262));
+  const override = await readMemberTierOverrideV262(env, phone);
+  return await enrichMemberWithOrders(env, applyMemberTierOverrideV262(member, override));
 }
 
 async function enrichMemberWithOrders(env, member) {
@@ -608,13 +550,7 @@ function samePhoneForMemberLookup(a, b) {
 
 function memberPhoneCandidates(phone) {
   phone = normalizePhone(phone);
-  const out = [];
-  if (phone) out.push(phone);
-  // Read-only compatibility for old records that were previously saved as 853 + 8-digit phone.
-  // This does not create, rewrite, or normalize any member phone number.
-  if (phone.length === 8) out.push("853" + phone);
-  if (phone.length > 3 && phone.startsWith("853")) out.push(phone.slice(3));
-  return Array.from(new Set(out.filter(Boolean)));
+  return phone ? [phone] : [];
 }
 
 function orderCups(order) {
