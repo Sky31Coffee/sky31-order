@@ -93,55 +93,52 @@ export async function onRequestPost(context) {
 
 async function loadMember(env, phone) {
   phone = normalizePhone(phone);
-  if (!phone) return null;
+  if (!phone) throw new Error("請輸入手機號碼");
 
-  // V214: collect all matching member records instead of returning the first stale duplicate.
-  // This fixes cases where Telegram edited member:853xxxx but frontend reads member:xxxx.
   const matches = [];
-  const seenKeys = new Set();
+  const seen = new Set();
 
-  function addCandidate(key, member) {
-    if (!member || member.deletedAt || seenKeys.has(key)) return;
-    seenKeys.add(key);
+  function add(key, member) {
+    if (!member || member.deletedAt || seen.has(key)) return;
     const keyPhone = normalizePhone(String(key || "").replace(/^member:/, ""));
     const storedPhone = normalizePhone(member.phone || keyPhone);
     if (!samePhoneForMemberLookup(storedPhone, phone) && !samePhoneForMemberLookup(keyPhone, phone)) return;
+    seen.add(key);
     member.phone = storedPhone || keyPhone || phone;
     matches.push({ key, member });
   }
 
-  const candidates = memberPhoneCandidates(phone);
-  for (const candidate of candidates) {
+  // V226 fast path: try exact/canonical phone candidates first.
+  for (const candidate of memberPhoneCandidates(phone)) {
     const key = "member:" + candidate;
     const raw = await env.ORDERS.get(key);
     if (!raw) continue;
-    try { addCandidate(key, JSON.parse(raw)); } catch (_) {}
+    try { add(key, JSON.parse(raw)); } catch (_) {}
   }
 
-  let cursor = undefined;
-  let checked = 0;
-  do {
-    const page = await env.ORDERS.list({ prefix: "member:", cursor });
+  // V226: only full-scan member:* if direct keys fail. This avoids slow login after duplicate cleanup.
+  if (!matches.length) {
+    let cursor = undefined;
+    let checked = 0;
+    do {
+      const page = await env.ORDERS.list({ prefix: "member:", cursor });
+      for (const key of (page.keys || [])) {
+        checked += 1;
+        if (checked > 5000) break;
+        const raw = await env.ORDERS.get(key.name);
+        if (!raw) continue;
+        try { add(key.name, JSON.parse(raw)); } catch (_) {}
+      }
+      cursor = page.cursor;
+      if (page.list_complete !== false) break;
+    } while (cursor && checked <= 5000);
+  }
 
-    for (const key of (page.keys || [])) {
-      checked += 1;
-      if (checked > 5000) break;
-
-      const raw = await env.ORDERS.get(key.name);
-      if (!raw) continue;
-      try { addCandidate(key.name, JSON.parse(raw)); } catch (_) {}
-    }
-
-    cursor = page.cursor;
-    if (page.list_complete !== false) break;
-  } while (cursor && checked <= 5000);
-
-  if (!matches.length) return null;
+  if (!matches.length) throw new Error("會員資料不存在或已被刪除，請重新登入或重新註冊");
 
   function manualKeyOf(member) {
     return String(member.manualTierKey || member.memberTierOverrideKey || member.memberTierManualKey || "").trim();
   }
-
   function timeOf(member) {
     return Math.max(
       new Date(member.manualTierUpdatedAt || 0).getTime() || 0,
@@ -158,53 +155,31 @@ async function loadMember(env, phone) {
     return timeOf(b.member) - timeOf(a.member);
   });
 
-  const base = { ...matches[matches.length - 1].member, ...matches[0].member };
-
-  // Merge the newest manual tier fields from any duplicate record.
+  const merged = { ...matches[matches.length - 1].member, ...matches[0].member };
   const manualSource = matches.find(x => manualKeyOf(x.member));
   if (manualSource) {
-    const m = manualSource.member;
-    base.manualTierKey = m.manualTierKey || m.memberTierOverrideKey || m.memberTierManualKey || "";
-    base.manualTierName = m.manualTierName || m.memberTierOverrideName || "";
-    base.manualTierIcon = m.manualTierIcon || m.memberTierOverrideIcon || "";
-    base.memberTierOverrideKey = base.manualTierKey;
-    base.memberTierOverrideName = base.manualTierName;
-    base.memberTierOverrideIcon = base.manualTierIcon;
-    base.manualTierUpdatedAt = m.manualTierUpdatedAt || m.updatedAt || base.manualTierUpdatedAt || "";
-    base.manualTierUpdatedBy = m.manualTierUpdatedBy || base.manualTierUpdatedBy || "";
+    merged.manualTierKey = manualSource.member.manualTierKey || manualSource.member.memberTierOverrideKey || manualSource.member.memberTierManualKey || "";
+    merged.manualTierName = manualSource.member.manualTierName || manualSource.member.memberTierOverrideName || "";
+    merged.manualTierIcon = manualSource.member.manualTierIcon || manualSource.member.memberTierOverrideIcon || "";
+    merged.memberTierOverrideKey = merged.manualTierKey;
+    merged.memberTierOverrideName = merged.manualTierName;
+    merged.memberTierOverrideIcon = merged.manualTierIcon;
+    merged.manualTierUpdatedAt = manualSource.member.manualTierUpdatedAt || "";
+    merged.manualTierUpdatedBy = manualSource.member.manualTierUpdatedBy || "";
+    merged.manualTierStartCups = Number(manualSource.member.manualTierStartCups ?? manualSource.member.manualTierSetAtCups ?? manualSource.member.manualTierOriginalCups ?? manualSource.member.totalCups ?? 0);
+    merged.manualTierBaseCups = Number(manualSource.member.manualTierBaseCups || sky31TierThresholdV216(merged.manualTierKey));
   }
 
-  // Preserve birthday from any record if the chosen base does not have one.
-  const birthdaySource = matches.find(x => x.member && x.member.birthday);
-  if (birthdaySource && !base.birthday) {
-    base.birthday = birthdaySource.member.birthday;
-    base.birthdayUpdatedAt = birthdaySource.member.birthdayUpdatedAt || base.birthdayUpdatedAt || "";
-    base.birthdayUpdatedBy = birthdaySource.member.birthdayUpdatedBy || base.birthdayUpdatedBy || "";
+  for (const m of matches.map(x => x.member)) {
+    merged.totalOrders = Math.max(Number(merged.totalOrders || 0), Number(m.totalOrders || 0));
+    merged.totalCups = Math.max(Number(merged.totalCups || 0), Number(m.totalCups || 0));
+    merged.totalSpent = Math.max(Number(merged.totalSpent || 0), Number(m.totalSpent || 0));
+    merged.rewardRedeemed = Math.max(Number(merged.rewardRedeemed || merged.rewardsRedeemed || 0), Number(m.rewardRedeemed || m.rewardsRedeemed || 0));
+    merged.rewardsRedeemed = merged.rewardRedeemed;
+    if (!merged.birthday && m.birthday) merged.birthday = m.birthday;
   }
 
-  // Preserve highest counters to avoid rolling back stats from a stale duplicate.
-  for (const item of matches) {
-    const m = item.member || {};
-    base.totalOrders = Math.max(Number(base.totalOrders || 0), Number(m.totalOrders || 0));
-    base.totalCups = Math.max(Number(base.totalCups || 0), Number(m.totalCups || 0));
-    base.totalSpent = Math.max(Number(base.totalSpent || 0), Number(m.totalSpent || 0));
-    base.rewardRedeemed = Math.max(Number(base.rewardRedeemed || base.rewardsRedeemed || 0), Number(m.rewardRedeemed || m.rewardsRedeemed || 0));
-    base.rewardsRedeemed = base.rewardRedeemed;
-  }
-
-  base.phone = normalizePhone(base.phone || phone);
-  base.updatedAt = base.updatedAt || new Date().toISOString();
-
-  // Self-heal all phone variants so frontend, order API and Telegram read the same tier.
-  const keysToSave = new Set(matches.map(x => x.key));
-  memberPhoneCandidates(base.phone || phone).forEach(p => keysToSave.add("member:" + p));
-  keysToSave.add("member:" + phone);
-
-  for (const key of keysToSave) {
-    try { await env.ORDERS.put(key, JSON.stringify(base), { expirationTtl: 60 * 60 * 24 * 3650 }); } catch (_) {}
-  }
-
-  return base;
+  return await enrichMemberWithOrders(env, merged);
 }
 
 async function enrichMemberWithOrders(env, member) {
@@ -365,24 +340,27 @@ async function collectMemberOrderNos(env, phone, member) {
 
   if (member.lastOrderNo) add(member.lastOrderNo);
 
-  // Fallback for old records where phone/member indexes were missing.
-  await listKeys(env, "order:", 5000, async key => {
-    const raw = await env.ORDERS.get(key.name);
-    if (!raw) return;
+  // V226: Full order:* scan is expensive and made login slow as orders grew.
+  // Use it only when no phone index / member_ordered index / recentOrderNos exists.
+  if (!found.size) {
+    await listKeys(env, "order:", 1200, async key => {
+      const raw = await env.ORDERS.get(key.name);
+      if (!raw) return;
 
-    try {
-      const order = JSON.parse(raw);
-      const orderPhones = [
-        normalizePhone(order.phone),
-        normalizePhone(order.memberPhone),
-        normalizePhone(order.submittedPhone)
-      ].filter(Boolean);
+      try {
+        const order = JSON.parse(raw);
+        const orderPhones = [
+          normalizePhone(order.phone),
+          normalizePhone(order.memberPhone),
+          normalizePhone(order.submittedPhone)
+        ].filter(Boolean);
 
-      if (orderPhones.some(p => samePhoneForMemberLookup(p, phone))) {
-        add(order.orderNo || key.name.replace("order:", ""));
-      }
-    } catch (_) {}
-  });
+        if (orderPhones.some(p => samePhoneForMemberLookup(p, phone))) {
+          add(order.orderNo || key.name.replace("order:", ""));
+        }
+      } catch (_) {}
+    });
+  }
 
   return Array.from(found);
 }
