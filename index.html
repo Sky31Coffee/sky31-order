@@ -17040,7 +17040,7 @@ window.addEventListener("load", function() {
     const cups = Number(member.totalCups || member.cups || member.totalItems || 0);
     const baseMap = {regular:0, silver:30, gold:60, diamond:100, blackgold:180, vip:180};
     const hasStart = member.manualTierStartCups !== undefined || member.manualTierSetAtCups !== undefined || member.manualTierOriginalCups !== undefined;
-    const base = Number(member.manualTierBaseCups || baseMap[manualBase.key] || 0);
+    const base = Number(member.manualTierBaseCups ?? baseMap[manualBase.key] ?? 0);
     const start = hasStart ? Number(member.manualTierStartCups ?? member.manualTierSetAtCups ?? member.manualTierOriginalCups ?? 0) : null;
     const effective = hasStart ? (base + Math.max(0, cups - Number(start || 0))) : Math.max(cups, base);
     const tier = tierByCups214(effective);
@@ -18168,7 +18168,7 @@ window.addEventListener("load", function() {
     if(!manualBase) return tierByKey240(member.memberTierKey || "") || tierByCups240(cups);
     const baseMap = {regular:0, silver:30, gold:60, diamond:100, blackgold:180, vip:180};
     const hasStart = member.manualTierStartCups !== undefined || member.manualTierSetAtCups !== undefined || member.manualTierOriginalCups !== undefined;
-    const base = Number(member.manualTierBaseCups || baseMap[manualBase.key] || 0);
+    const base = Number(member.manualTierBaseCups ?? baseMap[manualBase.key] ?? 0);
     const start = hasStart ? Number(member.manualTierStartCups ?? member.manualTierSetAtCups ?? member.manualTierOriginalCups ?? 0) : 0;
     return tierByCups240(hasStart ? base + Math.max(0, cups - start) : Math.max(cups, base));
   }
