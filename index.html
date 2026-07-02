@@ -8237,6 +8237,19 @@ body.sky31-maintenance-active-v218{
   transform:translateX(-50%) translateY(0) !important;
 }
 
+
+/* V226: login success redirect helper */
+.member-login-redirect-note-v226{
+  margin-top:10px !important;
+  padding:10px 12px !important;
+  border-radius:16px !important;
+  background:rgba(233,249,241,.82) !important;
+  border:1px solid rgba(60,154,107,.22) !important;
+  color:rgba(21,105,61,.95) !important;
+  font-size:12px !important;
+  font-weight:850 !important;
+}
+
 </style>
 
 <style>
@@ -17380,6 +17393,117 @@ window.addEventListener("load", function() {
 
   setTimeout(squashDuplicateSuccessDomV225, 300);
   setTimeout(squashDuplicateSuccessDomV225, 1000);
+})();
+</script>
+
+
+<script>
+/* V226: login redirect + refresh throttle.
+   After login, leave the login form and show the member center home automatically.
+*/
+(function(){
+  const MEMBER_KEY = "sky31_member_v1";
+
+  function getMemberV226(){
+    try{
+      const raw = localStorage.getItem(MEMBER_KEY);
+      return raw ? JSON.parse(raw) : null;
+    }catch(e){ return null; }
+  }
+
+  function setMemberV226(member){
+    try{
+      if(member && member.phone) localStorage.setItem(MEMBER_KEY, JSON.stringify(member));
+    }catch(e){}
+  }
+
+  function showMemberHomeV226(member){
+    member = member || getMemberV226();
+    if(!member || !member.phone) return false;
+
+    try{ if(typeof applyMember === "function") applyMember(member); }catch(e){}
+    try{ if(typeof updateMemberProfileButton === "function") updateMemberProfileButton(member); }catch(e){}
+    try{ if(typeof renderHomeQuickCard === "function") renderHomeQuickCard(); }catch(e){}
+    try{ if(typeof renderLoggedPanel === "function") renderLoggedPanel(member); }catch(e){}
+    try{ if(typeof showPage === "function") showPage("home"); }catch(e){}
+
+    const modal = document.getElementById("memberModal");
+    if(modal){
+      modal.classList.add("member-logged-in-v213");
+      modal.classList.remove("member-logged-out-v213");
+    }
+
+    const msg = document.getElementById("memberMsg");
+    if(msg) msg.textContent = "";
+
+    const quick = document.getElementById("memberQuickCard");
+    if(quick && !quick.querySelector(".member-login-redirect-note-v226")){
+      const div = document.createElement("div");
+      div.className = "member-login-redirect-note-v226";
+      div.textContent = "已登入，歡迎回到會員中心。";
+      quick.appendChild(div);
+      setTimeout(function(){ try{ div.remove(); }catch(e){} }, 1600);
+    }
+    return true;
+  }
+
+  // Throttle member refresh, because older scripts call refresh on open/show/cart/focus.
+  let refreshPromise = null;
+  let lastRefreshAt = 0;
+  function wrapRefreshV226(fn){
+    if(typeof fn !== "function" || fn.__sky31V226Wrapped) return fn;
+    const wrapped = async function(reason){
+      const now = Date.now();
+      const current = getMemberV226();
+      if(!current || !current.phone) return null;
+
+      if(refreshPromise && now - lastRefreshAt < 1200) return refreshPromise;
+      if(now - lastRefreshAt < 800) return current;
+
+      lastRefreshAt = now;
+      refreshPromise = Promise.resolve(fn.apply(this, arguments)).finally(function(){
+        setTimeout(function(){ refreshPromise = null; }, 200);
+      });
+      return refreshPromise;
+    };
+    wrapped.__sky31V226Wrapped = true;
+    return wrapped;
+  }
+
+  if(typeof window.SKY31_REFRESH_MEMBER_V213 === "function") window.SKY31_REFRESH_MEMBER_V213 = wrapRefreshV226(window.SKY31_REFRESH_MEMBER_V213);
+  if(typeof window.SKY31_REFRESH_MEMBER_V214 === "function") window.SKY31_REFRESH_MEMBER_V214 = wrapRefreshV226(window.SKY31_REFRESH_MEMBER_V214);
+
+  const oldLogin = window.memberLoginLookup;
+  if(typeof oldLogin === "function" && !oldLogin.__sky31V226LoginRedirect){
+    const wrappedLogin = async function(){
+      const result = await oldLogin.apply(this, arguments);
+
+      // Login function may save member async; check a few times then redirect.
+      let member = getMemberV226();
+      if(result && result.phone) {
+        member = result;
+        setMemberV226(member);
+      }
+
+      for(let i=0;i<8 && !(member && member.phone);i++){
+        await new Promise(r => setTimeout(r, 120));
+        member = getMemberV226();
+      }
+
+      if(member && member.phone){
+        window.__SKY31_HARD_LOGOUT_ACTIVE_V225 = false;
+        window.__SKY31_MEMBER_LOGGED_OUT_V224 = false;
+        showMemberHomeV226(member);
+        setTimeout(function(){ showMemberHomeV226(getMemberV226()); }, 250);
+        setTimeout(function(){ showMemberHomeV226(getMemberV226()); }, 900);
+      }
+      return result;
+    };
+    wrappedLogin.__sky31V226LoginRedirect = true;
+    window.memberLoginLookup = wrappedLogin;
+  }
+
+  window.SKY31_SHOW_MEMBER_HOME_V226 = showMemberHomeV226;
 })();
 </script>
 
