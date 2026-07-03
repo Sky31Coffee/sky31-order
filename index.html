@@ -10063,12 +10063,38 @@ function saveCustomerAndSubmit() {
 
 
 function sky31PaidAmountV284Front(o, fallbackCart) {
-    if (o && o.totalAmount !== undefined && o.totalAmount !== null) {
-      var n = Number(o.totalAmount);
-      return isFinite(n) ? Math.max(0, Math.round(n * 100) / 100) : 0;
+    o = o || {};
+    function round2(n){ return Math.max(0, Math.round(Number(n || 0) * 100) / 100); }
+
+    var rewardDiscount = Math.max(0, Number(o.rewardDiscount || 0));
+    var tierDiscount = Math.max(0, Number(o.tierDiscount || 0));
+    var hasVoucherUse =
+      Math.max(0, Number(o.rewardUse || o.rewardUseRequested || 0)) > 0 ||
+      Math.max(0, Number(o.rewardGiftUse || 0)) > 0 ||
+      Math.max(0, Number(o.rewardEarnedUse || 0)) > 0 ||
+      Math.max(0, Number(o.rewardBirthdayUse || o.birthdayVoucherCount || 0)) > 0 ||
+      rewardDiscount > 0;
+
+    if (hasVoucherUse) {
+      var afterTier = 0;
+      if (o.totalAfterTierDiscount !== undefined && o.totalAfterTierDiscount !== null) {
+        afterTier = Number(o.totalAfterTierDiscount);
+      } else if (o.subtotalBeforeReward !== undefined && o.subtotalBeforeReward !== null) {
+        afterTier = Number(o.subtotalBeforeReward) - tierDiscount;
+      } else {
+        try { afterTier = Number(cartTotal(fallbackCart || o.cart || []) || 0) - tierDiscount; }
+        catch(e) { afterTier = 0; }
+      }
+      return round2(afterTier - rewardDiscount);
     }
+
+    if (o.totalAmount !== undefined && o.totalAmount !== null) {
+      var n = Number(o.totalAmount);
+      return isFinite(n) ? round2(n) : 0;
+    }
+
     try {
-      return Math.max(0, Math.round(Number(cartTotal(fallbackCart || (o && o.cart) || []) || 0) * 100) / 100);
+      return round2(cartTotal(fallbackCart || o.cart || []));
     } catch(e) {
       return 0;
     }
