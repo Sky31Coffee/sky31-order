@@ -1618,6 +1618,21 @@ function buildReplyMarkup(order) {
 function buildTelegramText(order) {
   const lines = [];
   const s = order.status || "pending";
+  const moneyText = function(n){
+    return "MOP " + String(Math.round(Number(n || 0) * 100) / 100);
+  };
+  const subtotal = Number(
+    order.subtotalBeforeReward ??
+    order.totalBeforeTierDiscount ??
+    (typeof cartTotalForMemberQuery === "function" ? cartTotalForMemberQuery(order.cart) : 0)
+  );
+  const tierDiscount = Math.max(0, Number(order.tierDiscount || 0));
+  const rewardDiscount = Math.max(0, Number(order.rewardDiscount || 0));
+  const paidAmount = Math.max(0, Number(
+    order.totalAmount ??
+    (subtotal - tierDiscount - rewardDiscount)
+  ));
+
   lines.push("☕ SKY31 ORDER");
   lines.push("");
   lines.push("訂單號：#" + (order.orderNo || ""));
@@ -1637,6 +1652,7 @@ function buildTelegramText(order) {
       if (item.temp) parts.push(item.temp.includes("Hot") || item.temp.includes("熱") ? "🔥 Hot" : item.temp);
       if (item.ice && item.ice !== "不適用") parts.push(item.ice);
       if (item.milk) parts.push(item.milk);
+      if (Number(item.beanSurcharge || 0) > 0) parts.push("限定豆子 +MOP " + Number(item.beanSurcharge || 0));
       lines.push("☕ " + title + " ×" + (item.qty || 1) + (parts.length ? " | " + parts.join(" | ") : ""));
       if (item.note && item.note !== "無備註") lines.push("備註：" + item.note);
       lines.push("");
@@ -1647,6 +1663,18 @@ function buildTelegramText(order) {
   }
 
   lines.push("────────────");
+  lines.push("💰 金額明細");
+  lines.push("餐品小計：" + moneyText(subtotal));
+  if (Number(order.birthdayVoucherCount || 0) > 0) lines.push("生日月飲品券：" + Number(order.birthdayVoucherCount || 0) + " 張");
+  if (tierDiscount > 0) {
+    const tierName = order.memberTierName || "會員等級";
+    const detail = Array.isArray(order.tierDiscountDetails) && order.tierDiscountDetails.length ? "（" + order.tierDiscountDetails.join("、") + "）" : "";
+    lines.push(tierName + "優惠" + detail + "：-" + moneyText(tierDiscount));
+  }
+  if (rewardDiscount > 0) lines.push("會員免單 / 餐品券扣減：-" + moneyText(rewardDiscount));
+  lines.push("客人實付：" + moneyText(paidAmount));
+  if (order.orderNote) lines.push("整張訂單備註：" + order.orderNote);
+  lines.push("");
   lines.push("客人：" + (order.customerName || ""));
   lines.push("電話：" + (order.phone || ""));
   lines.push("");

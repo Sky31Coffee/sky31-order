@@ -646,6 +646,18 @@ function getPickupFromCart(cart) {
 
 function buildTelegramText(order) {
   const lines = [];
+  const subtotal = Number(
+    order.subtotalBeforeReward ??
+    order.totalBeforeTierDiscount ??
+    cartTotal(order.cart)
+  );
+  const tierDiscount = Math.max(0, Number(order.tierDiscount || 0));
+  const rewardDiscount = Math.max(0, Number(order.rewardDiscount || 0));
+  const paidAmount = Math.max(0, Number(
+    order.totalAmount ??
+    (subtotal - tierDiscount - rewardDiscount)
+  ));
+
   lines.push("☕ SKY31 ORDER");
   lines.push("");
   lines.push("訂單號：#" + (order.orderNo || ""));
@@ -673,15 +685,18 @@ function buildTelegramText(order) {
   }
 
   lines.push("────────────");
+  lines.push("💰 金額明細");
+  lines.push("餐品小計：" + money(subtotal));
   if (Number(order.birthdayVoucherCount || 0) > 0) lines.push("生日月飲品券：" + Number(order.birthdayVoucherCount || 0) + " 張");
-  if (Number(order.tierDiscount || 0) > 0) {
+  if (tierDiscount > 0) {
     const tierName = order.memberTierName || "會員等級";
     const detail = Array.isArray(order.tierDiscountDetails) && order.tierDiscountDetails.length ? "（" + order.tierDiscountDetails.join("、") + "）" : "";
-    lines.push(tierName + "優惠" + detail + "：-" + money(order.tierDiscount));
+    lines.push(tierName + "優惠" + detail + "：-" + money(tierDiscount));
   }
-  if (Number(order.rewardDiscount || 0) > 0) lines.push("會員免單扣減：-" + money(order.rewardDiscount));
-  lines.push("總額：" + money(order.totalAmount || cartTotal(order.cart)));
+  if (rewardDiscount > 0) lines.push("會員免單 / 餐品券扣減：-" + money(rewardDiscount));
+  lines.push("客人實付：" + money(paidAmount));
   if (order.orderNote) lines.push("整張訂單備註：" + order.orderNote);
+  lines.push("");
   lines.push("客人：" + (order.customerName || ""));
   lines.push("電話：" + (order.phone || ""));
   lines.push("");
