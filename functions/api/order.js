@@ -657,6 +657,14 @@ function buildTelegramText(order) {
     order.totalAmount ??
     (subtotal - tierDiscount - rewardDiscount)
   ));
+  const totalVoucherUse = Math.max(0, Number(order.rewardUse || order.rewardUseRequested || 0));
+  const giftVoucherUse = Math.max(0, Number(order.rewardGiftUse || 0));
+  const earnedVoucherUse = Math.max(0, Number(order.rewardEarnedUse || 0));
+  const birthdayVoucherUse = Math.max(0, Number(order.rewardBirthdayUse || order.birthdayVoucherCount || 0));
+  const voucherParts = [];
+  if (giftVoucherUse > 0) voucherParts.push("店員調整券 " + giftVoucherUse + " 張");
+  if (earnedVoucherUse > 0) voucherParts.push("10杯自動券 " + earnedVoucherUse + " 張");
+  if (birthdayVoucherUse > 0) voucherParts.push("生日月券 " + birthdayVoucherUse + " 張");
 
   lines.push("☕ SKY31 ORDER");
   lines.push("");
@@ -687,7 +695,7 @@ function buildTelegramText(order) {
   lines.push("────────────");
   lines.push("💰 金額明細");
   lines.push("餐品小計：" + money(subtotal));
-  if (Number(order.birthdayVoucherCount || 0) > 0) lines.push("生日月飲品券：" + Number(order.birthdayVoucherCount || 0) + " 張");
+  if (totalVoucherUse > 0) lines.push("使用餐品券：共 " + totalVoucherUse + " 張" + (voucherParts.length ? "（" + voucherParts.join("、") + "）" : ""));
   if (tierDiscount > 0) {
     const tierName = order.memberTierName || "會員等級";
     const detail = Array.isArray(order.tierDiscountDetails) && order.tierDiscountDetails.length ? "（" + order.tierDiscountDetails.join("、") + "）" : "";
