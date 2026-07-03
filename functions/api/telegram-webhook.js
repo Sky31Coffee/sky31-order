@@ -957,7 +957,7 @@ function sky31PaidAmountV284(order, fallbackCart) {
 }
 
 
-function enrichMemberStatsForTelegram(env, member) {
+async function enrichMemberStatsForTelegram(env, member) {
   const phone = normalizePhone(member.phone);
   const prefix = "phone:" + phone + ":";
   let cursor = undefined;
