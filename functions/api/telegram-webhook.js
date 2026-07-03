@@ -2643,8 +2643,8 @@ function buildCommandMenuTextV183() {
     "👤 會員查詢",
     "查看會員、訂單與累積資料。",
     "",
-    "🎁 贈送餐品券",
-    "直接把餐品券加到會員免單券池，使用、佔用、取消釋放都跟原本免單券同步。",
+    "🎁 餐品券調整",
+    "統一查看會員餐品券；10杯券由系統自動計算，店員只調整額外餐品券。",
     "",
     "提示：限定豆子只會出現在 Landing page 及飲品內的豆子選項；客人選擇後自動 +MOP 5。"
   ].join("\n");
@@ -2656,7 +2656,7 @@ function buildCommandMenuMarkupV183() {
       [{ text: "➕ 新增限定豆子", callback_data: "limited_wizard_add:x" }],
       [{ text: "✨ 限定豆子列表 / 編輯", callback_data: "limited_list:all" }],
       [{ text: "👤 查詢會員", callback_data: "member_list:active:0" }],
-      [{ text: "🎁 贈送餐品券", callback_data: "gift_voucher_menu:x" }],
+      [{ text: "🎁 餐品券調整", callback_data: "gift_voucher_menu:x" }],
       [{ text: "🧹 合併重複會員", callback_data: "member_merge_duplicates:x" }],
       [{ text: "🛠 系統維護", callback_data: "maint_status:x" }]
     ]
@@ -4474,20 +4474,20 @@ buildMemberDetailText = function(member, deleted = false) {
   if (member.note) lines.push("備註：" + member.note);
   if (member.createdAt) lines.push("註冊時間：" + formatDateTime(member.createdAt));
   if (member.manualTierUpdatedAt && !deleted) lines.push("等級修改時間：" + formatDateTime(member.manualTierUpdatedAt));
-  if (member.giftVoucherUpdatedAt && !deleted) lines.push("餐品券修改時間：" + formatDateTime(member.giftVoucherUpdatedAt));
+  if (member.giftVoucherUpdatedAt && !deleted) lines.push("餐品券調整時間：" + formatDateTime(member.giftVoucherUpdatedAt));
   if (member.birthdayUpdatedAt && !deleted) lines.push("生日修改時間：" + formatDateTime(member.birthdayUpdatedAt));
   lines.push("");
   lines.push("累積訂單：" + Number(member.totalOrders || 0));
   lines.push("累積杯數：" + Number(member.totalCups || 0));
   lines.push("累積消費：MOP " + String(Math.round(Number(member.totalSpent || 0) * 100) / 100));
   lines.push("");
-  lines.push("🎁 免單券 / 餐品券");
-  lines.push("10杯獲得餘額：" + earnedAvailable + " 張");
-  lines.push("店員贈送餘額：" + giftVoucherBalance + " 張");
-  if (giftVoucherReserved) lines.push("贈送券已被未完成訂單佔用：" + giftVoucherReserved + " 張");
+  lines.push("🎁 餐品券");
+  lines.push("10杯自動券餘額：" + earnedAvailable + " 張");
+  lines.push("店員調整券餘額：" + giftVoucherBalance + " 張");
+  if (giftVoucherReserved) lines.push("店員調整券已被未完成訂單佔用：" + giftVoucherReserved + " 張");
   if (rewardReserved) lines.push("10杯券已被未完成訂單佔用：" + rewardReserved + " 張");
   lines.push("已使用10杯券：" + rewardRedeemed + " 張");
-  lines.push("目前總可用：" + availableRewards + " 張");
+  lines.push("目前總可用餐品券：" + availableRewards + " 張");
 
   const recent = Array.isArray(member.recentOrders) ? member.recentOrders : [];
   if (recent.length) {
@@ -4497,7 +4497,7 @@ buildMemberDetailText = function(member, deleted = false) {
   }
 
   lines.push("");
-  lines.push(deleted ? "此會員已刪除。" : "可在下方修改會員等級或贈送 / 扣除餐品券。");
+  lines.push(deleted ? "此會員已刪除。" : "可在下方修改會員等級或調整餐品券。");
   return lines.join("\n").trim();
 };
 
@@ -4509,7 +4509,7 @@ buildMemberDetailReplyMarkup = function(member, deleted = false) {
   } else {
     rows.push([{ text: "🔄 重新讀取會員資料", callback_data: "member_refresh:" + phone }]);
     rows.push([{ text: "🏅 更改會員等級", callback_data: "member_tier_menu:" + phone }]);
-    rows.push([{ text: "🎁 贈送餐品券", callback_data: "gift_voucher_member:" + phone }]);
+    rows.push([{ text: "🎁 餐品券調整", callback_data: "gift_voucher_member:" + phone }]);
     rows.push([{ text: "🗑️ 刪除賬號", callback_data: "member_delete:" + phone }]);
   }
   rows.push([{ text: "📋 返回用戶列表", callback_data: "member_list:all" }]);
@@ -4601,14 +4601,15 @@ function clampGiftVoucherDeltaV269(delta, currentGift) {
 function buildGiftVoucherMemberListTextV269(members) {
   const active = (Array.isArray(members) ? members : []).filter(m => m && !m._deleted);
   const lines = [];
-  lines.push("🎁 贈送餐品券");
+  lines.push("🎁 餐品券調整");
   lines.push("");
-  lines.push("請先選擇要贈送 / 調整餐品券的會員。");
+  lines.push("請選擇會員。");
   lines.push("");
-  lines.push("餐品券會直接加入會員免單券池：");
-  lines.push("• 下單時會即時佔用");
-  lines.push("• 取消訂單會釋放");
-  lines.push("• 已領取後正式扣除");
+  lines.push("顯示時會合併為「總可用餐品券」，但底層分開記錄：");
+  lines.push("• 10杯券：由已領取杯數自動計算，不手動修改");
+  lines.push("• 店員調整券：可用 +1 / -1 增減");
+  lines.push("");
+  lines.push("下單會先佔用；取消會釋放；已領取後才正式扣除。");
   lines.push("");
   lines.push("有效會員：" + active.length);
   return lines.join("\n");
@@ -4650,24 +4651,27 @@ function buildGiftVoucherAdjustTextV269(member, delta) {
   delta = clampGiftVoucherDeltaV269(delta, stats.gifted);
   const afterGift = Math.max(0, stats.gifted + delta);
   const afterGiftAvailable = Math.max(0, afterGift - stats.giftReserved);
-  const afterAvailable = Math.max(0, Math.max(0, stats.earned - stats.redeemed - stats.reserved) + afterGiftAvailable);
+  const earnedAvailable = Math.max(0, stats.earned - stats.redeemed - stats.reserved);
+  const afterAvailable = Math.max(0, earnedAvailable + afterGiftAvailable);
   const lines = [];
-  lines.push("🎁 贈送 / 扣除餐品券");
+  lines.push("🎁 餐品券調整");
   lines.push("");
   lines.push("會員：" + (member.name || "-"));
   lines.push("電話：" + (member.phone || "-"));
   lines.push("");
-  lines.push("目前贈送券餘額：" + stats.gifted + " 張");
-  if (stats.giftReserved) lines.push("未完成訂單佔用贈送券：" + stats.giftReserved + " 張");
-  lines.push("目前總可用免單券：" + stats.available + " 張");
+  lines.push("10杯自動券餘額：" + earnedAvailable + " 張");
+  lines.push("店員調整券餘額：" + stats.gifted + " 張");
+  if (stats.giftReserved) lines.push("店員調整券被未完成訂單佔用：" + stats.giftReserved + " 張");
+  if (stats.reserved) lines.push("10杯券被未完成訂單佔用：" + stats.reserved + " 張");
+  lines.push("目前總可用餐品券：" + stats.available + " 張");
   lines.push("");
-  if (delta > 0) lines.push("本次：增加 +" + delta + " 張");
-  else if (delta < 0) lines.push("本次：扣除 " + Math.abs(delta) + " 張");
+  if (delta > 0) lines.push("本次：增加店員調整券 +" + delta + " 張");
+  else if (delta < 0) lines.push("本次：扣除店員調整券 " + Math.abs(delta) + " 張");
   else lines.push("本次：0 張");
-  lines.push("確定後贈送券餘額：" + afterGift + " 張");
-  lines.push("預計總可用免單券：" + afterAvailable + " 張");
+  lines.push("確定後店員調整券：" + afterGift + " 張");
+  lines.push("預計總可用餐品券：" + afterAvailable + " 張");
   lines.push("");
-  lines.push("用 +1 / -1 調整，按「確定」才保存。");
+  lines.push("注意：10杯自動券不會被手動修改，避免會員杯數重算時資料混亂。");
   return lines.join("\n");
 }
 
@@ -4731,7 +4735,7 @@ async function handleGiftVoucherActionV269(env, cq, data) {
     const { member } = await loadGiftVoucherMemberV269(env, phone);
     if (!member) return stop(env, cq, "找不到有效會員");
     await editTelegramMessage(env, chatId, messageId, buildMemberDetailText(member, false), buildMemberDetailReplyMarkup(member, false));
-    return stop(env, cq, "已取消贈送餐品券");
+    return stop(env, cq, "已取消餐品券調整");
   }
 
   if (action === "gift_voucher_confirm") {
@@ -4761,7 +4765,7 @@ async function handleGiftVoucherActionV269(env, cq, data) {
     const saved = await saveActiveMemberV223(env, loaded);
     const enriched = await enrichMemberStatsForTelegram(env, saved.member).catch(() => saved.member);
     await editTelegramMessage(env, chatId, messageId, buildMemberDetailText(enriched, false), buildMemberDetailReplyMarkup(enriched, false));
-    return stop(env, cq, delta > 0 ? ("已贈送餐品券 +" + delta + " 張") : ("已減少餐品券 " + delta + " 張"));
+    return stop(env, cq, delta > 0 ? ("已增加店員調整券 +" + delta + " 張") : ("已扣除店員調整券 " + Math.abs(delta) + " 張"));
   }
 
   return stop(env, cq, "未知餐品券操作");
@@ -4911,7 +4915,7 @@ buildCommandMenuMarkupV183 = function() {
       [{ text: "➕ 新增限定豆子", callback_data: "limited_wizard_add:x" }],
       [{ text: "✨ 限定豆子列表 / 編輯", callback_data: "limited_list:all" }],
       [{ text: "👤 查詢會員", callback_data: "member_list:active:0" }],
-      [{ text: "🎁 贈送餐品券", callback_data: "gift_voucher_menu:x" }],
+      [{ text: "🎁 餐品券調整", callback_data: "gift_voucher_menu:x" }],
       [{ text: "🧹 合併重複會員", callback_data: "member_merge_duplicates:x" }],
       [{ text: "🛠 系統維護", callback_data: "maint_status:x" }]
     ]
@@ -5481,7 +5485,7 @@ buildMemberDetailReplyMarkup = function(member, deleted = false) {
   } else {
     rows.push([{ text: "🔄 重新讀取會員資料", callback_data: "member_refresh:" + phone }]);
     rows.push([{ text: "🏅 更改會員等級", callback_data: "member_tier_menu:" + phone }]);
-    rows.push([{ text: "🎁 贈送餐品券", callback_data: "gift_voucher_member:" + phone }]);
+    rows.push([{ text: "🎁 餐品券調整", callback_data: "gift_voucher_member:" + phone }]);
     rows.push([{ text: "🗑️ 刪除賬號", callback_data: "member_delete:" + phone }]);
     rows.push([{ text: "🧨 永久刪除", callback_data: "member_purge:" + phone }]);
   }
@@ -5499,7 +5503,7 @@ buildMemberReplyMarkup = function(member, deleted = false) {
   } else {
     rows.push([{ text: "🔄 重新讀取會員資料", callback_data: "member_refresh:" + phone }]);
     rows.push([{ text: "🏅 更改會員等級", callback_data: "member_tier_menu:" + phone }]);
-    rows.push([{ text: "🎁 贈送餐品券", callback_data: "gift_voucher_member:" + phone }]);
+    rows.push([{ text: "🎁 餐品券調整", callback_data: "gift_voucher_member:" + phone }]);
     rows.push([{ text: "🗑️ 刪除", callback_data: "member_delete:" + phone }]);
     rows.push([{ text: "🧨 永久刪除", callback_data: "member_purge:" + phone }]);
   }
