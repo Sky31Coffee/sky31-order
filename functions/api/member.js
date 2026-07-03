@@ -344,6 +344,8 @@ async function enrichMemberWithOrders(env, member) {
     const belongs = orderPhones.some(p => samePhoneForMemberLookup(p, phone));
     if (!belongs) continue;
     seenOrderNosV272.add(String(order.orderNo || no));
+    const orderCupCountV278 = orderCups(order);
+    const voucherCupCountV278 = memberVoucherUseCountV275(order);
     const cups = memberLoyaltyCupsV275(order);
     const amount = Number(order.totalAmount || cartTotal(order.cart) || 0);
     const successful = isMemberLifetimeSuccessfulOrderV202(order);
@@ -377,7 +379,15 @@ async function enrichMemberWithOrders(env, member) {
       pickedUpAt: order.pickedUpAt || null,
       cancelledAt: order.cancelledAt || order.canceledAt || null,
       pickupTime: order.pickupTime || order.pickup || "",
-      totalCups: cups,
+      totalCups: orderCupCountV278,
+      orderCups: orderCupCountV278,
+      totalOrderCups: orderCupCountV278,
+      loyaltyCups: cups,
+      paidCups: cups,
+      accumulatedCups: cups,
+      redeemedFreeCups: voucherCupCountV278,
+      freeRedeemedCups: voucherCupCountV278,
+      voucherCups: voucherCupCountV278,
       subtotalBeforeReward: Number(order.subtotalBeforeReward || order.totalBeforeTierDiscount || 0),
       totalBeforeTierDiscount: Number(order.totalBeforeTierDiscount || order.subtotalBeforeReward || 0),
       totalAfterTierDiscount: Number(order.totalAfterTierDiscount || 0),
@@ -501,6 +511,10 @@ async function enrichMemberWithOrders(env, member) {
     rewardsReserved: Number(fixedMember.rewardReserved || fixedMember.rewardsReserved || 0),
     birthdayVoucherRedeemedThisMonth: Number(fixedMember.birthdayVoucherRedeemedThisMonth || 0),
     birthdayVoucherReservedThisMonth: Number(fixedMember.birthdayVoucherReservedThisMonth || 0),
+    redeemedFreeCups: Number(fixedMember.rewardRedeemed || 0) + Number(fixedMember.giftVoucherRedeemed || fixedMember.giftVoucherUsed || 0) + Number(fixedMember.birthdayVoucherRedeemedThisMonth || 0),
+    successfulFreeCups: Number(fixedMember.rewardRedeemed || 0) + Number(fixedMember.giftVoucherRedeemed || fixedMember.giftVoucherUsed || 0) + Number(fixedMember.birthdayVoucherRedeemedThisMonth || 0),
+    loyaltyCups: Number(fixedMember.totalCups || 0),
+    paidCups: Number(fixedMember.totalCups || 0),
     recentOrders: sortedOrders,
     historyOrders: sortedOrders,
     orders: sortedOrders

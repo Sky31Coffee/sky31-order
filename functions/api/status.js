@@ -204,8 +204,34 @@ function cartTotal(cart) {
   }, 0);
 }
 
+
+function cartCupsV278(cart) {
+  return (Array.isArray(cart) ? cart : []).reduce((sum, item) => {
+    const qty = Number(item.qty || item.quantity || 1);
+    return sum + (Number.isFinite(qty) && qty > 0 ? qty : 1);
+  }, 0);
+}
+
+function voucherCupsV278(order) {
+  if (!order) return 0;
+  const rewardUse = Math.max(0, Number(order.rewardUse || order.rewardUseRequested || 0));
+  const birthdayUse = Math.max(0, Number(order.rewardBirthdayUse || order.birthdayVoucherCount || 0));
+  const normalUse = Math.max(0, Number(order.rewardNormalUse || 0));
+  const giftUse = Math.max(0, Number(order.rewardGiftUse || 0));
+  const earnedUse = Math.max(0, Number(order.rewardEarnedUse || 0));
+  return Math.max(rewardUse, normalUse + birthdayUse, giftUse + earnedUse + birthdayUse);
+}
+
+function loyaltyCupsV278(order) {
+  return Math.max(0, cartCupsV278(order && order.cart) - voucherCupsV278(order));
+}
+
+
 function formatOrder(order) {
   const cart = Array.isArray(order.cart) ? order.cart : [];
+  const orderCups = cartCupsV278(cart);
+  const redeemedFreeCups = voucherCupsV278(order);
+  const loyaltyCups = loyaltyCupsV278(order);
 
   return {
     ok: true,
@@ -214,6 +240,15 @@ function formatOrder(order) {
     displayStatus: order.status || "pending",
     pickupTime: order.pickupTime || order.pickup || "",
     totalAmount: Number(order.totalAmount || cartTotal(cart) || 0),
+    totalCups: orderCups,
+    orderCups,
+    totalOrderCups: orderCups,
+    loyaltyCups,
+    paidCups: loyaltyCups,
+    accumulatedCups: loyaltyCups,
+    redeemedFreeCups,
+    freeRedeemedCups: redeemedFreeCups,
+    voucherCups: redeemedFreeCups,
     currency: order.currency || "MOP",
     createdAt: order.createdAt || "",
     updatedAt: order.updatedAt || order.statusUpdatedAt || order.createdAt || "",

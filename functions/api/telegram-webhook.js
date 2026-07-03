@@ -959,6 +959,8 @@ async function enrichMemberStatsForTelegram(env, member) {
       if (!order || normalizePhone(order.phone || order.memberPhone) !== phone) continue;
       seenOrderNosV272.add(String(order.orderNo || orderNo));
 
+      const orderCupCountV278 = orderCupsForMemberQuery(order);
+      const voucherCupCountV278 = tgVoucherUseCountV275(order);
       const cups = tgLoyaltyCupsForMemberQueryV275(order);
       const amount = Number(order.totalAmount || cartTotalForMemberQuery(order.cart) || 0);
       const success = sky31TelegramSuccessfulOrderV199(order);
@@ -981,7 +983,16 @@ async function enrichMemberStatsForTelegram(env, member) {
         orderNo: order.orderNo || orderNo,
         status: order.status || "pending",
         createdAt: order.createdAt || "",
-        cups,
+        cups: orderCupCountV278,
+        totalCups: orderCupCountV278,
+        orderCups: orderCupCountV278,
+        totalOrderCups: orderCupCountV278,
+        loyaltyCups: cups,
+        paidCups: cups,
+        accumulatedCups: cups,
+        redeemedFreeCups: voucherCupCountV278,
+        freeRedeemedCups: voucherCupCountV278,
+        voucherCups: voucherCupCountV278,
         totalAmount: amount
       });
     }
@@ -1000,6 +1011,10 @@ async function enrichMemberStatsForTelegram(env, member) {
       status: "pending",
       createdAt: lock.createdAt || "",
       cups: 0,
+      totalCups: 0,
+      orderCups: 0,
+      loyaltyCups: 0,
+      redeemedFreeCups: Math.max(0, Number(lock.rewardGiftUse || 0) + Number(lock.rewardEarnedUse || 0) + Number(lock.rewardBirthdayUse || 0)),
       totalAmount: 0
     });
   });
@@ -1060,7 +1075,9 @@ function buildMemberDetailText(member, deleted = false) {
   if (member.restoredAt && !deleted) lines.push("恢復時間：" + formatDateTime(member.restoredAt));
   lines.push("");
   lines.push("累積訂單：" + Number(member.totalOrders || 0));
-  lines.push("累積杯數：" + Number(member.totalCups || 0));
+  const successfulFreeCupsV278 = Number(member.successfulFreeCups ?? member.redeemedFreeCups ?? (Number(member.rewardRedeemed || member.rewardsRedeemed || 0) + Number(member.giftVoucherRedeemed || member.giftVoucherUsed || 0) + Number(member.birthdayVoucherRedeemedThisMonth || 0)));
+  lines.push("實付累計杯數：" + Number(member.totalCups || 0));
+  if (successfulFreeCupsV278) lines.push("成功兌換免費杯數：" + successfulFreeCupsV278);
   lines.push("累積消費：MOP " + String(Math.round(Number(member.totalSpent || 0) * 100) / 100));
 
   if (deleted && member.deletedOrders != null) {
@@ -4567,7 +4584,9 @@ buildMemberDetailText = function(member, deleted = false) {
   if (member.birthdayUpdatedAt && !deleted) lines.push("生日修改時間：" + formatDateTime(member.birthdayUpdatedAt));
   lines.push("");
   lines.push("累積訂單：" + Number(member.totalOrders || 0));
-  lines.push("累積杯數：" + Number(member.totalCups || 0));
+  const successfulFreeCupsV278 = Number(member.successfulFreeCups ?? member.redeemedFreeCups ?? (Number(member.rewardRedeemed || member.rewardsRedeemed || 0) + Number(member.giftVoucherRedeemed || member.giftVoucherUsed || 0) + Number(member.birthdayVoucherRedeemedThisMonth || 0)));
+  lines.push("實付累計杯數：" + Number(member.totalCups || 0));
+  if (successfulFreeCupsV278) lines.push("成功兌換免費杯數：" + successfulFreeCupsV278);
   lines.push("累積消費：MOP " + String(Math.round(Number(member.totalSpent || 0) * 100) / 100));
   lines.push("");
   lines.push("🎁 餐品券");
@@ -4584,7 +4603,14 @@ buildMemberDetailText = function(member, deleted = false) {
   if (recent.length) {
     lines.push("");
     lines.push("最近訂單：");
-    recent.forEach(order => lines.push("• #" + (order.orderNo || "-") + "｜" + (order.status || "-") + "｜" + Number(order.cups || 0) + "杯｜MOP " + String(Math.round(Number(order.totalAmount || 0) * 100) / 100)));
+    recent.forEach(order => {
+      const orderCups = Number(order.orderCups || order.totalOrderCups || order.totalCups || order.cups || 0);
+      const loyaltyCups = Number(order.loyaltyCups || order.paidCups || order.accumulatedCups || 0);
+      const freeCups = Number(order.redeemedFreeCups || order.freeRedeemedCups || order.voucherCups || 0);
+      const statusText = typeof statusLabel === "function" ? statusLabel(order.status || "pending") : (order.status || "-");
+      const cupText = (statusText === "已領取" ? "已領取 " : "") + orderCups + "杯" + (freeCups ? "｜累計+" + loyaltyCups + "｜兌換免費" + freeCups + "杯" : "");
+      lines.push("• #" + (order.orderNo || "-") + "｜" + statusText + "｜" + cupText + "｜MOP " + String(Math.round(Number(order.totalAmount || 0) * 100) / 100));
+    });
   }
 
   lines.push("");
