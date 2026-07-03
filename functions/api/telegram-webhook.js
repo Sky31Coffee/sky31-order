@@ -44,6 +44,10 @@ async function handleTelegramPost(context) {
     return handleMaintenanceActionV218(env, cq, data);
   }
 
+  if (data.startsWith("gift_voucher_")) {
+    return handleGiftVoucherActionV269(env, cq, data);
+  }
+
   if (data.startsWith("limited_")) {
     return handleLimitedMenuAction(env, cq, data);
   }
@@ -853,7 +857,16 @@ async function enrichMemberStatsForTelegram(env, member) {
   let totalOrders = 0;
   let totalCups = 0;
   let totalSpent = 0;
+  let rewardRedeemed = 0;
+  let rewardReserved = 0;
   const recentOrders = [];
+
+  function normalRewardUse(order) {
+    if (!order) return 0;
+    if (order.rewardNormalUse != null) return Math.max(0, Number(order.rewardNormalUse || 0));
+    if (order.rewardBirthdayUse != null) return Math.max(0, Number(order.rewardUse || order.rewardUseRequested || 0) - Number(order.rewardBirthdayUse || 0));
+    return Math.max(0, Number(order.rewardUse || order.rewardUseRequested || 0));
+  }
 
   do {
     const page = await env.ORDERS.list({ prefix, cursor });
@@ -867,15 +880,21 @@ async function enrichMemberStatsForTelegram(env, member) {
 
       let order = null;
       try { order = JSON.parse(raw); } catch (_) { continue; }
-      if (!order || normalizePhone(order.phone) !== phone) continue;
+      if (!order || normalizePhone(order.phone || order.memberPhone) !== phone) continue;
 
       const cups = orderCupsForMemberQuery(order);
       const amount = Number(order.totalAmount || cartTotalForMemberQuery(order.cart) || 0);
+      const success = sky31TelegramSuccessfulOrderV199(order);
+      const cancelled = isCancelledOrder(order);
+      const used = normalRewardUse(order);
 
-      if (sky31TelegramSuccessfulOrderV199(order)) {
+      if (success) {
         totalOrders += 1;
         totalCups += cups;
         totalSpent += amount;
+        rewardRedeemed += used;
+      } else if (!cancelled) {
+        rewardReserved += used;
       }
 
       recentOrders.push({
@@ -893,11 +912,32 @@ async function enrichMemberStatsForTelegram(env, member) {
 
   recentOrders.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
 
+  const giftVoucherBalance = Math.max(0, Number(member.giftVoucherBalance || member.giftVouchers || member.manualGiftVouchers || 0));
+  const earnedRewards = Math.floor(totalCups / 10);
+  const availableRewards = Math.max(0, earnedRewards + giftVoucherBalance - rewardRedeemed - rewardReserved);
+
   return {
     ...member,
     totalOrders,
     totalCups,
     totalSpent: Math.round(totalSpent * 100) / 100,
+    rewardRedeemed,
+    rewardsRedeemed: rewardRedeemed,
+    rewardReserved,
+    rewardsReserved: rewardReserved,
+    earnedRewards,
+    giftedRewards: giftVoucherBalance,
+    giftVoucherBalance,
+    availableRewards,
+    rewards: {
+      totalCups,
+      earnedRewards,
+      giftedRewards: giftVoucherBalance,
+      giftVoucherBalance,
+      redeemedRewards: rewardRedeemed,
+      reservedRewards: rewardReserved,
+      availableRewards
+    },
     recentOrders: recentOrders.slice(0, 5)
   };
 }
@@ -2513,6 +2553,9 @@ function buildCommandMenuTextV183() {
     "👤 會員查詢",
     "查看會員、訂單與累積資料。",
     "",
+    "🎁 贈送餐品券",
+    "直接把餐品券加到會員免單券池，使用、佔用、取消釋放都跟原本免單券同步。",
+    "",
     "提示：限定豆子只會出現在 Landing page 及飲品內的豆子選項；客人選擇後自動 +MOP 5。"
   ].join("\n");
 }
@@ -2523,6 +2566,7 @@ function buildCommandMenuMarkupV183() {
       [{ text: "➕ 新增限定豆子", callback_data: "limited_wizard_add:x" }],
       [{ text: "✨ 限定豆子列表 / 編輯", callback_data: "limited_list:all" }],
       [{ text: "👤 查詢會員", callback_data: "member_list:active:0" }],
+      [{ text: "🎁 贈送餐品券", callback_data: "gift_voucher_menu:x" }],
       [{ text: "🧹 合併重複會員", callback_data: "member_merge_duplicates:x" }],
       [{ text: "🛠 系統維護", callback_data: "maint_status:x" }]
     ]
@@ -4306,6 +4350,13 @@ handleMemberQueryAction = async function(env, cq, data) {
 
 buildMemberDetailText = function(member, deleted = false) {
   const tier = memberDisplayTierV211(member);
+  const rewards = member && member.rewards ? member.rewards : {};
+  const earnedRewards = Number(member.earnedRewards ?? rewards.earnedRewards ?? Math.floor(Number(member.totalCups || 0) / 10));
+  const giftVoucherBalance = Math.max(0, Number(member.giftVoucherBalance ?? rewards.giftVoucherBalance ?? rewards.giftedRewards ?? 0));
+  const rewardRedeemed = Number(member.rewardRedeemed ?? member.rewardsRedeemed ?? rewards.redeemedRewards ?? 0);
+  const rewardReserved = Number(member.rewardReserved ?? member.rewardsReserved ?? rewards.reservedRewards ?? 0);
+  const availableRewards = Math.max(0, Number(member.availableRewards ?? rewards.availableRewards ?? (earnedRewards + giftVoucherBalance - rewardRedeemed - rewardReserved)));
+
   const lines = [];
   lines.push("👤 SKY31 會員詳細資料");
   lines.push("");
@@ -4316,21 +4367,29 @@ buildMemberDetailText = function(member, deleted = false) {
   if (member.note) lines.push("備註：" + member.note);
   if (member.createdAt) lines.push("註冊時間：" + formatDateTime(member.createdAt));
   if (member.manualTierUpdatedAt && !deleted) lines.push("等級修改時間：" + formatDateTime(member.manualTierUpdatedAt));
+  if (member.giftVoucherUpdatedAt && !deleted) lines.push("餐品券修改時間：" + formatDateTime(member.giftVoucherUpdatedAt));
   if (member.birthdayUpdatedAt && !deleted) lines.push("生日修改時間：" + formatDateTime(member.birthdayUpdatedAt));
   lines.push("");
   lines.push("累積訂單：" + Number(member.totalOrders || 0));
   lines.push("累積杯數：" + Number(member.totalCups || 0));
   lines.push("累積消費：MOP " + String(Math.round(Number(member.totalSpent || 0) * 100) / 100));
+  lines.push("");
+  lines.push("🎁 免單券 / 餐品券");
+  lines.push("10杯獲得：" + earnedRewards + " 張");
+  lines.push("店員贈送：" + giftVoucherBalance + " 張");
+  lines.push("已使用：" + rewardRedeemed + " 張");
+  if (rewardReserved) lines.push("已被未完成訂單佔用：" + rewardReserved + " 張");
+  lines.push("目前可用：" + availableRewards + " 張");
 
   const recent = Array.isArray(member.recentOrders) ? member.recentOrders : [];
   if (recent.length) {
     lines.push("");
     lines.push("最近訂單：");
-    recent.forEach(order => lines.push("#" + order.orderNo + "｜" + statusLabel(order.status) + "｜" + Number(order.cups || 0) + "杯｜MOP " + String(Math.round(Number(order.totalAmount || 0) * 100) / 100)));
+    recent.forEach(order => lines.push("• #" + (order.orderNo || "-") + "｜" + (order.status || "-") + "｜" + Number(order.cups || 0) + "杯｜MOP " + String(Math.round(Number(order.totalAmount || 0) * 100) / 100)));
   }
 
   lines.push("");
-  lines.push(deleted ? "此會員已刪除。" : "可在下方修改會員等級。");
+  lines.push(deleted ? "此會員已刪除。" : "可在下方修改會員等級或贈送餐品券。");
   return lines.join("\n").trim();
 };
 
@@ -4342,6 +4401,7 @@ buildMemberDetailReplyMarkup = function(member, deleted = false) {
   } else {
     rows.push([{ text: "🔄 重新讀取會員資料", callback_data: "member_refresh:" + phone }]);
     rows.push([{ text: "🏅 更改會員等級", callback_data: "member_tier_menu:" + phone }]);
+    rows.push([{ text: "🎁 贈送餐品券", callback_data: "gift_voucher_member:" + phone }]);
     rows.push([{ text: "🗑️ 刪除賬號", callback_data: "member_delete:" + phone }]);
   }
   rows.push([{ text: "📋 返回用戶列表", callback_data: "member_list:all" }]);
@@ -4413,6 +4473,195 @@ async function handleMemberAdminEditActionV211(env, cq, data) {
 
   return stop(env, cq, "未知會員編輯操作");
 }
+
+
+/* V269: Telegram gift food voucher, linked to the existing free-drink voucher pool. */
+function giftVoucherCountV269(member) {
+  return Math.max(0, Number((member && (member.giftVoucherBalance ?? member.giftVouchers ?? member.manualGiftVouchers)) || 0));
+}
+
+function clampGiftVoucherDeltaV269(delta, currentGift) {
+  delta = Math.round(Number(delta || 0));
+  currentGift = giftVoucherCountV269({ giftVoucherBalance: currentGift });
+  if (!Number.isFinite(delta)) delta = 0;
+  if (delta > 50) delta = 50;
+  if (delta < -50) delta = -50;
+  if (currentGift + delta < 0) delta = -currentGift;
+  return delta;
+}
+
+function buildGiftVoucherMemberListTextV269(members) {
+  const active = (Array.isArray(members) ? members : []).filter(m => m && !m._deleted);
+  const lines = [];
+  lines.push("🎁 贈送餐品券");
+  lines.push("");
+  lines.push("請先選擇要贈送 / 調整餐品券的會員。");
+  lines.push("");
+  lines.push("餐品券會直接加入會員免單券池：");
+  lines.push("• 下單時會即時佔用");
+  lines.push("• 取消訂單會釋放");
+  lines.push("• 已領取後正式扣除");
+  lines.push("");
+  lines.push("有效會員：" + active.length);
+  return lines.join("\n");
+}
+
+function buildGiftVoucherMemberListMarkupV269(members) {
+  const rows = [];
+  const active = (Array.isArray(members) ? members : []).filter(m => m && !m._deleted);
+  active.slice(0, 80).forEach(member => {
+    const phone = normalizePhone(member.phone);
+    const name = member.name || "未命名";
+    const gifted = giftVoucherCountV269(member);
+    const label = ("🎁 " + name + "｜" + phone + (gifted ? "｜已贈 " + gifted + "張" : "")).slice(0, 60);
+    rows.push([{ text: label, callback_data: "gift_voucher_member:" + phone }]);
+  });
+  if (!active.length) rows.push([{ text: "暫無有效會員", callback_data: "gift_voucher_menu:x" }]);
+  rows.push([{ text: "📋 返回會員列表", callback_data: "member_list:active:0" }]);
+  rows.push([{ text: "返回功能列表", callback_data: "limited_cmd_menu:x" }]);
+  return { inline_keyboard: rows };
+}
+
+function giftVoucherStatsV269(member) {
+  member = member || {};
+  const rewards = member.rewards || {};
+  const totalCups = Number(member.totalCups || rewards.totalCups || 0);
+  const earned = Number(member.earnedRewards ?? rewards.earnedRewards ?? Math.floor(totalCups / 10));
+  const gifted = giftVoucherCountV269(member);
+  const redeemed = Number(member.rewardRedeemed ?? member.rewardsRedeemed ?? rewards.redeemedRewards ?? 0);
+  const reserved = Number(member.rewardReserved ?? member.rewardsReserved ?? rewards.reservedRewards ?? 0);
+  const available = Math.max(0, Number(member.availableRewards ?? rewards.availableRewards ?? (earned + gifted - redeemed - reserved)));
+  return { totalCups, earned, gifted, redeemed, reserved, available };
+}
+
+function buildGiftVoucherAdjustTextV269(member, delta) {
+  const stats = giftVoucherStatsV269(member);
+  delta = clampGiftVoucherDeltaV269(delta, stats.gifted);
+  const afterGift = Math.max(0, stats.gifted + delta);
+  const afterAvailable = Math.max(0, stats.earned + afterGift - stats.redeemed - stats.reserved);
+  const lines = [];
+  lines.push("🎁 贈送餐品券");
+  lines.push("");
+  lines.push("會員：" + (member.name || "-"));
+  lines.push("電話：" + (member.phone || "-"));
+  lines.push("");
+  lines.push("目前店員贈送：" + stats.gifted + " 張");
+  lines.push("10杯獲得：" + stats.earned + " 張");
+  lines.push("已使用：" + stats.redeemed + " 張");
+  if (stats.reserved) lines.push("未完成訂單佔用：" + stats.reserved + " 張");
+  lines.push("目前可用：" + stats.available + " 張");
+  lines.push("");
+  if (delta > 0) lines.push("本次準備增加：+" + delta + " 張");
+  else if (delta < 0) lines.push("本次準備減少：" + delta + " 張");
+  else lines.push("本次準備調整：0 張");
+  lines.push("確定後店員贈送會變成：" + afterGift + " 張");
+  lines.push("預計可用免單券會變成：" + afterAvailable + " 張");
+  lines.push("");
+  lines.push("請用 + / - 調整，按「確定」才會保存。");
+  return lines.join("\n");
+}
+
+function buildGiftVoucherAdjustMarkupV269(member, delta) {
+  const phone = normalizePhone(member && member.phone);
+  const stats = giftVoucherStatsV269(member);
+  delta = clampGiftVoucherDeltaV269(delta, stats.gifted);
+  const dec5 = clampGiftVoucherDeltaV269(delta - 5, stats.gifted);
+  const dec1 = clampGiftVoucherDeltaV269(delta - 1, stats.gifted);
+  const inc1 = clampGiftVoucherDeltaV269(delta + 1, stats.gifted);
+  const inc5 = clampGiftVoucherDeltaV269(delta + 5, stats.gifted);
+  return {
+    inline_keyboard: [
+      [
+        { text: "-5", callback_data: "gift_voucher_adjust:" + phone + ":" + dec5 },
+        { text: "-1", callback_data: "gift_voucher_adjust:" + phone + ":" + dec1 },
+        { text: "目前 " + (delta >= 0 ? "+" + delta : String(delta)) + " 張", callback_data: "gift_voucher_adjust:" + phone + ":" + delta },
+        { text: "+1", callback_data: "gift_voucher_adjust:" + phone + ":" + inc1 },
+        { text: "+5", callback_data: "gift_voucher_adjust:" + phone + ":" + inc5 }
+      ],
+      [{ text: "↩️ 撤銷本次調整", callback_data: "gift_voucher_reset:" + phone }],
+      [
+        { text: "✅ 確定", callback_data: "gift_voucher_confirm:" + phone + ":" + delta },
+        { text: "取消", callback_data: "gift_voucher_cancel:" + phone }
+      ],
+      [{ text: "返回贈送餐品券會員列表", callback_data: "gift_voucher_menu:x" }],
+      [{ text: "返回功能列表", callback_data: "limited_cmd_menu:x" }]
+    ]
+  };
+}
+
+async function loadGiftVoucherMemberV269(env, phone) {
+  const loaded = await findActiveMemberV223(env, phone);
+  if (!loaded.member) return { loaded, member: null };
+  const enriched = await enrichMemberStatsForTelegram(env, loaded.member).catch(() => loaded.member);
+  return { loaded, member: enriched };
+}
+
+async function handleGiftVoucherActionV269(env, cq, data) {
+  const chatId = cq.message && cq.message.chat ? cq.message.chat.id : env.TELEGRAM_CHAT_ID;
+  const messageId = cq.message ? cq.message.message_id : null;
+  if (!isAuthorizedTelegramChat(env, chatId)) return stop(env, cq, "沒有權限");
+
+  const parts = String(data || "").split(":");
+  const action = parts[0];
+  const phone = normalizePhone(parts[1] || "");
+
+  if (action === "gift_voucher_menu") {
+    const members = await listTelegramMembers(env);
+    await editTelegramMessage(env, chatId, messageId, buildGiftVoucherMemberListTextV269(members), buildGiftVoucherMemberListMarkupV269(members));
+    return stop(env, cq, "請選擇會員");
+  }
+
+  if (!phone) return stop(env, cq, "找不到會員電話");
+
+  if (action === "gift_voucher_member" || action === "gift_voucher_adjust" || action === "gift_voucher_reset") {
+    const { member } = await loadGiftVoucherMemberV269(env, phone);
+    if (!member) return stop(env, cq, "找不到有效會員");
+    const requested = action === "gift_voucher_reset" ? 0 : Number(parts[2] || 0);
+    const delta = clampGiftVoucherDeltaV269(requested, giftVoucherCountV269(member));
+    await editTelegramMessage(env, chatId, messageId, buildGiftVoucherAdjustTextV269(member, delta), buildGiftVoucherAdjustMarkupV269(member, delta));
+    return stop(env, cq, "已更新調整數量");
+  }
+
+  if (action === "gift_voucher_cancel") {
+    const { member } = await loadGiftVoucherMemberV269(env, phone);
+    if (!member) return stop(env, cq, "找不到有效會員");
+    await editTelegramMessage(env, chatId, messageId, buildMemberDetailText(member, false), buildMemberDetailReplyMarkup(member, false));
+    return stop(env, cq, "已取消贈送餐品券");
+  }
+
+  if (action === "gift_voucher_confirm") {
+    const requested = Number(parts[2] || 0);
+    const loaded = await findActiveMemberV223(env, phone);
+    if (!loaded.member) return stop(env, cq, "找不到有效會員");
+
+    const before = giftVoucherCountV269(loaded.member);
+    const delta = clampGiftVoucherDeltaV269(requested, before);
+    if (!delta) {
+      const enrichedNoChange = await enrichMemberStatsForTelegram(env, loaded.member).catch(() => loaded.member);
+      await editTelegramMessage(env, chatId, messageId, buildGiftVoucherAdjustTextV269(enrichedNoChange, 0), buildGiftVoucherAdjustMarkupV269(enrichedNoChange, 0));
+      return stop(env, cq, "未有更改");
+    }
+
+    const after = Math.max(0, before + delta);
+    const now = new Date().toISOString();
+    loaded.member.giftVoucherBalance = after;
+    loaded.member.giftVouchers = after;
+    loaded.member.manualGiftVouchers = after;
+    loaded.member.giftVoucherUpdatedAt = now;
+    loaded.member.giftVoucherUpdatedBy = "telegram";
+    const history = Array.isArray(loaded.member.giftVoucherHistory) ? loaded.member.giftVoucherHistory.slice(-24) : [];
+    history.push({ at: now, by: "telegram", delta, before, after });
+    loaded.member.giftVoucherHistory = history;
+
+    const saved = await saveActiveMemberV223(env, loaded);
+    const enriched = await enrichMemberStatsForTelegram(env, saved.member).catch(() => saved.member);
+    await editTelegramMessage(env, chatId, messageId, buildMemberDetailText(enriched, false), buildMemberDetailReplyMarkup(enriched, false));
+    return stop(env, cq, delta > 0 ? ("已贈送餐品券 +" + delta + " 張") : ("已減少餐品券 " + delta + " 張"));
+  }
+
+  return stop(env, cq, "未知餐品券操作");
+}
+
 
 async function handleMemberEditDraftTextV211(env, message, text, draft) {
   const chatId = message.chat && message.chat.id ? message.chat.id : env.TELEGRAM_CHAT_ID;
@@ -4557,6 +4806,7 @@ buildCommandMenuMarkupV183 = function() {
       [{ text: "➕ 新增限定豆子", callback_data: "limited_wizard_add:x" }],
       [{ text: "✨ 限定豆子列表 / 編輯", callback_data: "limited_list:all" }],
       [{ text: "👤 查詢會員", callback_data: "member_list:active:0" }],
+      [{ text: "🎁 贈送餐品券", callback_data: "gift_voucher_menu:x" }],
       [{ text: "🧹 合併重複會員", callback_data: "member_merge_duplicates:x" }],
       [{ text: "🛠 系統維護", callback_data: "maint_status:x" }]
     ]
@@ -5126,6 +5376,7 @@ buildMemberDetailReplyMarkup = function(member, deleted = false) {
   } else {
     rows.push([{ text: "🔄 重新讀取會員資料", callback_data: "member_refresh:" + phone }]);
     rows.push([{ text: "🏅 更改會員等級", callback_data: "member_tier_menu:" + phone }]);
+    rows.push([{ text: "🎁 贈送餐品券", callback_data: "gift_voucher_member:" + phone }]);
     rows.push([{ text: "🗑️ 刪除賬號", callback_data: "member_delete:" + phone }]);
     rows.push([{ text: "🧨 永久刪除", callback_data: "member_purge:" + phone }]);
   }
@@ -5143,6 +5394,7 @@ buildMemberReplyMarkup = function(member, deleted = false) {
   } else {
     rows.push([{ text: "🔄 重新讀取會員資料", callback_data: "member_refresh:" + phone }]);
     rows.push([{ text: "🏅 更改會員等級", callback_data: "member_tier_menu:" + phone }]);
+    rows.push([{ text: "🎁 贈送餐品券", callback_data: "gift_voucher_member:" + phone }]);
     rows.push([{ text: "🗑️ 刪除", callback_data: "member_delete:" + phone }]);
     rows.push([{ text: "🧨 永久刪除", callback_data: "member_purge:" + phone }]);
   }

@@ -420,6 +420,9 @@ async function enrichMemberWithOrders(env, member) {
     birthdayUpdatedBy: fixedMember.birthdayUpdatedBy || "",
     rewardRedeemed: Number(fixedMember.rewardRedeemed || 0),
     rewardsRedeemed: Number(fixedMember.rewardRedeemed || 0),
+    giftVoucherBalance: Math.max(0, Number(fixedMember.giftVoucherBalance || fixedMember.giftVouchers || fixedMember.manualGiftVouchers || 0)),
+    giftVoucherUpdatedAt: fixedMember.giftVoucherUpdatedAt || "",
+    giftVoucherUpdatedBy: fixedMember.giftVoucherUpdatedBy || "",
     rewardReserved: Number(fixedMember.rewardReserved || fixedMember.rewardsReserved || 0),
     rewardsReserved: Number(fixedMember.rewardReserved || fixedMember.rewardsReserved || 0),
     birthdayVoucherRedeemedThisMonth: Number(fixedMember.birthdayVoucherRedeemedThisMonth || 0),
@@ -689,12 +692,15 @@ function sky31RewardsFromMemberV192(member) {
   const totalCups = Number(member.totalCups || member.cups || member.totalItems || member.orderCups || 0);
   const redeemed = Number(member.rewardRedeemed || member.rewardsRedeemed || 0);
   const reserved = Number(member.rewardReserved || member.rewardsReserved || member.pendingRewardUse || 0);
+  const gifted = Math.max(0, Number(member.giftVoucherBalance || member.giftVouchers || member.manualGiftVouchers || 0));
   const earned = Math.floor(totalCups / 10);
-  const available = Math.max(0, earned - redeemed - reserved);
+  const available = Math.max(0, earned + gifted - redeemed - reserved);
   const tier = sky31RewardTierV192(totalCups);
   return {
     totalCups,
     earnedRewards: earned,
+    giftedRewards: gifted,
+    giftVoucherBalance: gifted,
     redeemedRewards: redeemed,
     reservedRewards: reserved,
     availableRewards: available,
@@ -731,14 +737,17 @@ function sky31RewardsFromMemberV196(member) {
   const totalCups = Number(member.totalCups || member.cups || member.totalItems || member.orderCups || 0);
   const redeemed = Number(member.rewardRedeemed || member.rewardsRedeemed || 0);
   const reserved = Number(member.rewardReserved || member.rewardsReserved || member.pendingRewardUse || 0);
+  const gifted = Math.max(0, Number(member.giftVoucherBalance || member.giftVouchers || member.manualGiftVouchers || 0));
   const earned = Math.floor(totalCups / 10);
-  const available = Math.max(0, earned - redeemed - reserved);
+  const available = Math.max(0, earned + gifted - redeemed - reserved);
   const progress = totalCups % 10;
   const cupsToNextReward = progress === 0 && totalCups > 0 ? 0 : 10 - progress;
   const tier = sky31RewardTierV196(totalCups);
   return {
     totalCups,
     earnedRewards: earned,
+    giftedRewards: gifted,
+    giftVoucherBalance: gifted,
     redeemedRewards: redeemed,
     reservedRewards: reserved,
     availableRewards: available,
@@ -768,6 +777,8 @@ function sky31DecorateMemberV196(member) {
     rewards,
     availableRewards: rewards.availableRewards,
     earnedRewards: rewards.earnedRewards,
+    giftVoucherBalance: rewards.giftVoucherBalance,
+    giftedRewards: rewards.giftedRewards,
     redeemedRewards: rewards.redeemedRewards,
     reservedRewards: rewards.reservedRewards,
     rewardReserved: rewards.reservedRewards,

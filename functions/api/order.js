@@ -199,6 +199,9 @@ async function ensureActiveMember(env, phone) {
     merged.totalSpent = Math.max(Number(merged.totalSpent || 0), Number(m.totalSpent || 0));
     merged.rewardRedeemed = Math.max(Number(merged.rewardRedeemed || merged.rewardsRedeemed || 0), Number(m.rewardRedeemed || m.rewardsRedeemed || 0));
     merged.rewardsRedeemed = merged.rewardRedeemed;
+    merged.giftVoucherBalance = Math.max(Number(merged.giftVoucherBalance || merged.giftVouchers || merged.manualGiftVouchers || 0), Number(m.giftVoucherBalance || m.giftVouchers || m.manualGiftVouchers || 0));
+    merged.giftVouchers = merged.giftVoucherBalance;
+    merged.manualGiftVouchers = merged.giftVoucherBalance;
   }
 
   merged.phone = normalizePhone(merged.phone || phone);
@@ -825,11 +828,14 @@ function sky31RewardsFromMemberV192(member) {
   const totalCups = Number(member.totalCups || member.cups || member.totalItems || member.orderCups || 0);
   const redeemed = Number(member.rewardRedeemed || member.rewardsRedeemed || 0);
   const reserved = Number(member.rewardReserved || member.rewardsReserved || member.pendingRewardUse || 0);
+  const gifted = Math.max(0, Number(member.giftVoucherBalance || member.giftVouchers || member.manualGiftVouchers || 0));
   const earned = Math.floor(totalCups / 10);
-  const available = Math.max(0, earned - redeemed - reserved);
+  const available = Math.max(0, earned + gifted - redeemed - reserved);
   return {
     totalCups,
     earnedRewards: earned,
+    giftedRewards: gifted,
+    giftVoucherBalance: gifted,
     redeemedRewards: redeemed,
     reservedRewards: reserved,
     availableRewards: available,
