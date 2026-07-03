@@ -941,6 +941,7 @@ async function enrichMemberStatsForTelegram(env, member) {
   let rewardReserved = 0;
   let giftVoucherRedeemed = 0;
   let giftVoucherReserved = 0;
+  let redeemedFreeCupsTotalV279 = 0;
   const seenOrderNosV272 = new Set();
   const recentOrders = [];
 
@@ -974,6 +975,7 @@ async function enrichMemberStatsForTelegram(env, member) {
         totalSpent += amount;
         rewardRedeemed += earnedUse;
         giftVoucherRedeemed += giftUse;
+        redeemedFreeCupsTotalV279 += voucherCupCountV278;
       } else if (!cancelled) {
         rewardReserved += earnedUse;
         giftVoucherReserved += giftUse;
@@ -1504,7 +1506,7 @@ function buildMemberTelegramText(member, deleted = false, confirmingDelete = fal
   if (member.restoredAt && !deleted && !confirmingDelete) lines.push("已恢復相關訂單：" + Number(member.restoredOrders || 0));
   lines.push("");
   lines.push("累積訂單：" + Number(member.totalOrders || 0));
-  lines.push("累積杯數：" + Number(member.totalCups || 0));
+  lines.push("實付累計杯數：" + Number(member.totalCups || 0));
   lines.push("累積消費：MOP " + String(Math.round(Number(member.totalSpent || 0) * 100) / 100));
   lines.push("");
 
@@ -1684,7 +1686,7 @@ function buildTelegramText(order) {
     const detail = Array.isArray(order.tierDiscountDetails) && order.tierDiscountDetails.length ? "（" + order.tierDiscountDetails.join("、") + "）" : "";
     lines.push(tierName + "優惠" + detail + "：-" + moneyText(tierDiscount));
   }
-  if (rewardDiscount > 0) lines.push("會員免單 / 餐品券扣減：-" + moneyText(rewardDiscount));
+  if (rewardDiscount > 0) lines.push("餐品券扣減：-" + moneyText(rewardDiscount));
   lines.push("客人實付：" + moneyText(paidAmount));
   if (order.orderNote) lines.push("整張訂單備註：" + order.orderNote);
   lines.push("");
@@ -4052,6 +4054,7 @@ async function recalcMemberFromOrdersV199(env, changedOrder) {
   let rewardReserved = 0;
   let giftVoucherRedeemed = 0;
   let giftVoucherReserved = 0;
+  let redeemedFreeCupsTotalV279 = 0;
   const seenOrderNosV272 = new Set();
   let lastOrderAt = "";
   let lastOrderNo = "";
@@ -4085,6 +4088,7 @@ async function recalcMemberFromOrdersV199(env, changedOrder) {
       totalSpent += Math.max(0, Number(order.totalAmount || cartTotalForMemberQuery(order.cart) || 0));
       rewardRedeemed += earnedUse;
       giftVoucherRedeemed += giftUse;
+      redeemedFreeCupsTotalV279 += tgVoucherUseCountV275(order);
     } else if (!cancelled) {
       rewardReserved += earnedUse;
       giftVoucherReserved += giftUse;
@@ -4114,6 +4118,8 @@ async function recalcMemberFromOrdersV199(env, changedOrder) {
     member.rewardsRedeemed = rewardRedeemed;
     member.giftVoucherRedeemed = giftVoucherRedeemed;
     member.giftVoucherUsed = giftVoucherRedeemed;
+    member.redeemedFreeCups = redeemedFreeCupsTotalV279;
+    member.successfulFreeCups = redeemedFreeCupsTotalV279;
     member.rewardReserved = entryRewardReservedV272;
     member.rewardsReserved = entryRewardReservedV272;
     member.giftVoucherReserved = entryGiftVoucherReservedV272;

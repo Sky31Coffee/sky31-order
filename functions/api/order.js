@@ -701,7 +701,7 @@ function buildTelegramText(order) {
     const detail = Array.isArray(order.tierDiscountDetails) && order.tierDiscountDetails.length ? "（" + order.tierDiscountDetails.join("、") + "）" : "";
     lines.push(tierName + "優惠" + detail + "：-" + money(tierDiscount));
   }
-  if (rewardDiscount > 0) lines.push("會員免單 / 餐品券扣減：-" + money(rewardDiscount));
+  if (rewardDiscount > 0) lines.push("餐品券扣減：-" + money(rewardDiscount));
   lines.push("客人實付：" + money(paidAmount));
   if (order.orderNote) lines.push("整張訂單備註：" + order.orderNote);
   lines.push("");
@@ -1062,7 +1062,7 @@ function sky31RewardTelegramLineV192(order) {
   const use = Number(order && order.rewardUse || 0);
   const discount = Number(order && order.rewardDiscount || 0);
   if (!use || !discount) return "";
-  return "🎁 會員獎賞兌換 ×" + use + "｜-" + money(discount);
+  return "🎁 餐品券兌換 ×" + use + "｜-" + money(discount);
 }
 
 
@@ -1111,6 +1111,7 @@ async function sky31RecomputeMemberForRewardV199(env, member, phone) {
   let rewardReserved = 0;
   let giftVoucherRedeemed = 0;
   let giftVoucherReserved = 0;
+  let redeemedFreeCupsTotalV279 = 0;
   let birthdayVoucherRedeemedThisMonth = 0;
   let birthdayVoucherReservedThisMonth = 0;
   const currentMonthKey = birthdayVoucherMonthKeyV266(new Date());
@@ -1137,6 +1138,7 @@ async function sky31RecomputeMemberForRewardV199(env, member, phone) {
       totalSpent += Number(order.totalAmount || 0);
       rewardRedeemed += normalUse;
       giftVoucherRedeemed += giftUse;
+      redeemedFreeCupsTotalV279 += sky31VoucherUseCountV275(order);
       birthdayVoucherRedeemedThisMonth += birthdayUse;
     } else if (!cancelled) {
       rewardReserved += normalUse;
@@ -1167,6 +1169,8 @@ async function sky31RecomputeMemberForRewardV199(env, member, phone) {
     rewardsRedeemed: rewardRedeemed,
     giftVoucherRedeemed,
     giftVoucherUsed: giftVoucherRedeemed,
+    redeemedFreeCups: redeemedFreeCupsTotalV279,
+    successfulFreeCups: redeemedFreeCupsTotalV279,
     rewardReserved,
     rewardsReserved: rewardReserved,
     giftVoucherReserved,

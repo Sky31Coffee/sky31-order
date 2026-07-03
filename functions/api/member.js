@@ -320,6 +320,7 @@ async function enrichMemberWithOrders(env, member) {
   let reservedRewards = 0;
   let giftVoucherRedeemed = 0;
   let giftVoucherReserved = 0;
+  let redeemedFreeCupsTotalV279 = 0;
   let birthdayVoucherRedeemedThisMonth = 0;
   let birthdayVoucherReservedThisMonth = 0;
   const currentBirthdayMonthKey = memberBirthdayVoucherMonthKeyV266(new Date());
@@ -360,6 +361,7 @@ async function enrichMemberWithOrders(env, member) {
       totalSpent += amount;
       redeemedRewards += normalRewardUse;
       giftVoucherRedeemed += giftRewardUse;
+      redeemedFreeCupsTotalV279 += voucherCupCountV278;
       birthdayVoucherRedeemedThisMonth += birthdayRewardUse;
     } else if (!isCancelledOrder(order)) {
       reservedRewards += normalRewardUse;
@@ -452,6 +454,8 @@ async function enrichMemberWithOrders(env, member) {
     giftVoucherReserved: scannedGiftVoucherReserved,
     voucherReservationLocks: extraLocksV272,
     giftVoucherReservedRewards: scannedGiftVoucherReserved,
+    redeemedFreeCups: redeemedFreeCupsTotalV279,
+    successfulFreeCups: redeemedFreeCupsTotalV279,
     birthdayVoucherRedeemedThisMonth,
     birthdayVoucherReservedThisMonth,
     recentOrderNos: sortedOrders.map(o => o.orderNo).filter(Boolean).slice(0, 2000)
@@ -511,8 +515,8 @@ async function enrichMemberWithOrders(env, member) {
     rewardsReserved: Number(fixedMember.rewardReserved || fixedMember.rewardsReserved || 0),
     birthdayVoucherRedeemedThisMonth: Number(fixedMember.birthdayVoucherRedeemedThisMonth || 0),
     birthdayVoucherReservedThisMonth: Number(fixedMember.birthdayVoucherReservedThisMonth || 0),
-    redeemedFreeCups: Number(fixedMember.rewardRedeemed || 0) + Number(fixedMember.giftVoucherRedeemed || fixedMember.giftVoucherUsed || 0) + Number(fixedMember.birthdayVoucherRedeemedThisMonth || 0),
-    successfulFreeCups: Number(fixedMember.rewardRedeemed || 0) + Number(fixedMember.giftVoucherRedeemed || fixedMember.giftVoucherUsed || 0) + Number(fixedMember.birthdayVoucherRedeemedThisMonth || 0),
+    redeemedFreeCups: Number(fixedMember.redeemedFreeCups || fixedMember.successfulFreeCups || 0),
+    successfulFreeCups: Number(fixedMember.successfulFreeCups || fixedMember.redeemedFreeCups || 0),
     loyaltyCups: Number(fixedMember.totalCups || 0),
     paidCups: Number(fixedMember.totalCups || 0),
     recentOrders: sortedOrders,
@@ -817,7 +821,7 @@ function sky31RewardsFromMemberV192(member) {
     reservedRewards: reserved,
     availableRewards: available,
     cupsToNextReward: Math.max(0, 10 - (totalCups % 10 || 10)),
-    rule: "成功領取累計 10 杯，可免費兌換任何 1 杯飲品",
+    rule: "實付累計 10 杯，可獲得 1 張餐品券",
     tier
   };
 }
@@ -873,7 +877,7 @@ function sky31RewardsFromMemberV196(member) {
     availableRewards: available,
     cupsToNextReward,
     nextRewardAt: (earned + 1) * 10,
-    rule: "成功領取累計 10 杯，可免費兌換任何 1 杯飲品",
+    rule: "實付累計 10 杯，可獲得 1 張餐品券",
     tier
   };
 }
