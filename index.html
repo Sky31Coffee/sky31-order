@@ -11694,8 +11694,8 @@ window.addEventListener("load", function() {
           '<div class="member-reward-stat-v196"><b>' + available + '</b><span>目前可用<br>餐品券</span></div>' +
         '</div>' +
         '<div class="member-reward-bar-v196"><i style="width:' + pct + '%"></i></div>' +
-        '<div class="member-reward-line-v196">🎁 成功領取累計 10 杯，可免費兌換任何 1 杯飲品。<br>' + esc(rewardText) + ' 免單只扣可用次數，不扣總累計杯數。</div>' +
-        '<div class="member-voucher-strip-v217">🎫 飲品券：<b>' + (Number(available || 0) + Number(sky31BirthdayVoucherCountV217(member) || 0)) + '</b> 張可用' + (sky31BirthdayVoucherCountV217(member) > 0 ? '｜含生日月飲品券 1 張 🎂' : '') + '</div>' +
+        '<div class="member-reward-line-v196">🎁 實付累計 10 杯，可獲得 1 張餐品券。<br>' + esc(rewardText) + ' 餐品券只扣可用張數，不影響實付累計杯數。</div>' +
+        '<div class="member-voucher-strip-v217">🎫 餐品券：<b>' + (Number(available || 0) + Number(sky31BirthdayVoucherCountV217(member) || 0)) + '</b> 張可用' + (sky31BirthdayVoucherCountV217(member) > 0 ? '｜含生日月券 1 張 🎂' : '') + '</div>' +
       '</div>';
   }
 
@@ -11821,7 +11821,7 @@ window.addEventListener("load", function() {
         '<div class="cake">🎂</div>' +
         '<h3>生日月快樂！</h3>' +
         '<p>' + esc(name) + '，Sky31 祝你生日月快樂，願你每天都有一杯喜歡的咖啡陪伴。</p>' +
-        '<div class="coupon">🎫 已為你顯示生日月飲品券 1 張</div>' +
+        '<div class="coupon">🎫 已為你顯示生日月券 1 張</div>' +
         '<button type="button" onclick="sky31CloseBirthdayBlessingV217()">收到，謝謝</button>' +
       '</div>';
     document.body.appendChild(div);
@@ -11932,7 +11932,7 @@ window.addEventListener("load", function() {
         cups:0,
         icon:"🌱",
         name:"普通會員",
-        benefit:"基本會員獎賞：成功領取累計 10 杯，可免費兌換任何 1 杯飲品。"
+        benefit:"基本餐品券：實付累計 10 杯，可獲得 1 張餐品券。"
       },
       {
         key:"silver",
@@ -11946,7 +11946,7 @@ window.addEventListener("load", function() {
         cups:60,
         icon:"🥇",
         name:"金卡會員",
-        benefit:"會員優惠：每月 2 次限定豆子加價豁免；生日月可獲 1 張 MOP 10 飲品券。"
+        benefit:"會員優惠：每月 2 次限定豆子加價豁免；生日月可獲 1 張 MOP 10 餐品券。"
       },
       {
         key:"diamond",
@@ -16554,26 +16554,26 @@ window.addEventListener("load", function() {
 
   function rewardBox201(member, calc){
     if(!member || !member.phone){
-      return '<div class="v201-checkout-reward"><div class="title">🎁 會員獎賞</div><div class="note">登入會員後，成功領取累計 10 杯，可免費兌換任何 1 杯飲品。</div></div>';
+      return '<div class="v201-checkout-reward"><div class="title">🎁 餐品券</div><div class="note">登入會員後，實付累計 10 杯，可獲得 1 張餐品券。</div></div>';
     }
 
     if(calc.useRewards > 0 && calc.rewardDiscount > 0){
       const names = calc.freeItems.map(function(x){return x.title;}).slice(0,3).join("、");
       return '<div class="v201-checkout-reward">' +
-        '<div class="title">🎁 會員免單</div>' +
+        '<div class="title">🎁 餐品券</div>' +
         '<div class="line"><span>原本總額</span><strong>' + money201(calc.subtotal) + '</strong></div>' +
-        '<div class="line"><span>目前可用免單</span><strong>' + calc.available + ' 次</strong></div>' +
+        '<div class="line"><span>目前可用餐品券</span><strong>' + calc.available + ' 張</strong></div>' +
         '<div class="line"><span>本次兌換</span><strong>' + calc.useRewards + ' 杯</strong></div>' +
-        '<div class="line"><span>獎賞扣減</span><strong>-' + money201(calc.rewardDiscount) + '</strong></div>' +
+        '<div class="line"><span>餐品券扣減</span><strong>-' + money201(calc.rewardDiscount) + '</strong></div>' +
         '<div class="line v201-final-total"><span>應付總額</span><strong>' + money201(calc.finalTotal) + '</strong></div>' +
       '</div>';
     }
 
     return '<div class="v201-checkout-reward">' +
-      '<div class="title">🎁 會員獎賞</div>' +
-      '<div class="line"><span>總累計杯數</span><strong>' + calc.cups + ' 杯</strong></div>' +
-      '<div class="line"><span>目前可用免單</span><strong>0 次</strong></div>' +
-      '<div class="note">暫時未有可用免單。成功領取累計 10 杯，可免費兌換任何 1 杯飲品。</div>' +
+      '<div class="title">🎁 餐品券</div>' +
+      '<div class="line"><span>實付累計杯數</span><strong>' + calc.cups + ' 杯</strong></div>' +
+      '<div class="line"><span>目前可用餐品券</span><strong>0 張</strong></div>' +
+      '<div class="note">暫時未有可用餐品券。實付累計 10 杯，可獲得 1 張餐品券。</div>' +
     '</div>';
   }
 
@@ -16612,7 +16612,7 @@ window.addEventListener("load", function() {
     summary.innerHTML =
       '<div class="row"><strong>總杯數</strong><strong>' + totalQty + ' 杯</strong></div>' +
       '<div class="row"><strong>原本總額</strong><strong>' + money201(calc.subtotal) + '</strong></div>' +
-      (calc.rewardDiscount > 0 ? '<div class="row"><strong>會員免單兌換 ×' + calc.useRewards + '</strong><strong>-' + money201(calc.rewardDiscount) + '</strong></div>' : '') +
+      (calc.rewardDiscount > 0 ? '<div class="row"><strong>餐品券兌換 ×' + calc.useRewards + '</strong><strong>-' + money201(calc.rewardDiscount) + '</strong></div>' : '') +
       '<div class="row v201-final-total"><strong>應付總額</strong><strong>' + money201(calc.finalTotal) + '</strong></div>' +
       rewardBox201(checkoutMember, calc) +
       rows;
@@ -18524,22 +18524,22 @@ window.addEventListener("load", function() {
 
   function rewardBox240(member, calc){
     if(!member || !member.phone){
-      return '<div class="v201-checkout-reward"><div class="title">🎁 會員獎賞</div><div class="note">登入會員後，成功領取累計 10 杯，可免費兌換任何 1 杯飲品。</div></div>';
+      return '<div class="v201-checkout-reward"><div class="title">🎁 餐品券</div><div class="note">登入會員後，實付累計 10 杯，可獲得 1 張餐品券。</div></div>';
     }
     if(calc.useRewards > 0 && calc.rewardDiscount > 0){
       const names = calc.freeItems.map(function(x){return x.title;}).slice(0,3).join("、");
       return '<div class="v201-checkout-reward">' +
-        '<div class="title">🎁 會員免單</div>' +
-        '<div class="line"><span>目前可用免單</span><strong>' + calc.available + ' 次</strong></div>' +
+        '<div class="title">🎁 餐品券</div>' +
+        '<div class="line"><span>目前可用餐品券</span><strong>' + calc.available + ' 張</strong></div>' +
         '<div class="line"><span>本次兌換</span><strong>' + calc.useRewards + ' 杯</strong></div>' +
-        '<div class="line"><span>免單扣減</span><strong>-' + money240(calc.rewardDiscount) + '</strong></div>' +
+        '<div class="line"><span>餐品券扣減</span><strong>-' + money240(calc.rewardDiscount) + '</strong></div>' +
       '</div>';
     }
     return '<div class="v201-checkout-reward">' +
-      '<div class="title">🎁 會員獎賞</div>' +
-      '<div class="line"><span>總累計杯數</span><strong>' + calc.cups + ' 杯</strong></div>' +
-      '<div class="line"><span>目前可用免單</span><strong>0 次</strong></div>' +
-      '<div class="note">暫時未有可用免單。成功領取累計 10 杯，可免費兌換任何 1 杯飲品。</div>' +
+      '<div class="title">🎁 餐品券</div>' +
+      '<div class="line"><span>實付累計杯數</span><strong>' + calc.cups + ' 杯</strong></div>' +
+      '<div class="line"><span>目前可用餐品券</span><strong>0 張</strong></div>' +
+      '<div class="note">暫時未有可用餐品券。實付累計 10 杯，可獲得 1 張餐品券。</div>' +
     '</div>';
   }
 
@@ -18599,17 +18599,17 @@ window.addEventListener("load", function() {
 
     let rewardBox = '';
     if(!member || !member.phone){
-      rewardBox = '<div class="v201-checkout-reward"><div class="title">🎁 會員免單</div><div class="line"><span>狀態</span><strong>登入後自動檢查</strong></div></div>';
+      rewardBox = '<div class="v201-checkout-reward"><div class="title">🎁 餐品券</div><div class="line"><span>狀態</span><strong>登入後自動檢查</strong></div></div>';
     }else if(calc.useRewards > 0 && calc.rewardDiscount > 0){
       rewardBox = '<div class="v201-checkout-reward">' +
-        '<div class="title">🎁 會員免單</div>' +
+        '<div class="title">🎁 餐品券</div>' +
         '<div class="line"><span>本次套用</span><strong>' + calc.useRewards + ' 張</strong></div>' +
-        '<div class="line"><span>免單優惠</span><strong>-' + money240(calc.rewardDiscount) + '</strong></div>' +
+        '<div class="line"><span>餐品券優惠</span><strong>-' + money240(calc.rewardDiscount) + '</strong></div>' +
       '</div>';
     }else{
       rewardBox = '<div class="v201-checkout-reward">' +
-        '<div class="title">🎁 會員免單</div>' +
-        '<div class="line"><span>可用免單</span><strong>0 張</strong></div>' +
+        '<div class="title">🎁 餐品券</div>' +
+        '<div class="line"><span>可用餐品券</span><strong>0 張</strong></div>' +
       '</div>';
     }
 
@@ -19048,18 +19048,18 @@ window.addEventListener("load", function() {
   }
   function rewardBox242(member, calc){
     if(!member || !member.phone){
-      return '<div class="v201-checkout-reward"><div class="title">🎁 會員免單</div><div class="line"><span>狀態</span><strong>登入後自動檢查</strong></div></div>';
+      return '<div class="v201-checkout-reward"><div class="title">🎁 餐品券</div><div class="line"><span>狀態</span><strong>登入後自動檢查</strong></div></div>';
     }
     if(Number(calc.useRewards || 0) > 0 && Number(calc.rewardDiscount || 0) > 0){
       return '<div class="v201-checkout-reward">' +
-        '<div class="title">🎁 會員免單</div>' +
+        '<div class="title">🎁 餐品券</div>' +
         '<div class="line"><span>本次套用</span><strong>' + Number(calc.useRewards || 0) + ' 張</strong></div>' +
-        '<div class="line"><span>免單優惠</span><strong>-' + money242(calc.rewardDiscount) + '</strong></div>' +
+        '<div class="line"><span>餐品券優惠</span><strong>-' + money242(calc.rewardDiscount) + '</strong></div>' +
       '</div>';
     }
     return '<div class="v201-checkout-reward">' +
-      '<div class="title">🎁 會員免單</div>' +
-      '<div class="line"><span>可用免單</span><strong>0 張</strong></div>' +
+      '<div class="title">🎁 餐品券</div>' +
+      '<div class="line"><span>可用餐品券</span><strong>0 張</strong></div>' +
     '</div>';
   }
   function applyState242(calc){
@@ -19323,18 +19323,18 @@ window.addEventListener("load", function() {
 
     const rewardRows = [];
     if(!member || !member.phone){
-      rewardRows.push(row244("狀態", "登入會員後可查看會員免單"));
+      rewardRows.push(row244("狀態", "登入會員後可查看餐品券"));
     }else{
-      rewardRows.push(row244("可用免單", rewardAvailable + " 張"));
+      rewardRows.push(row244("可用餐品券", rewardAvailable + " 張"));
       rewardRows.push(row244("本次使用", Number(calc.useRewards || 0) + " 張"));
-      if(Number(calc.rewardDiscount || 0) > 0) rewardRows.push(row244("免單扣減", "-" + money244(calc.rewardDiscount)));
-      if(freeNames) rewardRows.push(row244("免單飲品", freeNames));
+      if(Number(calc.rewardDiscount || 0) > 0) rewardRows.push(row244("餐品券扣減", "-" + money244(calc.rewardDiscount)));
+      if(freeNames) rewardRows.push(row244("兌換飲品", freeNames));
     }
 
     summary.innerHTML =
       '<div class="v244-checkout-panel">' + mainRows.join("") + '</div>' +
       section244("🏅 會員等級優惠", "", tierRows, "tier") +
-      section244("🎁 會員免單", "", rewardRows, "reward");
+      section244("🎁 餐品券", "", rewardRows, "reward");
 
     window.SKY31_REWARD_APPLY_V201 = {
       cups:calc.cups, earned:calc.earned, redeemed:calc.redeemed, available:calc.available, subtotal:calc.subtotal,
