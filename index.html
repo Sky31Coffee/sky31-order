@@ -11471,8 +11471,8 @@ window.addEventListener("load", function() {
               '<input id="memberRegPhone" inputmode="tel" placeholder="輸入手機號碼">' +
               '<label>姓名 Name</label>' +
               '<input id="memberRegName" placeholder="輸入姓名">' +
-              '<label>生日 Birthday，可選</label>' +
-              '<input id="memberRegBirthday" type="date" required>' +
+              '<label>生日 Birthday（必選）</label>' +
+              '<input id="memberRegBirthday" type="text" inputmode="numeric" autocomplete="bday" placeholder="YYYY-MM-DD 例如 1990-07-03" pattern="\\d{4}-\\d{2}-\\d{2}" required>' +
             '</div>' +
             '<div class="member-actions">' +
               '<button class="member-btn primary" type="button" onclick="memberRegisterSave()">註冊</button>' +
@@ -11700,6 +11700,24 @@ window.addEventListener("load", function() {
     member = member || {};
     var birthday = String(member.birthday || "").trim();
     if(!/^\d{4}-\d{2}-\d{2}$/.test(birthday)) return 0;
+
+    function tierKey(m){
+      var key = String(m.memberTierKey || m.manualTierKey || m.memberTierOverrideKey || m.memberTierManualKey || "").toLowerCase();
+      if(key === "vip") key = "blackgold";
+      if(key) return key;
+
+      var cups = Number(m.memberTierEffectiveCups || m.totalCups || m.cups || m.totalItems || 0);
+      if(cups >= 180) return "blackgold";
+      if(cups >= 100) return "diamond";
+      if(cups >= 60) return "gold";
+      if(cups >= 30) return "silver";
+      return "regular";
+    }
+
+    var key = tierKey(member);
+    var goldOrAbove = key === "gold" || key === "diamond" || key === "blackgold";
+    if(!goldOrAbove) return 0;
+
     var parts = birthday.split("-");
     var month = Number(parts[1] || 0);
     var now = new Date();
@@ -12194,11 +12212,11 @@ window.addEventListener("load", function() {
 
   window.memberRegisterSave = async function(){
     var phone = phoneNorm(($("memberRegPhone") || {}).value || "");
-    var name = (($("memberRegName") || {}).value || "").trim();
-    var birthday = (($("memberRegBirthday") || {}).value || "").trim();
+    var name = (typeof formatMemberNameV265 === "function" ? formatMemberNameV265(($("memberRegName") || {}).value || "") : (($("memberRegName") || {}).value || "").trim());
+    var birthday = (typeof normalizeBirthdayInputV265 === "function" ? normalizeBirthdayInputV265(($("memberRegBirthday") || {}).value || "") : (($("memberRegBirthday") || {}).value || "").trim());
 
-    if(!phone || !name){
-      setRegMsg("註冊會員需要姓名和手機號碼。", "error");
+    if(!phone || !name || !birthday){
+      setRegMsg("註冊會員需要姓名、手機號碼和生日，生日格式請用 YYYY-MM-DD。", "error");
       return;
     }
 
@@ -12713,6 +12731,37 @@ window.addEventListener("load", function() {
     return String(s || "").replace(/\D/g, "");
   }
 
+
+  window.formatMemberNameV265 = function formatMemberNameV265(name){
+    name = String(name || "").trim().replace(/\s+/g, " ");
+    if(!name) return "";
+    return name.replace(/\b([a-zA-Z])([a-zA-Z'’-]*)\b/g, function(_, first, rest){
+      return first.toUpperCase() + String(rest || "");
+    });
+  };
+
+
+  window.normalizeBirthdayInputV265 = function normalizeBirthdayInputV265(value){
+    var s = String(value || "").trim();
+    if(!s) return "";
+    s = s.replace(/[．。]/g, ".")
+         .replace(/[\\/.]/g, "-")
+         .replace(/年/g, "-")
+         .replace(/月/g, "-")
+         .replace(/日/g, "")
+         .replace(/\s+/g, "");
+    var m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if(!m){
+      var compact = s.match(/^(\d{4})(\d{2})(\d{2})$/);
+      if(compact) m = compact;
+    }
+    if(!m) return "";
+    var y = Number(m[1]), mo = Number(m[2]), d = Number(m[3]);
+    var dt = new Date(y, mo - 1, d);
+    if(dt.getFullYear() !== y || dt.getMonth() + 1 !== mo || dt.getDate() !== d) return "";
+    return String(y).padStart(4, "0") + "-" + String(mo).padStart(2, "0") + "-" + String(d).padStart(2, "0");
+  };
+
   function esc(s){
     return String(s == null ? "" : s).replace(/[&<>"']/g,function(c){
       return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
@@ -12886,8 +12935,8 @@ window.addEventListener("load", function() {
               '<input id="checkoutRegPhone" inputmode="tel" placeholder="手機號碼">' +
               '<label>姓名 Name</label>' +
               '<input id="checkoutRegName" placeholder="輸入姓名">' +
-              '<label>生日日期 Birthday</label>' +
-              '<input id="checkoutRegBirthday" type="date" required>' +
+              '<label>生日 Birthday（必選）</label>' +
+              '<input id="checkoutRegBirthday" type="text" inputmode="numeric" autocomplete="bday" placeholder="YYYY-MM-DD 例如 1990-07-03" pattern="\\d{4}-\\d{2}-\\d{2}" required>' +
             '</div>' +
             '<div class="checkout-member-actions">' +
               '<button class="checkout-member-btn primary" type="button" onclick="checkoutMemberRegister()">確認註冊</button>' +
@@ -13011,11 +13060,11 @@ window.addEventListener("load", function() {
     ensureCheckoutMemberModal();
 
     var phone = phoneNorm(($("checkoutRegPhone") || {}).value || "");
-    var name = (($("checkoutRegName") || {}).value || "").trim();
-    var birthday = (($("checkoutRegBirthday") || {}).value || "").trim();
+    var name = formatMemberNameV265(($("checkoutRegName") || {}).value || "");
+    var birthday = (typeof normalizeBirthdayInputV265 === "function" ? normalizeBirthdayInputV265(($("checkoutRegBirthday") || {}).value || "") : (($("checkoutRegBirthday") || {}).value || "").trim());
 
     if(!phone || !name || !birthday){
-      setCheckoutMsg("請完整填寫手機、姓名和生日日期。", "error");
+      setCheckoutMsg("請完整填寫手機、姓名和生日日期，生日格式請用 YYYY-MM-DD。", "error");
       return;
     }
 
@@ -13359,7 +13408,7 @@ window.addEventListener("load", function() {
     var oldMemberRegister = window.memberRegisterSave;
     if(typeof oldMemberRegister === "function"){
       window.memberRegisterSave = async function(){
-        var birthday = (($("memberRegBirthday") || {}).value || "").trim();
+        var birthday = (typeof normalizeBirthdayInputV265 === "function" ? normalizeBirthdayInputV265(($("memberRegBirthday") || {}).value || "") : (($("memberRegBirthday") || {}).value || "").trim());
         if(!birthday){
           setMsg($("memberRegMsg"), "還沒輸入生日日期。");
           focusBirthday("memberRegBirthday");
@@ -13372,7 +13421,7 @@ window.addEventListener("load", function() {
     var oldCheckoutRegister = window.checkoutMemberRegister;
     if(typeof oldCheckoutRegister === "function"){
       window.checkoutMemberRegister = async function(){
-        var birthday = (($("checkoutRegBirthday") || {}).value || "").trim();
+        var birthday = (typeof normalizeBirthdayInputV265 === "function" ? normalizeBirthdayInputV265(($("checkoutRegBirthday") || {}).value || "") : (($("checkoutRegBirthday") || {}).value || "").trim());
         if(!birthday){
           setMsg($("checkoutMemberMsg"), "還沒輸入生日日期。");
           focusBirthday("checkoutRegBirthday");
