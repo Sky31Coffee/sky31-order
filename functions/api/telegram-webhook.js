@@ -1023,7 +1023,8 @@ async function enrichMemberStatsForTelegram(env, member) {
 
   recentOrders.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
 
-  const giftVoucherBalance = Math.max(0, Number(member.giftVoucherBalance || member.giftVouchers || member.manualGiftVouchers || 0));
+  const rawGiftVoucherBalance = Math.max(0, Number(member.giftVoucherBalance || member.giftVouchers || member.manualGiftVouchers || 0));
+  const giftVoucherBalance = Math.max(rawGiftVoucherBalance, giftVoucherRedeemed + giftVoucherReserved);
   const earnedRewards = Math.floor(totalCups / 10);
   const earnedAvailable = Math.max(0, earnedRewards - rewardRedeemed - rewardReserved);
   const giftAvailable = Math.max(0, giftVoucherBalance - giftVoucherRedeemed - giftVoucherReserved);
@@ -4567,9 +4568,10 @@ buildMemberDetailText = function(member, deleted = false) {
   const tier = memberDisplayTierV211(member);
   const rewards = member && member.rewards ? member.rewards : {};
   const earnedRewards = Number(member.earnedRewards ?? rewards.earnedRewards ?? Math.floor(Number(member.totalCups || 0) / 10));
-  const giftVoucherTotal = Math.max(0, Number(member.giftVoucherBalance ?? rewards.giftVoucherBalance ?? rewards.giftedRewards ?? 0));
+  const rawGiftVoucherTotal = Math.max(0, Number(member.giftVoucherBalance ?? rewards.giftVoucherBalance ?? rewards.giftedRewards ?? 0));
   const giftVoucherRedeemed = Math.max(0, Number(member.giftVoucherRedeemed ?? member.giftVoucherUsed ?? rewards.giftVoucherRedeemed ?? rewards.giftVoucherUsed ?? 0));
   const giftVoucherReserved = Math.max(0, Number(member.giftVoucherReserved ?? member.giftVoucherReservedRewards ?? rewards.giftVoucherReserved ?? 0));
+  const giftVoucherTotal = Math.max(rawGiftVoucherTotal, giftVoucherRedeemed + giftVoucherReserved);
   const rewardRedeemed = Number(member.rewardRedeemed ?? member.rewardsRedeemed ?? rewards.redeemedRewards ?? 0);
   const rewardReserved = Number(member.rewardReserved ?? member.rewardsReserved ?? rewards.reservedRewards ?? 0);
   const earnedAvailable = Math.max(0, earnedRewards - rewardRedeemed - rewardReserved);
@@ -4745,8 +4747,8 @@ function buildGiftVoucherMemberListMarkupV269(members) {
   active.slice(0, 80).forEach(member => {
     const phone = normalizePhone(member.phone);
     const name = member.name || "未命名";
-    const gifted = giftVoucherCountV269(member);
-    const label = ("🎁 " + name + "｜" + phone + (gifted ? "｜已贈 " + gifted + "張" : "")).slice(0, 60);
+    const stats = giftVoucherStatsV269(member);
+    const label = ("🎁 " + name + "｜" + phone + (stats.gifted ? "｜店員券 " + stats.giftAvailable + "/" + stats.gifted + "張" : "")).slice(0, 60);
     rows.push([{ text: label, callback_data: "gift_voucher_member:" + phone }]);
   });
   if (!active.length) rows.push([{ text: "暫無有效會員", callback_data: "gift_voucher_menu:x" }]);
@@ -4760,15 +4762,17 @@ function giftVoucherStatsV269(member) {
   const rewards = member.rewards || {};
   const totalCups = Number(member.totalCups || rewards.totalCups || 0);
   const earned = Number(member.earnedRewards ?? rewards.earnedRewards ?? Math.floor(totalCups / 10));
-  const gifted = giftVoucherCountV269(member);
-  const giftRedeemed = Number(member.giftVoucherRedeemed ?? member.giftVoucherUsed ?? rewards.giftVoucherRedeemed ?? rewards.giftVoucherUsed ?? 0);
-  const giftReserved = Number(member.giftVoucherReserved ?? member.giftVoucherReservedRewards ?? rewards.giftVoucherReserved ?? 0);
+  const rawGifted = giftVoucherCountV269(member);
+  const giftRedeemed = Math.max(0, Number(member.giftVoucherRedeemed ?? member.giftVoucherUsed ?? rewards.giftVoucherRedeemed ?? rewards.giftVoucherUsed ?? 0));
+  const giftReserved = Math.max(0, Number(member.giftVoucherReserved ?? member.giftVoucherReservedRewards ?? rewards.giftVoucherReserved ?? 0));
+  const minGifted = giftRedeemed + giftReserved;
+  const gifted = Math.max(rawGifted, minGifted);
   const redeemed = Number(member.rewardRedeemed ?? member.rewardsRedeemed ?? rewards.redeemedRewards ?? 0);
   const reserved = Number(member.rewardReserved ?? member.rewardsReserved ?? rewards.reservedRewards ?? 0);
   const earnedAvailable = Math.max(0, earned - redeemed - reserved);
   const giftAvailable = Math.max(0, gifted - giftRedeemed - giftReserved);
   const available = Math.max(0, earnedAvailable + giftAvailable);
-  return { totalCups, earned, gifted, giftRedeemed, giftReserved, giftAvailable, redeemed, reserved, available };
+  return { totalCups, earned, rawGifted, gifted, giftRedeemed, giftReserved, minGifted, giftAvailable, redeemed, reserved, available };
 }
 
 function buildGiftVoucherAdjustTextV269(member, delta) {
@@ -4873,7 +4877,7 @@ async function handleGiftVoucherActionV269(env, cq, data) {
 
     const enrichedForClamp = await enrichMemberStatsForTelegram(env, loaded.member).catch(() => loaded.member);
     const statsForClamp = giftVoucherStatsV269(enrichedForClamp);
-    const before = giftVoucherCountV269(enrichedForClamp);
+    const before = statsForClamp.gifted;
     const delta = clampGiftVoucherDeltaV269(requested, before, statsForClamp.giftRedeemed + statsForClamp.giftReserved);
     if (!delta) {
       const enrichedNoChange = await enrichMemberStatsForTelegram(env, loaded.member).catch(() => loaded.member);

@@ -964,9 +964,10 @@ function sky31RewardsFromMemberV192(member) {
   const totalCups = Number(member.totalCups || member.cups || member.totalItems || member.orderCups || 0);
   const redeemed = Number(member.rewardRedeemed || member.rewardsRedeemed || 0);
   const reserved = Number(member.rewardReserved || member.rewardsReserved || member.pendingRewardUse || 0);
-  const gifted = Math.max(0, Number(member.giftVoucherBalance || member.giftVouchers || member.manualGiftVouchers || 0));
+  const rawGifted = Math.max(0, Number(member.giftVoucherBalance || member.giftVouchers || member.manualGiftVouchers || 0));
   const giftRedeemed = Math.max(0, Number(member.giftVoucherRedeemed || member.giftVoucherUsed || 0));
   const giftReserved = Math.max(0, Number(member.giftVoucherReserved || member.giftVoucherReservedRewards || 0));
+  const gifted = Math.max(rawGifted, giftRedeemed + giftReserved);
   const giftAvailable = Math.max(0, gifted - giftRedeemed - giftReserved);
   const earned = Math.floor(totalCups / 10);
   const earnedAvailable = Math.max(0, earned - redeemed - reserved);
