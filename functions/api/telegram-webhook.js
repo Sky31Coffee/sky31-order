@@ -1585,14 +1585,14 @@ async function saveAndRefresh(env, cq, order) {
   order.updatedAt = now;
   order.statusUpdatedAt = now;
 
-  // V170: keep edited orders long-term. Do not revert to old 14-day TTL when Telegram buttons are pressed.
-  await env.ORDERS.put("order:" + order.orderNo, JSON.stringify(order), { expirationTtl: 60 * 60 * 24 * 3650 });
+  // V292-D1-Telegram-Parallel: start D1 save and Telegram message edit at the same time.
+  // The Telegram operator sees the message/buttons update faster, while the order status is still saved to D1.
+  const saveJob = env.ORDERS.put("order:" + order.orderNo, JSON.stringify(order), { expirationTtl: 60 * 60 * 24 * 3650 });
+  const editJob = editTelegramMessage(env, cq.message.chat.id, cq.message.message_id, buildTelegramText(order), buildReplyMarkup(order));
+  const results = await Promise.allSettled([saveJob, editJob]);
+  if (results[0] && results[0].status === "rejected") throw results[0].reason;
 
-  // V290-D1-Fast: update the Telegram message first.
-  // D1 is immediate, but member lifetime-stat recalculation scans order history and can make
-  // Telegram buttons feel slow. Run that recalculation in the background when possible.
-  await editTelegramMessage(env, cq.message.chat.id, cq.message.message_id, buildTelegramText(order), buildReplyMarkup(order));
-
+  // Keep lifetime member-stat recalculation in the background.
   const recalcJob = recalcMemberFromOrdersV199(env, order).catch(() => {});
   if (env && typeof env.__SKY31_WAIT_UNTIL === "function") {
     env.__SKY31_WAIT_UNTIL(recalcJob);
