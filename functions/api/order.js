@@ -870,7 +870,7 @@ async function updateMemberAfterOrder(env, order, ttl) {
   }
 
   const cups = orderLoyaltyCupsV275(order);
-  const total = Number(order.totalAmount || cartTotal(order.cart) || 0);
+  const total = sky31PaidAmountV284(order);
 
   member.phone = normalizePhone(member.phone || phone);
   if (order.memberName || order.customerName) {
@@ -981,6 +981,14 @@ function sky31OrderDrinkCupCountV192(items) {
   }, 0);
 }
 
+
+function sky31PaidAmountV284(order, fallbackCart) {
+  if (order && order.totalAmount !== undefined && order.totalAmount !== null) {
+    const n = Number(order.totalAmount);
+    return Number.isFinite(n) ? Math.max(0, Math.round(n * 100) / 100) : 0;
+  }
+  return Math.max(0, Math.round(Number(cartTotal(fallbackCart || (order && order.cart) || []) || 0) * 100) / 100);
+}
 
 function sky31VoucherUseCountV275(order) {
   if (!order) return 0;
@@ -1123,7 +1131,7 @@ async function sky31RecomputeMemberForRewardV199(env, member, phone) {
     if (success) {
       totalOrders += 1;
       totalCups += sky31LoyaltyCupCountV275(order);
-      totalSpent += Number(order.totalAmount || 0);
+      totalSpent += sky31PaidAmountV284(order);
       rewardRedeemed += normalUse;
       giftVoucherRedeemed += giftUse;
       redeemedFreeCupsTotalV279 += sky31VoucherUseCountV275(order);

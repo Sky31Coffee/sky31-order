@@ -923,7 +923,15 @@ function tgActiveVoucherLocksV272(member, knownOrderNos) {
 }
 
 
-async function enrichMemberStatsForTelegram(env, member) {
+async function sky31PaidAmountV284(order, fallbackCart) {
+  if (order && order.totalAmount !== undefined && order.totalAmount !== null) {
+    const n = Number(order.totalAmount);
+    return Number.isFinite(n) ? Math.max(0, Math.round(n * 100) / 100) : 0;
+  }
+  return Math.max(0, Math.round(Number(cartTotalForMemberQuery(fallbackCart || (order && order.cart) || []) || 0) * 100) / 100);
+}
+
+function enrichMemberStatsForTelegram(env, member) {
   const phone = normalizePhone(member.phone);
   const prefix = "phone:" + phone + ":";
   let cursor = undefined;
@@ -956,7 +964,7 @@ async function enrichMemberStatsForTelegram(env, member) {
       const orderCupCountV278 = orderCupsForMemberQuery(order);
       const voucherCupCountV278 = tgVoucherUseCountV275(order);
       const cups = tgLoyaltyCupsForMemberQueryV275(order);
-      const amount = Number(order.totalAmount || cartTotalForMemberQuery(order.cart) || 0);
+      const amount = sky31PaidAmountV284(order);
       const success = sky31TelegramSuccessfulOrderV199(order);
       const cancelled = isCancelledOrder(order);
       const earnedUse = tgRewardEarnedUseFromOrderV270(order);
@@ -1085,7 +1093,7 @@ function buildMemberDetailText(member, deleted = false) {
     lines.push("");
     lines.push("最近訂單：");
     recent.forEach(order => {
-      lines.push("#" + order.orderNo + "｜" + statusLabel(order.status) + "｜" + Number(order.cups || 0) + "杯｜MOP " + String(Math.round(Number(order.totalAmount || 0) * 100) / 100));
+      lines.push("#" + order.orderNo + "｜" + statusLabel(order.status) + "｜" + Number(order.cups || 0) + "杯｜MOP " + String(Math.round(sky31PaidAmountV284(order) * 100) / 100));
     });
   }
 
@@ -1397,7 +1405,7 @@ async function restoreMemberOrders(env, phone) {
     if (order && sky31TelegramSuccessfulOrderV199(order)) {
       restoredOrders += 1;
       totalCups += orderLoyaltyCupsForMemberRestoreV275(order);
-      totalSpent += Number(order.totalAmount || cartTotalForMemberRestore(order.cart) || 0);
+      totalSpent += sky31PaidAmountV284(order, order.cart);
       recentOrderNos.push(orderNo);
 
       if (!lastOrderAt || String(order.createdAt || "").localeCompare(String(lastOrderAt || "")) > 0) {
@@ -4067,7 +4075,7 @@ async function recalcMemberFromOrdersV199(env, changedOrder) {
       successfulNos.push(String(order.orderNo || no));
       totalOrders += 1;
       totalCups += Math.max(0, Number(tgLoyaltyCupsForMemberQueryV275(order) || 0));
-      totalSpent += Math.max(0, Number(order.totalAmount || cartTotalForMemberQuery(order.cart) || 0));
+      totalSpent += sky31PaidAmountV284(order);
       rewardRedeemed += earnedUse;
       giftVoucherRedeemed += giftUse;
       redeemedFreeCupsTotalV279 += tgVoucherUseCountV275(order);
@@ -4598,7 +4606,7 @@ buildMemberDetailText = function(member, deleted = false) {
       const freeCups = Number(order.redeemedFreeCups || order.freeRedeemedCups || order.voucherCups || 0);
       const statusText = typeof statusLabel === "function" ? statusLabel(order.status || "pending") : (order.status || "-");
       const cupText = (statusText === "已領取" ? "已領取 " : "") + orderCups + "杯" + (freeCups ? "｜累計+" + loyaltyCups + "｜兌換免費" + freeCups + "杯" : "");
-      lines.push("• #" + (order.orderNo || "-") + "｜" + statusText + "｜" + cupText + "｜MOP " + String(Math.round(Number(order.totalAmount || 0) * 100) / 100));
+      lines.push("• #" + (order.orderNo || "-") + "｜" + statusText + "｜" + cupText + "｜MOP " + String(Math.round(sky31PaidAmountV284(order) * 100) / 100));
     });
   }
 

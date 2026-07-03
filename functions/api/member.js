@@ -354,7 +354,7 @@ async function enrichMemberWithOrders(env, member) {
     const orderCupCountV278 = orderCups(order);
     const voucherCupCountV278 = memberVoucherUseCountV275(order);
     const cups = memberLoyaltyCupsV275(order);
-    const amount = Number(order.totalAmount || cartTotal(order.cart) || 0);
+    const amount = sky31PaidAmountV284(order);
     const successful = isMemberLifetimeSuccessfulOrderV202(order);
 
     const normalRewardUse = memberRewardEarnedUseFromOrderV270(order);
@@ -744,6 +744,14 @@ function memberPhoneCandidates(phone) {
   return phone ? [phone] : [];
 }
 
+
+function sky31PaidAmountV284(order, fallbackCart) {
+  if (order && order.totalAmount !== undefined && order.totalAmount !== null) {
+    const n = Number(order.totalAmount);
+    return Number.isFinite(n) ? Math.max(0, Math.round(n * 100) / 100) : 0;
+  }
+  return Math.max(0, Math.round(Number(cartTotal(fallbackCart || (order && order.cart) || []) || 0) * 100) / 100);
+}
 
 function memberVoucherUseCountV275(order) {
   if (!order) return 0;

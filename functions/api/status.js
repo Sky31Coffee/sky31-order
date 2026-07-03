@@ -196,6 +196,14 @@ function cartTotal(cart) {
 }
 
 
+function sky31PaidAmountV284(order, fallbackCart) {
+  if (order && order.totalAmount !== undefined && order.totalAmount !== null) {
+    const n = Number(order.totalAmount);
+    return Number.isFinite(n) ? Math.max(0, Math.round(n * 100) / 100) : 0;
+  }
+  return Math.max(0, Math.round(Number(cartTotal(fallbackCart || (order && order.cart) || []) || 0) * 100) / 100);
+}
+
 function cartCupsV278(cart) {
   return (Array.isArray(cart) ? cart : []).reduce((sum, item) => {
     const qty = Number(item.qty || item.quantity || 1);
@@ -230,7 +238,7 @@ function formatOrder(order) {
     status: order.status || "pending",
     displayStatus: order.status || "pending",
     pickupTime: order.pickupTime || order.pickup || "",
-    totalAmount: Number(order.totalAmount || cartTotal(cart) || 0),
+    totalAmount: sky31PaidAmountV284(order, cart),
     totalCups: orderCups,
     orderCups,
     totalOrderCups: orderCups,
