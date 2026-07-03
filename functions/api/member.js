@@ -1,3 +1,37 @@
+
+
+function normalizeBirthdayV265(value) {
+  let s = String(value || "").trim();
+  if (!s) return "";
+  s = s.replace(/[．。]/g, ".")
+       .replace(/[\/\.]/g, "-")
+       .replace(/年/g, "-")
+       .replace(/月/g, "-")
+       .replace(/日/g, "")
+       .replace(/\s+/g, "");
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (!m) {
+    const compact = s.match(/^(\d{4})(\d{2})(\d{2})$/);
+    if (compact) m = compact;
+  }
+  if (!m) return "";
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  if (y < 1900 || y > 2100 || mo < 1 || mo > 12 || d < 1 || d > 31) return "";
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() + 1 !== mo || dt.getUTCDate() !== d) return "";
+  return String(y).padStart(4, "0") + "-" + String(mo).padStart(2, "0") + "-" + String(d).padStart(2, "0");
+}
+
+function formatMemberNameV265(name) {
+  name = String(name || "").trim().replace(/\s+/g, " ");
+  if (!name) return "";
+  return name.replace(/\b([a-zA-Z])([a-zA-Z'’-]*)\b/g, function(_, first, rest) {
+    return first.toUpperCase() + String(rest || "");
+  });
+}
+
 export async function onRequestGet(context) {
   const { request, env } = context;
   const url = new URL(request.url);
@@ -108,7 +142,7 @@ export async function onRequestPost(context) {
 
     if (String(body.action || "") === "setBirthday") {
       const phoneForBirthday = normalizePhone(body.phone || "");
-      const birthdayForMember = String(body.birthday || "").trim();
+      const birthdayForMember = normalizeBirthdayV265(body.birthday || "");
 
       if (!phoneForBirthday) return json({ ok: false, error: "請先登入會員" }, 400);
       if (!isValidBirthdayV211(birthdayForMember)) return json({ ok: false, error: "生日日期格式不正確" }, 400);
@@ -131,12 +165,12 @@ export async function onRequestPost(context) {
     }
 
     const phone = normalizePhone(body.phone || "");
-    const name = String(body.name || body.customerName || "").trim();
-    const birthday = String(body.birthday || "").trim();
+    const name = formatMemberNameV265(body.name || body.customerName || "");
+    const birthday = normalizeBirthdayV265(body.birthday || "");
     const note = String(body.note || "").trim();
 
-    if (!phone || !name) {
-      return json({ ok: false, error: "請輸入姓名和手機號碼" }, 400);
+    if (!phone || !name || !birthday) {
+      return json({ ok: false, error: "請輸入姓名、手機號碼和生日" }, 400);
     }
 
     let existing = null;
@@ -717,14 +751,7 @@ function isMemberLifetimeSuccessfulOrderV202(order) {
 
 /* V211: birthday validation and manual tier override for member API. */
 function isValidBirthdayV211(value) {
-  const s = String(value || "").trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
-  const d = new Date(s + "T00:00:00Z");
-  if (Number.isNaN(d.getTime())) return false;
-  const y = String(d.getUTCFullYear()).padStart(4, "0");
-  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(d.getUTCDate()).padStart(2, "0");
-  return y + "-" + m + "-" + day === s;
+  return !!normalizeBirthdayV265(value);
 }
 
 function sky31TierByKeyV211(key) {
@@ -788,8 +815,15 @@ function sky31DisplayTierV216(member, naturalTier) {
 }
 
 function sky31BirthdayVoucherCountV217(member) {
-  const birthday = String((member && member.birthday) || "").trim();
+  member = member || {};
+  const birthday = String(member.birthday || "").trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(birthday)) return 0;
+
+  const tier = sky31DisplayTierV216(member, null);
+  const key = String((tier && tier.key) || member.memberTierKey || member.manualTierKey || "").toLowerCase();
+  const goldOrAbove = key === "gold" || key === "diamond" || key === "blackgold" || key === "vip";
+  if (!goldOrAbove) return 0;
+
   const month = Number(birthday.split("-")[1] || 0);
   const now = new Date();
   return month === now.getUTCMonth() + 1 ? 1 : 0;

@@ -284,8 +284,15 @@ function calcUnitPrice(item) {
 /* V213: final member tier discount calculation, based on backend member record. */
 
 function sky31BirthdayVoucherCountOrderV217(member) {
-  const birthday = String((member && member.birthday) || "").trim();
+  member = member || {};
+  const birthday = String(member.birthday || "").trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(birthday)) return 0;
+
+  const tier = sky31OrderDisplayTierV213(member);
+  const key = String((tier && tier.key) || member.memberTierKey || member.manualTierKey || "").toLowerCase();
+  const goldOrAbove = key === "gold" || key === "diamond" || key === "blackgold" || key === "vip";
+  if (!goldOrAbove) return 0;
+
   const month = Number(birthday.split("-")[1] || 0);
   const now = new Date();
   return month === now.getUTCMonth() + 1 ? 1 : 0;
