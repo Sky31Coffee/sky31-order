@@ -10051,8 +10051,17 @@ function saveCustomerAndSubmit() {
 }
 
 async function submitOrder() {
-  if (!cart.length) return alert("請先選擇餐品");
-  if (!val("name") || !val("phone")) { openCustomerModal(true); return; }
+  if (window.__SKY31_ORDER_SUBMITTING_V272) return;
+  window.__SKY31_ORDER_SUBMITTING_V272 = true;
+  var __sky31SubmitButtonV272 = document.querySelector('#cartModal button.primary[onclick*="submitOrder"]');
+  var __sky31SubmitButtonTextV272 = __sky31SubmitButtonV272 ? __sky31SubmitButtonV272.textContent : "";
+  if(__sky31SubmitButtonV272){ __sky31SubmitButtonV272.disabled = true; __sky31SubmitButtonV272.textContent = "提交中..."; }
+  function __sky31UnlockSubmitV272(){
+    window.__SKY31_ORDER_SUBMITTING_V272 = false;
+    if(__sky31SubmitButtonV272){ __sky31SubmitButtonV272.disabled = false; __sky31SubmitButtonV272.textContent = __sky31SubmitButtonTextV272 || "確認訂單 Checkout"; }
+  }
+  if (!cart.length){ __sky31UnlockSubmitV272(); return alert("請先選擇餐品"); }
+  if (!val("name") || !val("phone")) { __sky31UnlockSubmitV272(); openCustomerModal(true); return; }
 
   const orderText = makeRobotOrder();
 
@@ -10076,6 +10085,7 @@ async function submitOrder() {
     const data = await res.json();
 
     if (!data.ok) {
+      __sky31UnlockSubmitV272();
       alert(data.error || "提交失敗，請稍後再試");
       return;
     }
@@ -10092,6 +10102,7 @@ async function submitOrder() {
 
     return;
   } catch (e) {
+    __sky31UnlockSubmitV272();
     alert("提交失敗，請檢查網絡後再試");
   }
 }
@@ -11106,12 +11117,22 @@ window.addEventListener("load", function() {
   };
 
   window.submitOrder = async function(){
+    if(window.__SKY31_ORDER_SUBMITTING_V272) return;
+    window.__SKY31_ORDER_SUBMITTING_V272 = true;
+    var __sky31SubmitButtonV272 = document.querySelector('#cartModal button.primary[onclick*="submitOrder"]');
+    var __sky31SubmitButtonTextV272 = __sky31SubmitButtonV272 ? __sky31SubmitButtonV272.textContent : "";
+    if(__sky31SubmitButtonV272){ __sky31SubmitButtonV272.disabled = true; __sky31SubmitButtonV272.textContent = "提交中..."; }
+    function __sky31UnlockSubmitV272(){
+      window.__SKY31_ORDER_SUBMITTING_V272 = false;
+      if(__sky31SubmitButtonV272){ __sky31SubmitButtonV272.disabled = false; __sky31SubmitButtonV272.textContent = __sky31SubmitButtonTextV272 || "確認訂單 Checkout"; }
+    }
     if(!cart.length){
       var err = document.getElementById("errorMsg");
       if(err){ err.textContent = "請先選擇餐品"; err.style.display = "block"; }
       return;
     }
     if(!val("name") || !val("phone")){
+      __sky31UnlockSubmitV272();
       openCustomerModal(true);
       return;
     }
@@ -11139,6 +11160,7 @@ window.addEventListener("load", function() {
       if(!data.ok){
         var e = document.getElementById("errorMsg");
         if(e){ e.textContent = data.error || "提交失敗，請稍後再試"; e.style.display = "block"; }
+        __sky31UnlockSubmitV272();
         return;
       }
 
@@ -11152,6 +11174,7 @@ window.addEventListener("load", function() {
     }catch(e){
       var er = document.getElementById("errorMsg");
       if(er){ er.textContent = "提交失敗，請檢查網絡後再試"; er.style.display = "block"; }
+      __sky31UnlockSubmitV272();
     }
   };
 
