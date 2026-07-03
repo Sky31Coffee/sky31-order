@@ -1,0 +1,47 @@
+Sky31 V50 Order System Setup
+
+這版加入：
+1. Telegram「✅ 完成訂單」按鈕
+2. 網站右上角「📋 查詢訂單」
+3. Cloudflare KV 儲存訂單狀態
+4. 完整日期顯示，避免明天早上混淆
+
+Cloudflare 需要設定：
+
+A. 建立 KV
+Cloudflare Dashboard → Workers & Pages → KV
+建立一個 namespace，例如：SKY31_ORDERS
+
+B. 綁定 KV 到 Pages Project
+Workers & Pages → sky31 → Settings → Bindings → KV namespace bindings
+Variable name 必須填：
+ORDERS
+
+C. 設定環境變數
+Workers & Pages → sky31 → Settings → Environment variables
+加入：
+TELEGRAM_BOT_TOKEN = 你的 Telegram Bot Token
+TELEGRAM_CHAT_ID = 你的 Telegram Chat ID
+
+Cloudflare 文件說明：Pages Functions 可在 dashboard 加 KV/D1 bindings；Workers 環境變數會透過 env 傳入 Function。請見官方 Cloudflare Pages bindings / Workers environment variables 文件。
+
+D. 上傳本 ZIP 解壓後的所有檔案到 Cloudflare Pages
+
+E. 設定 Telegram Webhook
+部署後打開以下網址，記得替換 TOKEN：
+
+https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook?url=https://sky31-order.pages.dev/api/telegram-webhook
+
+例如：
+https://api.telegram.org/bot123456:ABC/setWebhook?url=https://sky31-order.pages.dev/api/telegram-webhook
+
+F. 測試
+1. 網站下單
+2. Telegram 收到訂單
+3. Telegram 訊息下方應出現「✅ 完成訂單 #A001」
+4. 按下完成
+5. 網站右上角 📋 輸入訂單號和電話查詢，應顯示已完成
+
+注意：
+- 不要把 Token 寫入 index.html
+- Token 只放 Cloudflare Environment variables
