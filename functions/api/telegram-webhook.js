@@ -757,7 +757,7 @@ function buildMemberListMarkup(members) {
   members.slice(0, 80).forEach(member => {
     const rawPhone = normalizePhone(member.phone);
     const lookupPhone = memberLookupPhoneV221(member);
-    // V237: show the phone exactly as stored/input; do not auto-prefix 853.
+    // V237: show the phone exactly as stored/input; 保持原始電話號碼.
     const displayPhone = rawPhone;
     const name = member.name || "未命名";
     const deleted = !!member._deleted;
@@ -783,16 +783,9 @@ async function getMemberForTelegramView(env, phone, deleted) {
   const primaryPrefix = deleted ? "member_deleted:" : "member:";
   const fallbackPrefixes = deleted ? ["member_deleted:", "member:"] : ["member:", "member_deleted:"];
 
-  function candidatePhonesFromV221(p) {
-    const s = normalizePhone(p);
-    const last8 = s.length >= 8 ? s.slice(-8) : s;
-    const out = [];
-    if (s) out.push(s);
-    if (last8) {
-      out.push(last8);
-      out.push("853" + last8);
-    }
-    return Array.from(new Set(out.filter(Boolean)));
+  function candidatePhonesFromV221(phone) {
+    phone = normalizePhone(phone || "");
+    return phone ? [phone] : [];
   }
 
   // 1) Try direct keys first.
@@ -818,7 +811,7 @@ async function getMemberForTelegramView(env, phone, deleted) {
   }
 
   // 2) Full scan fallback by last 8 digits. This is essential after merge cleanup
-  // where member:xxxx alias may be deleted and only member:853xxxx remains.
+  // where member:xxxx alias may be deleted and only member:xxxx remains.
   for (const prefix of fallbackPrefixes) {
     let cursor = undefined;
     do {
@@ -3981,24 +3974,12 @@ function sky31TelegramSuccessfulOrderV199(order) {
 function sky31SamePhoneV199(a, b) {
   a = normalizePhone(a);
   b = normalizePhone(b);
-  if (!a || !b) return false;
-  if (a === b) return true;
-  if (a.length > 3 && a.startsWith("853") && a.slice(3) === b) return true;
-  if (b.length > 3 && b.startsWith("853") && b.slice(3) === a) return true;
-  const aa = a.length > 8 ? a.slice(-8) : a;
-  const bb = b.length > 8 ? b.slice(-8) : b;
-  return !!aa && aa === bb;
+  return !!a && !!b && a === b;
 }
 
 function sky31PhoneCandidatesV239(phone) {
   phone = normalizePhone(phone);
-  const out = [];
-  function add(v) { v = normalizePhone(v); if (v && !out.includes(v)) out.push(v); }
-  add(phone);
-  if (phone.length === 8) add("853" + phone);
-  if (phone.length > 8) add(phone.slice(-8));
-  if (phone.length > 3 && phone.startsWith("853")) add(phone.slice(3));
-  return out;
+  return phone ? [phone] : [];
 }
 
 async function sky31CollectOrderNosForMemberV239(env, phone, changedOrderNo) {
@@ -4150,7 +4131,7 @@ function phoneLast8V223(phone) {
 }
 
 function canonicalPhoneV223(phone) {
-  // V237: no longer force-add Macau 853. Keep the customer's input digits as canonical.
+  // V237: no longer force-add Macau . Keep the customer's input digits as canonical.
   return normalizePhone(phone || "");
 }
 
@@ -5057,34 +5038,26 @@ buildCommandMenuMarkupV183 = function() {
 };
 
 
-/* V237 member admin phone/delete fix: no forced 853, robust legacy alias cleanup. */
+/* V237 member admin phone/delete fix: no legacy prefix, robust legacy alias cleanup. */
 function memberLookupPhoneV221(member) {
   member = member || {};
   return normalizePhone(member.phone || String(member._kvKey || "").replace(/^member_deleted:|^member:/, ""));
 }
 
-function phoneWithoutForced853V237(phone) {
-  phone = normalizePhone(phone || "");
-  if (phone.length > 3 && phone.startsWith("853")) return phone.slice(3);
-  return phone;
+function phoneWithoutForcedV237(phone) {
+  return normalizePhone(phone || "");
 }
 
 function legacyMemberPhonesV237(phone) {
-  const p = normalizePhone(phone || "");
-  const stripped = phoneWithoutForced853V237(p);
-  const last8 = p.length >= 8 ? p.slice(-8) : p;
-  const strippedLast8 = stripped.length >= 8 ? stripped.slice(-8) : stripped;
-  const out = [];
-  [p, stripped, last8, strippedLast8].forEach(x => { if (x) out.push(x); });
-  [last8, strippedLast8, stripped].forEach(x => { if (x) out.push("853" + x); });
-  return Array.from(new Set(out.map(normalizePhone).filter(Boolean)));
+  phone = normalizePhone(phone || "");
+  return phone ? [phone] : [];
 }
 
 async function findMemberRecordV237(env, phone, preferDeleted) {
   phone = normalizePhone(phone || "");
   const candidates = legacyMemberPhonesV237(phone);
   const prefixes = preferDeleted ? ["member_deleted:", "member:"] : ["member:", "member_deleted:"];
-  const wantedLast = phone.length >= 8 ? phone.slice(-8) : phoneWithoutForced853V237(phone);
+  const wantedLast = phone.length >= 8 ? phone.slice(-8) : phoneWithoutForcedV237(phone);
 
   for (const prefix of prefixes) {
     for (const c of candidates) {
@@ -5095,7 +5068,7 @@ async function findMemberRecordV237(env, phone, preferDeleted) {
         const member = JSON.parse(raw);
         if (!member) continue;
         const stored = normalizePhone(member.phone || c);
-        const storedLast = stored.length >= 8 ? stored.slice(-8) : phoneWithoutForced853V237(stored);
+        const storedLast = stored.length >= 8 ? stored.slice(-8) : phoneWithoutForcedV237(stored);
         if (stored === phone || candidates.includes(stored) || storedLast === wantedLast || normalizePhone(c).slice(-8) === wantedLast) {
           member.phone = stored || c || phone;
           member._kvKey = key;
@@ -5115,7 +5088,7 @@ async function findMemberRecordV237(env, phone, preferDeleted) {
         checked += 1;
         if (checked > 8000) break;
         const keyPhone = normalizePhone(String(key.name || "").replace(prefix, ""));
-        const keyLast = keyPhone.length >= 8 ? keyPhone.slice(-8) : phoneWithoutForced853V237(keyPhone);
+        const keyLast = keyPhone.length >= 8 ? keyPhone.slice(-8) : phoneWithoutForcedV237(keyPhone);
         if (wantedLast && keyLast !== wantedLast && !candidates.includes(keyPhone)) continue;
         const raw = await env.ORDERS.get(key.name);
         if (!raw) continue;
@@ -5123,7 +5096,7 @@ async function findMemberRecordV237(env, phone, preferDeleted) {
           const member = JSON.parse(raw);
           if (!member) continue;
           const stored = normalizePhone(member.phone || keyPhone);
-          const storedLast = stored.length >= 8 ? stored.slice(-8) : phoneWithoutForced853V237(stored);
+          const storedLast = stored.length >= 8 ? stored.slice(-8) : phoneWithoutForcedV237(stored);
           if (storedLast === wantedLast || keyLast === wantedLast || candidates.includes(stored) || candidates.includes(keyPhone)) {
             member.phone = stored || keyPhone || phone;
             member._kvKey = key.name;
@@ -5305,8 +5278,8 @@ function memberPurgeCandidatePhonesV238(phone) {
   const out = [];
   if (p) out.push(p);
   if (p.length >= 8) out.push(p.slice(-8));
-  if (p.length > 3 && p.startsWith("853")) out.push(p.slice(3));
-  if (p.length === 8) out.push("853" + p);
+  if (p.length > 3 && p.startsWith("")) out.push(p.slice(3));
+  if (p.length === 8) out.push("" + p);
   return Array.from(new Set(out.map(normalizePhone).filter(Boolean)));
 }
 
@@ -5314,7 +5287,7 @@ function memberPurgeLastTokenV238(phone) {
   const p = normalizePhone(phone || "");
   if (!p) return "";
   if (p.length >= 8) return p.slice(-8);
-  if (p.length > 3 && p.startsWith("853")) return p.slice(3);
+  if (p.length > 3 && p.startsWith("")) return p.slice(3);
   return p;
 }
 
@@ -5709,7 +5682,7 @@ handleMemberAction = async function(env, cq, data) {
         "",
         "目前狀態：" + (found.deleted ? "已刪除會員" : "有效會員"),
         "",
-        "確認後會永久刪除此會員資料、舊 853 alias、已刪除備份、會員訂單索引、相關訂單及 purge 標記。",
+        "確認後會永久刪除此會員資料、舊  alias、已刪除備份、會員訂單索引、相關訂單及 purge 標記。",
         "永久刪除後不會再於 Telegram 會員列表顯示；如日後重新註冊，會以全新會員資料開始。"
       ].join("\n");
       await editTelegramMessage(env, chatId, messageId, text, {

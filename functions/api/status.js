@@ -110,26 +110,17 @@ async function listKeys(env, prefix, limit, callback) {
 
 function phoneCandidates(phone) {
   phone = normalizePhone(phone);
-  const out = [];
-  if (phone) out.push(phone);
-  if (phone.length === 8) out.push("853" + phone);
-  if (phone.length === 11 && phone.startsWith("853")) out.push(phone.slice(3));
-  return Array.from(new Set(out.filter(Boolean)));
+  return phone ? [phone] : [];
 }
 
 function phoneWithoutMacauCode(phone) {
-  phone = normalizePhone(phone);
-  // V237: support old records accidentally saved with 853 prefix of any length.
-  if (phone.length > 3 && phone.startsWith("853")) return phone.slice(3);
-  return phone;
+  return normalizePhone(phone || "");
 }
 
 function samePhone(a, b) {
   a = normalizePhone(a);
   b = normalizePhone(b);
-  if (!a || !b) return false;
-  if (a === b) return true;
-  return phoneWithoutMacauCode(a) === phoneWithoutMacauCode(b);
+  return !!a && !!b && a === b;
 }
 
 function latestFormattedOrderTime(order) {

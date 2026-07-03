@@ -55,31 +55,11 @@ function memberRegistrationPurgeKeysV261(phone) {
   phone = normalizePhone(phone || "");
   const out = new Set();
   if (!phone) return [];
-  const last = phone.length >= 8 ? phone.slice(-8) : phone;
-
   out.add("member_deleted:" + phone);
   out.add("member_purged:" + phone);
-  if (last) {
-    out.add("member_tier_override:" + last);
-    out.add("member_purged:last8:" + last);
-  }
-
-  // Clean existing legacy blocks only; this does not create or normalize any 853 member.
-  if (phone.length === 8) {
-    out.add("member:" + "853" + phone);
-    out.add("member_deleted:" + "853" + phone);
-    out.add("member_purged:" + "853" + phone);
-  }
-  if (phone.length > 3 && phone.startsWith("853")) {
-    const local = phone.slice(3);
-    out.add("member:" + local);
-    out.add("member_deleted:" + local);
-    out.add("member_purged:" + local);
-    out.add("member_tier_override:" + local.slice(-8));
-    out.add("member_purged:last8:" + local.slice(-8));
-  }
-
-  return Array.from(out).filter(Boolean);
+  out.add("member_tier_override:" + phone);
+  out.add("member_purged:last8:" + phone);
+  return Array.from(out);
 }
 
 async function clearMemberRegistrationBlocksV261(env, phone) {
@@ -212,22 +192,48 @@ export async function onRequestPost(context) {
   }
 }
 
+
+function memberLookupPhonesV281(phone) {
+  phone = normalizePhone(phone || "");
+  return phone ? [phone] : [];
+}
+
 async function loadMember(env, phone) {
   phone = normalizePhone(phone);
   if (!phone) throw new Error("請輸入手機號碼");
 
-  const raw = await env.ORDERS.get("member:" + phone);
+  const candidates = memberLookupPhonesV281(phone);
+  let raw = null;
+  let foundKey = "";
+  for (const candidate of candidates) {
+    const key = "member:" + candidate;
+    raw = await env.ORDERS.get(key);
+    if (raw) { foundKey = key; break; }
+  }
   if (!raw) throw new Error("會員資料不存在或已被刪除，請重新登入或重新註冊");
 
   let member = null;
   try { member = JSON.parse(raw); } catch (_) { member = null; }
   if (!member || member.deletedAt) throw new Error("會員資料不存在或已被刪除，請重新登入或重新註冊");
 
-  member.phone = normalizePhone(member.phone || phone) || phone;
-  if (member.phone !== phone) member.phone = phone;
+  const storedPhone = normalizePhone(member.phone || foundKey.replace(/^member:/, ""));
+  member.phone = storedPhone || phone;
+  member._kvKey = foundKey;
 
   const override = await readMemberTierOverrideV262(env, phone);
-  return await enrichMemberWithOrders(env, applyMemberTierOverrideV262(member, override));
+  const enriched = await enrichMemberWithOrders(env, applyMemberTierOverrideV262(member, override));
+
+  // V281: if Telegram wrote to a legacy/alias key, sync a copy to the exact key used by the storefront.
+  try {
+    const canonicalKey = "member:" + phone;
+    if (canonicalKey !== foundKey) {
+      const copy = { ...enriched, phone: phone, _syncedFrom: foundKey, updatedAt: new Date().toISOString() };
+      await env.ORDERS.put(canonicalKey, JSON.stringify(copy), { expirationTtl: 60 * 60 * 24 * 3650 });
+      enriched.phone = phone;
+    }
+  } catch (_) {}
+
+  return enriched;
 }
 
 
@@ -428,6 +434,8 @@ async function enrichMemberWithOrders(env, member) {
   const scannedRewardRedeemed = redeemedRewards;
   const scannedRewardReserved = reservedRewards;
   const scannedGiftVoucherReserved = giftVoucherReserved;
+  const rawGiftVoucherBalanceV281 = Math.max(0, Number(member.giftVoucherBalance || member.giftVouchers || member.manualGiftVouchers || 0));
+  const effectiveGiftVoucherBalanceV281 = Math.max(rawGiftVoucherBalanceV281, giftVoucherRedeemed + scannedGiftVoucherReserved);
 
   // V239: use exact recomputed values, not Math.max(old, scanned).
   // Math.max prevented cups/free-drink counts from decreasing after undo pickup or cancel.
@@ -447,6 +455,9 @@ async function enrichMemberWithOrders(env, member) {
     totalSpent: Math.round(finalTotalSpent * 100) / 100,
     rewardRedeemed: finalRewardRedeemed,
     rewardsRedeemed: finalRewardRedeemed,
+    giftVoucherBalance: effectiveGiftVoucherBalanceV281,
+    giftVouchers: effectiveGiftVoucherBalanceV281,
+    manualGiftVouchers: effectiveGiftVoucherBalanceV281,
     giftVoucherRedeemed,
     giftVoucherUsed: giftVoucherRedeemed,
     rewardReserved: scannedRewardReserved,
@@ -470,6 +481,10 @@ async function enrichMemberWithOrders(env, member) {
       Number(member.totalSpent || 0) !== fixedMember.totalSpent ||
       Number(member.rewardRedeemed || member.rewardsRedeemed || 0) !== Number(fixedMember.rewardRedeemed || 0) ||
       Number(member.rewardReserved || member.rewardsReserved || 0) !== Number(fixedMember.rewardReserved || 0) ||
+      Number(member.giftVoucherBalance || member.giftVouchers || member.manualGiftVouchers || 0) !== Number(fixedMember.giftVoucherBalance || 0) ||
+      Number(member.giftVoucherRedeemed || member.giftVoucherUsed || 0) !== Number(fixedMember.giftVoucherRedeemed || 0) ||
+      Number(member.giftVoucherReserved || member.giftVoucherReservedRewards || 0) !== Number(fixedMember.giftVoucherReserved || 0) ||
+      Number(member.redeemedFreeCups || member.successfulFreeCups || 0) !== Number(fixedMember.redeemedFreeCups || 0) ||
       JSON.stringify(member.recentOrderNos || []) !== JSON.stringify(fixedMember.recentOrderNos || [])
     ) {
       await env.ORDERS.put("member:" + phone, JSON.stringify(fixedMember));
@@ -504,7 +519,9 @@ async function enrichMemberWithOrders(env, member) {
     birthdayUpdatedBy: fixedMember.birthdayUpdatedBy || "",
     rewardRedeemed: Number(fixedMember.rewardRedeemed || 0),
     rewardsRedeemed: Number(fixedMember.rewardRedeemed || 0),
-    giftVoucherBalance: Math.max(0, Number(fixedMember.giftVoucherBalance || fixedMember.giftVouchers || fixedMember.manualGiftVouchers || 0)),
+    giftVoucherBalance: effectiveGiftVoucherBalanceV281,
+    giftVouchers: effectiveGiftVoucherBalanceV281,
+    manualGiftVouchers: effectiveGiftVoucherBalanceV281,
     giftVoucherRedeemed: Number(fixedMember.giftVoucherRedeemed || fixedMember.giftVoucherUsed || 0),
     giftVoucherUsed: Number(fixedMember.giftVoucherRedeemed || fixedMember.giftVoucherUsed || 0),
     giftVoucherUpdatedAt: fixedMember.giftVoucherUpdatedAt || "",
@@ -713,19 +730,13 @@ function normalizePhone(phone) {
 }
 
 function phoneWithoutMacauCode(phone) {
-  phone = normalizePhone(phone);
-  // V237: support old records accidentally saved with 853 prefix of any length.
-  if (phone.length > 3 && phone.startsWith("853")) return phone.slice(3);
-  return phone;
+  return normalizePhone(phone || "");
 }
 
 function samePhoneForMemberLookup(a, b) {
   a = normalizePhone(a);
   b = normalizePhone(b);
-  if (!a || !b) return false;
-  if (a === b) return true;
-  if (phoneWithoutMacauCode(a) === phoneWithoutMacauCode(b)) return true;
-  return false;
+  return !!a && !!b && a === b;
 }
 
 function memberPhoneCandidates(phone) {

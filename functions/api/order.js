@@ -212,8 +212,6 @@ async function ensureActiveMember(env, phone) {
   }
 
   merged.phone = normalizePhone(merged.phone || phone);
-  // V237: preserve existing legacy aliases if they already exist, but do not create
-  // new member:853xxxx aliases for fresh registrations/orders.
   const keysToSave = new Set(matches.map(x => x.key));
   keysToSave.add("member:" + normalizePhone(merged.phone || phone));
   keysToSave.add("member:" + phone);
@@ -770,28 +768,18 @@ function normalizePhone(phone) {
 }
 
 function phoneWithoutMacauCode(phone) {
-  phone = normalizePhone(phone);
-  // V237: accept legacy records that were stored with a forced 853 prefix,
-  // but never require new customer input to be rewritten to 853-prefixed form.
-  if (phone.length > 3 && phone.startsWith("853")) return phone.slice(3);
-  return phone;
+  return normalizePhone(phone || "");
 }
 
 function samePhoneForMemberLookup(a, b) {
   a = normalizePhone(a);
   b = normalizePhone(b);
-  if (!a || !b) return false;
-  if (a === b) return true;
-  return phoneWithoutMacauCode(a) === phoneWithoutMacauCode(b);
+  return !!a && !!b && a === b;
 }
 
 function memberPhoneCandidates(phone) {
   phone = normalizePhone(phone);
-  const out = [];
-  if (phone) out.push(phone);
-  if (phone.length === 8) out.push("853" + phone);
-  if (phone.length === 11 && phone.startsWith("853")) out.push(phone.slice(3));
-  return Array.from(new Set(out.filter(Boolean)));
+  return phone ? [phone] : [];
 }
 
 
@@ -830,8 +818,7 @@ function formatDateTime(d) {
 
 async function saveOrderMemberIndexes(env, order, ttl) {
   // V237: save new order indexes exactly as the customer/member phone is stored.
-  // Legacy 853-prefixed lookups are still supported by status/member queries, but
-  // this function no longer creates fresh 853 aliases.
+  // Only exact stored phone numbers are indexed.
   const phones = [order.phone, order.memberPhone, order.submittedPhone];
 
   const uniquePhones = Array.from(new Set(phones.map(normalizePhone).filter(Boolean)));
