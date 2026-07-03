@@ -10061,6 +10061,19 @@ function saveCustomerAndSubmit() {
 }
 
 
+
+function sky31PaidAmountV284Front(o, fallbackCart) {
+    if (o && o.totalAmount !== undefined && o.totalAmount !== null) {
+      var n = Number(o.totalAmount);
+      return isFinite(n) ? Math.max(0, Math.round(n * 100) / 100) : 0;
+    }
+    try {
+      return Math.max(0, Math.round(Number(cartTotal(fallbackCart || (o && o.cart) || []) || 0) * 100) / 100);
+    } catch(e) {
+      return 0;
+    }
+  }
+
 function sky31HasCartItemsV283() {
   try {
     return Array.isArray(cart) && cart.some(function(item) {
@@ -11257,11 +11270,11 @@ window.addEventListener("load", function() {
                  status === "confirmed" ? "訂單已確認，準備開始製作" :
                  "已下單，等待確定";
       var items = "";
-      var total = Number(o.totalAmount || 0);
+      var total = sky31PaidAmountV284Front(o);
       if(Array.isArray(o.cart) && o.cart.length){
         items = o.cart.map(function(raw){
           var item = enrichedItem(raw);
-          total += o.totalAmount ? 0 : Number(item.subtotal || 0);
+          total += (o.totalAmount !== undefined && o.totalAmount !== null) ? 0 : Number(item.subtotal || 0);
           var name = item.name || item.cn || "-";
           var meta = [
             item.bean ? sky31BeanDisplayV204(item.bean) : "",
@@ -11317,11 +11330,11 @@ window.addEventListener("load", function() {
                  status === "confirmed" ? "訂單已確認，準備開始製作" :
                  "已下單，等待確定";
       var itemHtml = "";
-      var total = Number(o.totalAmount || 0);
+      var total = sky31PaidAmountV284Front(o);
       if(Array.isArray(o.cart) && o.cart.length){
         itemHtml = o.cart.map(function(raw){
           var item = enrichedItem(raw);
-          total += o.totalAmount ? 0 : Number(item.subtotal || 0);
+          total += (o.totalAmount !== undefined && o.totalAmount !== null) ? 0 : Number(item.subtotal || 0);
           var name = item.name || item.cn || "-";
           var meta = [
             item.bean ? sky31BeanDisplayV204(item.bean) : "",
@@ -12187,7 +12200,7 @@ window.addEventListener("load", function() {
         '<div class="member-order-summary">' +
           '<div><div class="member-order-no">#' + esc(o.orderNo || "") + '</div>' +
           '<div class="member-order-meta">' + esc(dateText(o.createdAt)) + '｜' + esc(statusText(o.status)) + '｜' + Number(o.orderCups || o.totalOrderCups || o.totalCups || 0) + ' 杯' + (Number(o.redeemedFreeCups || o.freeRedeemedCups || o.voucherCups || 0) ? '｜累計+' + Number(o.loyaltyCups || o.paidCups || o.accumulatedCups || 0) + '｜兌換免費' + Number(o.redeemedFreeCups || o.freeRedeemedCups || o.voucherCups || 0) : '') + '</div></div>' +
-          '<div class="member-order-total">' + money(o.totalAmount || 0) + '</div>' +
+          '<div class="member-order-total">' + money(sky31PaidAmountV284Front(o)) + '</div>' +
         '</div>' +
         '<button class="member-order-toggle" type="button" onclick="memberToggleOrder(' + globalIdx + ')">查看詳情 ▼</button>' +
         '<div class="member-order-detail">' +
@@ -14128,7 +14141,7 @@ window.addEventListener("load", function() {
         '狀態：' + esc(statusLabel(order.status)) + '<br>' +
         (order.pickupTime ? '取餐時間：' + esc(order.pickupTime) + '<br>' : '') +
         '杯數：' + esc(order.totalCups || 0) + '　' +
-        '金額：MOP ' + esc(order.totalAmount || 0) +
+        '金額：MOP ' + esc(sky31PaidAmountV284Front(order)) +
       '</div>';
   }
 
@@ -14136,7 +14149,7 @@ window.addEventListener("load", function() {
     return '' +
       '<div class="member-notice-mini">' +
         '<strong>#' + esc(order.orderNo || "-") + '｜' + esc(statusLabel(order.status)) + '</strong>' +
-        '<div>杯數：' + esc(order.totalCups || 0) + '　金額：MOP ' + esc(order.totalAmount || 0) + '</div>' +
+        '<div>杯數：' + esc(order.totalCups || 0) + '　金額：MOP ' + esc(sky31PaidAmountV284Front(order)) + '</div>' +
       '</div>';
   }
 
@@ -18948,7 +18961,7 @@ window.addEventListener("load", function() {
     var giftUse = Number(o.rewardGiftUse || 0);
     var earnedUse = Number(o.rewardEarnedUse || 0);
     var voucherUse = Math.max(rewardUse, giftUse + earnedUse + birthday);
-    var total = Number(o.totalAmount || 0);
+    var total = sky31PaidAmountV284Front(o);
     var tierName = String(o.memberTierName || "會員等級優惠");
     var tierDetail = Array.isArray(o.tierDiscountDetails) && o.tierDiscountDetails.length ? "（" + o.tierDiscountDetails.join("、") + "）" : "";
     var freeNames = Array.isArray(o.rewardFreeItems) && o.rewardFreeItems.length ? o.rewardFreeItems.map(function(x){return x.title || x.name || "飲品";}).slice(0,4).join("、") : "";
