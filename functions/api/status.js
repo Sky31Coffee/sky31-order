@@ -197,12 +197,38 @@ function cartTotal(cart) {
 
 
 function sky31PaidAmountV284(order, fallbackCart) {
-  if (order && order.totalAmount !== undefined && order.totalAmount !== null) {
-    const n = Number(order.totalAmount);
-    return Number.isFinite(n) ? Math.max(0, Math.round(n * 100) / 100) : 0;
+  order = order || {};
+  const round2 = n => Math.max(0, Math.round(Number(n || 0) * 100) / 100);
+
+  const rewardDiscount = Math.max(0, Number(order.rewardDiscount || 0));
+  const tierDiscount = Math.max(0, Number(order.tierDiscount || 0));
+  const hasVoucherUse =
+    Math.max(0, Number(order.rewardUse || order.rewardUseRequested || 0)) > 0 ||
+    Math.max(0, Number(order.rewardGiftUse || 0)) > 0 ||
+    Math.max(0, Number(order.rewardEarnedUse || 0)) > 0 ||
+    Math.max(0, Number(order.rewardBirthdayUse || order.birthdayVoucherCount || 0)) > 0 ||
+    rewardDiscount > 0;
+
+  if (hasVoucherUse) {
+    const afterTier =
+      order.totalAfterTierDiscount !== undefined && order.totalAfterTierDiscount !== null
+        ? Number(order.totalAfterTierDiscount)
+        : (
+          order.subtotalBeforeReward !== undefined && order.subtotalBeforeReward !== null
+            ? Number(order.subtotalBeforeReward) - tierDiscount
+            : cartTotal(fallbackCart || order.cart || []) - tierDiscount
+        );
+    return round2(afterTier - rewardDiscount);
   }
-  return Math.max(0, Math.round(Number(cartTotal(fallbackCart || (order && order.cart) || []) || 0) * 100) / 100);
+
+  if (order.totalAmount !== undefined && order.totalAmount !== null) {
+    const n = Number(order.totalAmount);
+    return Number.isFinite(n) ? round2(n) : 0;
+  }
+
+  return round2(cartTotal(fallbackCart || order.cart || []));
 }
+
 
 function cartCupsV278(cart) {
   return (Array.isArray(cart) ? cart : []).reduce((sum, item) => {
