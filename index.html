@@ -11601,7 +11601,8 @@ window.addEventListener("load", function() {
     var redeemed = Number(member.rewardRedeemed || member.rewardsRedeemed || (member.rewards && member.rewards.redeemedRewards) || 0);
     var earned = Math.floor(cups / 10);
     var reserved = Number(member.rewardReserved || member.rewardsReserved || (member.rewards && member.rewards.reservedRewards) || 0);
-    var available = Math.max(0, Number((member.rewards && member.rewards.availableRewards) ?? (earned - redeemed - reserved) ?? 0));
+    var gifted = Number(member.giftVoucherBalance || member.giftVouchers || member.manualGiftVouchers || (member.rewards && member.rewards.giftedRewards) || 0);
+    var available = Math.max(0, Number((member.rewards && member.rewards.availableRewards) ?? (earned + gifted - redeemed - reserved) ?? 0));
     var progress = cups % 10;
     var remain = progress === 0 && cups > 0 ? 0 : 10 - progress;
     var pct = cups > 0 && progress === 0 ? 100 : Math.round((progress / 10) * 100);
@@ -16487,7 +16488,8 @@ window.addEventListener("load", function() {
     const redeemed = Number(member.rewardRedeemed || member.rewardsRedeemed || (member.rewards && member.rewards.redeemedRewards) || 0);
     const earned = Math.floor(cups / 10);
     const reserved = Number(member.rewardReserved || member.rewardsReserved || (member.rewards && member.rewards.reservedRewards) || 0);
-    const available = Math.max(0, Number((member.rewards && member.rewards.availableRewards) ?? (earned - redeemed - reserved) ?? 0));
+    const gifted = Number(member.giftVoucherBalance || member.giftVouchers || member.manualGiftVouchers || (member.rewards && member.rewards.giftedRewards) || 0);
+    const available = Math.max(0, Number((member.rewards && member.rewards.availableRewards) ?? (earned + gifted - redeemed - reserved) ?? 0));
 
     const expanded = [];
     let subtotal = 0;
@@ -17366,7 +17368,8 @@ window.addEventListener("load", function() {
     const cups = Number(member.totalCups || 0);
     const redeemed = Number(member.rewardRedeemed || member.rewardsRedeemed || (member.rewards && member.rewards.redeemedRewards) || 0);
     const reserved = Number(member.rewardReserved || member.rewardsReserved || (member.rewards && member.rewards.reservedRewards) || 0);
-    const available = Math.max(0, Number((member.rewards && member.rewards.availableRewards) ?? (Math.floor(cups/10) - redeemed - reserved) ?? 0));
+    const gifted = Number(member.giftVoucherBalance || member.giftVouchers || member.manualGiftVouchers || (member.rewards && member.rewards.giftedRewards) || 0);
+    const available = Math.max(0, Number((member.rewards && member.rewards.availableRewards) ?? (Math.floor(cups/10) + gifted - redeemed - reserved) ?? 0));
     const units = [];
     cart214().forEach(function(item){
       const q = Math.max(1, Number(item.qty || item.quantity || 1));
@@ -18460,7 +18463,8 @@ window.addEventListener("load", function() {
     const redeemed = Number(member.rewardRedeemed || member.rewardsRedeemed || (member.rewards && member.rewards.redeemedRewards) || 0);
     const earned = Math.floor(cups / 10);
     const reserved = Number(member.rewardReserved || member.rewardsReserved || (member.rewards && member.rewards.reservedRewards) || 0);
-    const available = Math.max(0, Number((member.rewards && member.rewards.availableRewards) ?? (earned - redeemed - reserved) ?? 0));
+    const gifted = Number(member.giftVoucherBalance || member.giftVouchers || member.manualGiftVouchers || (member.rewards && member.rewards.giftedRewards) || 0);
+    const available = Math.max(0, Number((member.rewards && member.rewards.availableRewards) ?? (earned + gifted - redeemed - reserved) ?? 0));
     const rewardUnits = units.slice().sort(function(a,b){ return Number(b.rewardUnit || 0) - Number(a.rewardUnit || 0); });
     const useRewards = Math.min(available, rewardUnits.length);
     const freeItems = rewardUnits.slice(0, useRewards);
