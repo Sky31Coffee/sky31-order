@@ -99,7 +99,9 @@ if (!cart.length && !String(body.orderText || "").trim()) {
     const ttl = 60 * 60 * 24 * 3650; // V166: long-term order/member history
     await env.ORDERS.put("order:" + orderNo, JSON.stringify(order), { expirationTtl: ttl });
     await saveOrderMemberIndexes(env, order, ttl);
+    await reserveMemberVouchersOnSubmitV272(env, order, ttl);
     // V199: member cups/rewards are counted only after Telegram marks the order as picked_up.
+    // V272: voucher use is locked immediately on submit to stop fast repeated redemption.
 
     const bg = sendTelegram(env, order.orderText, orderNo)
       .then(async tg => {
@@ -297,6 +299,79 @@ function calcUnitPrice(item) {
 /* V213: final member tier discount calculation, based on backend member record. */
 
 
+
+
+/* V272: immediate voucher lock on order submit.
+   Do not rely only on KV list(order:/phone:) recompute, because KV list can lag briefly. */
+function rewardLockMapV272(member) {
+  const raw = member && member.voucherReservationLocks;
+  return raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+}
+
+function activeVoucherLocksV272(member, knownOrderNos) {
+  const locks = rewardLockMapV272(member);
+  const out = {};
+  const known = knownOrderNos instanceof Set ? knownOrderNos : new Set();
+  const now = Date.now();
+  const maxAgeMs = 1000 * 60 * 60 * 24 * 3; // safety cleanup after 3 days if an old pending order disappears
+  Object.keys(locks).forEach(no => {
+    const lock = locks[no] || {};
+    const created = new Date(lock.createdAt || 0).getTime() || 0;
+    if (known.has(String(no))) return;
+    if (created && now - created > maxAgeMs) return;
+    out[no] = {
+      orderNo: String(no),
+      rewardEarnedUse: Math.max(0, Number(lock.rewardEarnedUse || lock.earned || 0)),
+      rewardGiftUse: Math.max(0, Number(lock.rewardGiftUse || lock.gift || 0)),
+      rewardBirthdayUse: Math.max(0, Number(lock.rewardBirthdayUse || lock.birthday || 0)),
+      birthdayVoucherMonthKey: String(lock.birthdayVoucherMonthKey || ""),
+      createdAt: String(lock.createdAt || "")
+    };
+  });
+  return out;
+}
+
+async function reserveMemberVouchersOnSubmitV272(env, order, ttl) {
+  if (!env || !env.ORDERS || !order) return null;
+  const phone = normalizePhone(order.memberPhone || order.phone || order.submittedPhone);
+  if (!phone || !order.orderNo) return null;
+
+  const earnedUse = Math.max(0, Number(order.rewardEarnedUse || 0));
+  const giftUse = Math.max(0, Number(order.rewardGiftUse || 0));
+  const birthdayUse = Math.max(0, Number(order.rewardBirthdayUse || order.birthdayVoucherCount || 0));
+  if (!earnedUse && !giftUse && !birthdayUse) return null;
+
+  const key = "member:" + phone;
+  let member = null;
+  try {
+    const raw = await env.ORDERS.get(key);
+    member = raw ? JSON.parse(raw) : null;
+  } catch (_) {
+    member = null;
+  }
+  if (!member || typeof member !== "object") return null;
+
+  const locks = rewardLockMapV272(member);
+  locks[String(order.orderNo)] = {
+    orderNo: String(order.orderNo),
+    rewardEarnedUse: earnedUse,
+    rewardGiftUse: giftUse,
+    rewardBirthdayUse: birthdayUse,
+    birthdayVoucherMonthKey: String(order.birthdayVoucherMonthKey || ""),
+    createdAt: order.createdAt || new Date().toISOString(),
+    status: order.status || "pending"
+  };
+
+  member.voucherReservationLocks = locks;
+  member.rewardReserved = Math.max(0, Number(member.rewardReserved || member.rewardsReserved || 0)) + earnedUse;
+  member.rewardsReserved = member.rewardReserved;
+  member.giftVoucherReserved = Math.max(0, Number(member.giftVoucherReserved || member.giftVoucherReservedRewards || 0)) + giftUse;
+  member.giftVoucherReservedRewards = member.giftVoucherReserved;
+  member.birthdayVoucherReservedThisMonth = Math.max(0, Number(member.birthdayVoucherReservedThisMonth || 0)) + birthdayUse;
+  member.updatedAt = new Date().toISOString();
+  await env.ORDERS.put(key, JSON.stringify(member), { expirationTtl: ttl || 60 * 60 * 24 * 3650 });
+  return member;
+}
 
 function rewardNormalUseFromOrderV270(order) {
   if (!order) return 0;
@@ -954,6 +1029,7 @@ async function sky31RecomputeMemberForRewardV199(env, member, phone) {
   if (!phone || !env || !env.ORDERS) return member;
 
   const orderNos = new Set();
+  const lockSourceMember = member || {};
   const candidates = memberPhoneCandidates(phone);
   for (const candidate of candidates) {
     let cursor = undefined;
@@ -977,6 +1053,7 @@ async function sky31RecomputeMemberForRewardV199(env, member, phone) {
   let birthdayVoucherRedeemedThisMonth = 0;
   let birthdayVoucherReservedThisMonth = 0;
   const currentMonthKey = birthdayVoucherMonthKeyV266(new Date());
+  const seenOrderNosV272 = new Set();
 
   for (const no of orderNos) {
     const raw = await env.ORDERS.get("order:" + no);
@@ -986,6 +1063,7 @@ async function sky31RecomputeMemberForRewardV199(env, member, phone) {
     const phones = [order.phone, order.memberPhone, order.submittedPhone].map(normalizePhone).filter(Boolean);
     if (!phones.some(p => sky31SamePhoneV199(p, phone))) continue;
 
+    seenOrderNosV272.add(String(order.orderNo || no));
     const success = sky31OrderSuccessV199(order);
     const cancelled = isCancelledOrder(order);
     const normalUse = rewardEarnedUseFromOrderV270(order);
@@ -1005,9 +1083,19 @@ async function sky31RecomputeMemberForRewardV199(env, member, phone) {
     }
   }
 
+  const extraLocksV272 = activeVoucherLocksV272(lockSourceMember, seenOrderNosV272);
+  Object.keys(extraLocksV272).forEach(no => {
+    const lock = extraLocksV272[no] || {};
+    rewardReserved += Math.max(0, Number(lock.rewardEarnedUse || 0));
+    giftVoucherReserved += Math.max(0, Number(lock.rewardGiftUse || 0));
+    const lockMonth = String(lock.birthdayVoucherMonthKey || currentMonthKey);
+    if (lockMonth === currentMonthKey) birthdayVoucherReservedThisMonth += Math.max(0, Number(lock.rewardBirthdayUse || 0));
+  });
+
   const scannedTotalSpent = Math.round(totalSpent * 100) / 100;
   return {
     ...(member || {}),
+    voucherReservationLocks: extraLocksV272,
     phone,
     // V239: exact recompute, not Math.max(old, scanned), so undo/cancel deducts properly.
     totalOrders,

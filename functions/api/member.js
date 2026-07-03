@@ -232,6 +232,37 @@ async function loadMember(env, phone) {
 
 
 
+
+/* V272: keep immediate order-submit voucher locks until the related order appears in KV list. */
+function memberRewardLockMapV272(member) {
+  const raw = member && member.voucherReservationLocks;
+  return raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+}
+
+function memberActiveVoucherLocksV272(member, knownOrderNos) {
+  const locks = memberRewardLockMapV272(member);
+  const out = {};
+  const known = knownOrderNos instanceof Set ? knownOrderNos : new Set();
+  const now = Date.now();
+  const maxAgeMs = 1000 * 60 * 60 * 24 * 3;
+  Object.keys(locks).forEach(no => {
+    const lock = locks[no] || {};
+    const created = new Date(lock.createdAt || 0).getTime() || 0;
+    if (known.has(String(no))) return;
+    if (created && now - created > maxAgeMs) return;
+    out[no] = {
+      orderNo: String(no),
+      rewardEarnedUse: Math.max(0, Number(lock.rewardEarnedUse || lock.earned || 0)),
+      rewardGiftUse: Math.max(0, Number(lock.rewardGiftUse || lock.gift || 0)),
+      rewardBirthdayUse: Math.max(0, Number(lock.rewardBirthdayUse || lock.birthday || 0)),
+      birthdayVoucherMonthKey: String(lock.birthdayVoucherMonthKey || ""),
+      createdAt: String(lock.createdAt || "")
+    };
+  });
+  return out;
+}
+
+
 function memberRewardNormalUseFromOrderV270(order) {
   if (!order) return 0;
   if (order.rewardNormalUse != null) return Math.max(0, Number(order.rewardNormalUse || 0));
@@ -291,6 +322,7 @@ async function enrichMemberWithOrders(env, member) {
   let birthdayVoucherRedeemedThisMonth = 0;
   let birthdayVoucherReservedThisMonth = 0;
   const currentBirthdayMonthKey = memberBirthdayVoucherMonthKeyV266(new Date());
+  const seenOrderNosV272 = new Set();
   const historyStartAt = member.historyStartAt ? new Date(member.historyStartAt).getTime() : 0;
 
   for (const no of orderNos) {
@@ -310,6 +342,7 @@ async function enrichMemberWithOrders(env, member) {
 
     const belongs = orderPhones.some(p => samePhoneForMemberLookup(p, phone));
     if (!belongs) continue;
+    seenOrderNosV272.add(String(order.orderNo || no));
     const cups = orderCups(order);
     const amount = Number(order.totalAmount || cartTotal(order.cart) || 0);
     const successful = isMemberLifetimeSuccessfulOrderV202(order);
@@ -366,6 +399,15 @@ async function enrichMemberWithOrders(env, member) {
 
   // V202: preserve existing lifetime counters and recover legacy completed/done/paid orders.
   // Newly created orders are still counted only after picked_up / successful transaction.
+  const extraLocksV272 = memberActiveVoucherLocksV272(member, seenOrderNosV272);
+  Object.keys(extraLocksV272).forEach(no => {
+    const lock = extraLocksV272[no] || {};
+    reservedRewards += Math.max(0, Number(lock.rewardEarnedUse || 0));
+    giftVoucherReserved += Math.max(0, Number(lock.rewardGiftUse || 0));
+    const lockMonth = String(lock.birthdayVoucherMonthKey || currentBirthdayMonthKey);
+    if (lockMonth === currentBirthdayMonthKey) birthdayVoucherReservedThisMonth += Math.max(0, Number(lock.rewardBirthdayUse || 0));
+  });
+
   const scannedTotalOrders = totalOrders;
   const scannedTotalCups = totalCups;
   const scannedTotalSpent = Math.round(totalSpent * 100) / 100;
@@ -394,6 +436,7 @@ async function enrichMemberWithOrders(env, member) {
     rewardReserved: scannedRewardReserved,
     rewardsReserved: scannedRewardReserved,
     giftVoucherReserved: scannedGiftVoucherReserved,
+    voucherReservationLocks: extraLocksV272,
     giftVoucherReservedRewards: scannedGiftVoucherReserved,
     birthdayVoucherRedeemedThisMonth,
     birthdayVoucherReservedThisMonth,

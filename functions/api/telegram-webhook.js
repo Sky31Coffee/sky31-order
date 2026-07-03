@@ -937,6 +937,37 @@ async function applyGiftVoucherActiveDeductV270(env, order, mode) {
 }
 
 
+
+/* V272: preserve immediate order-submit voucher locks until KV list catches up. */
+function tgRewardLockMapV272(member) {
+  const raw = member && member.voucherReservationLocks;
+  return raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+}
+
+function tgActiveVoucherLocksV272(member, knownOrderNos) {
+  const locks = tgRewardLockMapV272(member);
+  const out = {};
+  const known = knownOrderNos instanceof Set ? knownOrderNos : new Set();
+  const now = Date.now();
+  const maxAgeMs = 1000 * 60 * 60 * 24 * 3;
+  Object.keys(locks).forEach(no => {
+    const lock = locks[no] || {};
+    const created = new Date(lock.createdAt || 0).getTime() || 0;
+    if (known.has(String(no))) return;
+    if (created && now - created > maxAgeMs) return;
+    out[no] = {
+      orderNo: String(no),
+      rewardEarnedUse: Math.max(0, Number(lock.rewardEarnedUse || lock.earned || 0)),
+      rewardGiftUse: Math.max(0, Number(lock.rewardGiftUse || lock.gift || 0)),
+      rewardBirthdayUse: Math.max(0, Number(lock.rewardBirthdayUse || lock.birthday || 0)),
+      birthdayVoucherMonthKey: String(lock.birthdayVoucherMonthKey || ""),
+      createdAt: String(lock.createdAt || "")
+    };
+  });
+  return out;
+}
+
+
 async function enrichMemberStatsForTelegram(env, member) {
   const phone = normalizePhone(member.phone);
   const prefix = "phone:" + phone + ":";
@@ -947,6 +978,7 @@ async function enrichMemberStatsForTelegram(env, member) {
   let rewardRedeemed = 0;
   let rewardReserved = 0;
   let giftVoucherReserved = 0;
+  const seenOrderNosV272 = new Set();
   const recentOrders = [];
 
   do {
@@ -962,6 +994,7 @@ async function enrichMemberStatsForTelegram(env, member) {
       let order = null;
       try { order = JSON.parse(raw); } catch (_) { continue; }
       if (!order || normalizePhone(order.phone || order.memberPhone) !== phone) continue;
+      seenOrderNosV272.add(String(order.orderNo || orderNo));
 
       const cups = orderCupsForMemberQuery(order);
       const amount = Number(order.totalAmount || cartTotalForMemberQuery(order.cart) || 0);
@@ -993,6 +1026,20 @@ async function enrichMemberStatsForTelegram(env, member) {
     if (page.list_complete !== false) break;
   } while (cursor);
 
+  const extraLocksV272 = tgActiveVoucherLocksV272(member, seenOrderNosV272);
+  Object.keys(extraLocksV272).forEach(no => {
+    const lock = extraLocksV272[no] || {};
+    rewardReserved += Math.max(0, Number(lock.rewardEarnedUse || 0));
+    giftVoucherReserved += Math.max(0, Number(lock.rewardGiftUse || 0));
+    recentOrders.push({
+      orderNo: no,
+      status: "pending",
+      createdAt: lock.createdAt || "",
+      cups: 0,
+      totalAmount: 0
+    });
+  });
+
   recentOrders.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
 
   const giftVoucherBalance = Math.max(0, Number(member.giftVoucherBalance || member.giftVouchers || member.manualGiftVouchers || 0));
@@ -1012,6 +1059,7 @@ async function enrichMemberStatsForTelegram(env, member) {
     rewardsReserved: rewardReserved,
     giftVoucherReserved,
     giftVoucherReservedRewards: giftVoucherReserved,
+    voucherReservationLocks: extraLocksV272,
     earnedRewards,
     giftedRewards: giftVoucherBalance,
     giftVoucherBalance,
@@ -3962,6 +4010,7 @@ async function recalcMemberFromOrdersV199(env, changedOrder) {
   let rewardRedeemed = 0;
   let rewardReserved = 0;
   let giftVoucherReserved = 0;
+  const seenOrderNosV272 = new Set();
   let lastOrderAt = "";
   let lastOrderNo = "";
 
@@ -3974,6 +4023,7 @@ async function recalcMemberFromOrdersV199(env, changedOrder) {
 
     const orderPhones = [order.memberPhone, order.phone, order.submittedPhone].map(normalizePhone).filter(Boolean);
     if (!orderPhones.some(p => candidates.some(c => sky31SamePhoneV199(p, c)))) continue;
+    seenOrderNosV272.add(String(order.orderNo || no));
 
     recentNos.push(no);
     const orderAt = String(order.updatedAt || order.statusUpdatedAt || order.createdAt || "");
@@ -4004,16 +4054,26 @@ async function recalcMemberFromOrdersV199(env, changedOrder) {
 
   for (const entry of memberEntries) {
     const member = { ...entry.member };
+    const extraLocksV272 = tgActiveVoucherLocksV272(member, seenOrderNosV272);
+    let entryRewardReservedV272 = rewardReserved;
+    let entryGiftVoucherReservedV272 = giftVoucherReserved;
+    Object.keys(extraLocksV272).forEach(no => {
+      const lock = extraLocksV272[no] || {};
+      entryRewardReservedV272 += Math.max(0, Number(lock.rewardEarnedUse || 0));
+      entryGiftVoucherReservedV272 += Math.max(0, Number(lock.rewardGiftUse || 0));
+    });
+
     member.phone = normalizePhone(member.phone || entry.key.replace(/^member:/, "") || phone);
     member.totalOrders = totalOrders;
     member.totalCups = totalCups;
     member.totalSpent = totalSpent;
     member.rewardRedeemed = rewardRedeemed;
     member.rewardsRedeemed = rewardRedeemed;
-    member.rewardReserved = rewardReserved;
-    member.rewardsReserved = rewardReserved;
-    member.giftVoucherReserved = giftVoucherReserved;
-    member.giftVoucherReservedRewards = giftVoucherReserved;
+    member.rewardReserved = entryRewardReservedV272;
+    member.rewardsReserved = entryRewardReservedV272;
+    member.giftVoucherReserved = entryGiftVoucherReservedV272;
+    member.giftVoucherReservedRewards = entryGiftVoucherReservedV272;
+    member.voucherReservationLocks = extraLocksV272;
     member.countedRewardOrderNos = Array.from(new Set(successfulNos)).slice(0, 5000);
     member.recentOrderNos = Array.from(new Set(recentNos)).slice(0, 2000);
     member.lastOrderAt = lastOrderAt || member.lastOrderAt || "";
