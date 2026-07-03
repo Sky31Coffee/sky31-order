@@ -996,7 +996,7 @@ async function enrichMemberStatsForTelegram(env, member) {
       if (!order || normalizePhone(order.phone || order.memberPhone) !== phone) continue;
       seenOrderNosV272.add(String(order.orderNo || orderNo));
 
-      const cups = orderCupsForMemberQuery(order);
+      const cups = tgLoyaltyCupsForMemberQueryV275(order);
       const amount = Number(order.totalAmount || cartTotalForMemberQuery(order.cart) || 0);
       const success = sky31TelegramSuccessfulOrderV199(order);
       const cancelled = isCancelledOrder(order);
@@ -1144,6 +1144,22 @@ function orderCupsForMemberQuery(order) {
     ? order.cart.reduce((sum, item) => sum + Number(item.qty || item.quantity || 1), 0)
     : 0;
 }
+
+
+function tgVoucherUseCountV275(order) {
+  if (!order) return 0;
+  const rewardUse = Math.max(0, Number(order.rewardUse || order.rewardUseRequested || 0));
+  const birthdayUse = Math.max(0, Number(order.rewardBirthdayUse || order.birthdayVoucherCount || 0));
+  const normalUse = Math.max(0, Number(order.rewardNormalUse || 0));
+  const giftUse = Math.max(0, Number(order.rewardGiftUse || 0));
+  const earnedUse = Math.max(0, Number(order.rewardEarnedUse || 0));
+  return Math.max(rewardUse, normalUse + birthdayUse, giftUse + earnedUse + birthdayUse);
+}
+
+function tgLoyaltyCupsForMemberQueryV275(order) {
+  return Math.max(0, orderCupsForMemberQuery(order) - tgVoucherUseCountV275(order));
+}
+
 
 function cartTotalForMemberQuery(cart) {
   return (Array.isArray(cart) ? cart : []).reduce((sum, item) => {
@@ -1401,7 +1417,7 @@ async function restoreMemberOrders(env, phone) {
 
     if (order && sky31TelegramSuccessfulOrderV199(order)) {
       restoredOrders += 1;
-      totalCups += orderCupsForMemberRestore(order);
+      totalCups += orderLoyaltyCupsForMemberRestoreV275(order);
       totalSpent += Number(order.totalAmount || cartTotalForMemberRestore(order.cart) || 0);
       recentOrderNos.push(orderNo);
 
@@ -1435,6 +1451,12 @@ function orderCupsForMemberRestore(order) {
     ? order.cart.reduce((sum, item) => sum + Number(item.qty || item.quantity || 1), 0)
     : 0;
 }
+
+
+function orderLoyaltyCupsForMemberRestoreV275(order) {
+  return Math.max(0, orderCupsForMemberRestore(order) - tgVoucherUseCountV275(order));
+}
+
 
 function cartTotalForMemberRestore(cart) {
   return (Array.isArray(cart) ? cart : []).reduce((sum, item) => {
@@ -4075,7 +4097,7 @@ async function recalcMemberFromOrdersV199(env, changedOrder) {
     if (sky31TelegramSuccessfulOrderV199(order)) {
       successfulNos.push(String(order.orderNo || no));
       totalOrders += 1;
-      totalCups += Math.max(0, Number(orderCupsForMemberQuery(order) || 0));
+      totalCups += Math.max(0, Number(tgLoyaltyCupsForMemberQueryV275(order) || 0));
       totalSpent += Math.max(0, Number(order.totalAmount || cartTotalForMemberQuery(order.cart) || 0));
       rewardRedeemed += earnedUse;
     } else if (!cancelled) {

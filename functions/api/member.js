@@ -343,7 +343,7 @@ async function enrichMemberWithOrders(env, member) {
     const belongs = orderPhones.some(p => samePhoneForMemberLookup(p, phone));
     if (!belongs) continue;
     seenOrderNosV272.add(String(order.orderNo || no));
-    const cups = orderCups(order);
+    const cups = memberLoyaltyCupsV275(order);
     const amount = Number(order.totalAmount || cartTotal(order.cart) || 0);
     const successful = isMemberLifetimeSuccessfulOrderV202(order);
 
@@ -708,6 +708,22 @@ function memberPhoneCandidates(phone) {
   phone = normalizePhone(phone);
   return phone ? [phone] : [];
 }
+
+
+function memberVoucherUseCountV275(order) {
+  if (!order) return 0;
+  const rewardUse = Math.max(0, Number(order.rewardUse || order.rewardUseRequested || 0));
+  const birthdayUse = Math.max(0, Number(order.rewardBirthdayUse || order.birthdayVoucherCount || 0));
+  const normalUse = Math.max(0, Number(order.rewardNormalUse || 0));
+  const giftUse = Math.max(0, Number(order.rewardGiftUse || 0));
+  const earnedUse = Math.max(0, Number(order.rewardEarnedUse || 0));
+  return Math.max(rewardUse, normalUse + birthdayUse, giftUse + earnedUse + birthdayUse);
+}
+
+function memberLoyaltyCupsV275(order) {
+  return Math.max(0, orderCups(order) - memberVoucherUseCountV275(order));
+}
+
 
 function orderCups(order) {
   return Array.isArray(order.cart)

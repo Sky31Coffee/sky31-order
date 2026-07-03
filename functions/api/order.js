@@ -882,7 +882,7 @@ async function updateMemberAfterOrder(env, order, ttl) {
     };
   }
 
-  const cups = orderCups(order);
+  const cups = orderLoyaltyCupsV275(order);
   const total = Number(order.totalAmount || cartTotal(order.cart) || 0);
 
   member.phone = normalizePhone(member.phone || phone);
@@ -908,6 +908,22 @@ async function updateMemberAfterOrder(env, order, ttl) {
   await env.ORDERS.put(key, JSON.stringify(member));
   await env.ORDERS.put(countedKey, "1", { expirationTtl: ttl || 60 * 60 * 24 * 3650 });
 }
+
+
+function orderVoucherUseCountV275(order) {
+  if (!order) return 0;
+  const rewardUse = Math.max(0, Number(order.rewardUse || order.rewardUseRequested || 0));
+  const birthdayUse = Math.max(0, Number(order.rewardBirthdayUse || order.birthdayVoucherCount || 0));
+  const normalUse = Math.max(0, Number(order.rewardNormalUse || 0));
+  const giftUse = Math.max(0, Number(order.rewardGiftUse || 0));
+  const earnedUse = Math.max(0, Number(order.rewardEarnedUse || 0));
+  return Math.max(rewardUse, normalUse + birthdayUse, giftUse + earnedUse + birthdayUse);
+}
+
+function orderLoyaltyCupsV275(order) {
+  return Math.max(0, orderCups(order) - orderVoucherUseCountV275(order));
+}
+
 
 function orderCups(order) {
   const cart = Array.isArray(order && order.cart) ? order.cart : [];
@@ -973,6 +989,24 @@ function sky31OrderDrinkCupCountV192(items) {
     return sum + Math.max(0, Number(item.qty || 1));
   }, 0);
 }
+
+
+function sky31VoucherUseCountV275(order) {
+  if (!order) return 0;
+  const rewardUse = Math.max(0, Number(order.rewardUse || order.rewardUseRequested || 0));
+  const birthdayUse = Math.max(0, Number(order.rewardBirthdayUse || order.birthdayVoucherCount || 0));
+  const normalUse = Math.max(0, Number(order.rewardNormalUse || 0));
+  const giftUse = Math.max(0, Number(order.rewardGiftUse || 0));
+  const earnedUse = Math.max(0, Number(order.rewardEarnedUse || 0));
+  return Math.max(rewardUse, normalUse + birthdayUse, giftUse + earnedUse + birthdayUse);
+}
+
+function sky31LoyaltyCupCountV275(order) {
+  const cups = sky31OrderDrinkCupCountV192(order && order.cart);
+  const voucherUse = sky31VoucherUseCountV275(order);
+  return Math.max(0, cups - voucherUse);
+}
+
 
 function sky31RewardDiscountForItemsV192(items, availableRewards) {
   const rewards = Math.max(0, Number(availableRewards || 0));
@@ -1095,7 +1129,7 @@ async function sky31RecomputeMemberForRewardV199(env, member, phone) {
 
     if (success) {
       totalOrders += 1;
-      totalCups += sky31OrderDrinkCupCountV192(order.cart);
+      totalCups += sky31LoyaltyCupCountV275(order);
       totalSpent += Number(order.totalAmount || 0);
       rewardRedeemed += normalUse;
       birthdayVoucherRedeemedThisMonth += birthdayUse;
