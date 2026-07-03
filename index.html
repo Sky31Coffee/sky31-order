@@ -4244,6 +4244,36 @@ input.input-error{
 }
 
 
+
+/* V267 birthday select picker */
+.birthday-select-v267{
+  display:grid !important;
+  grid-template-columns:1.15fr .85fr .85fr !important;
+  gap:8px !important;
+  width:100% !important;
+}
+.birthday-select-v267 select{
+  width:100% !important;
+  min-height:46px !important;
+  border-radius:16px !important;
+  border:1px solid rgba(31,29,26,.16) !important;
+  background:rgba(255,255,255,.78) !important;
+  color:rgba(31,29,26,.90) !important;
+  font-size:15px !important;
+  font-weight:780 !important;
+  padding:0 10px !important;
+  outline:none !important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.82), 0 8px 20px rgba(0,0,0,.04) !important;
+}
+.birthday-select-v267 select:focus{
+  border-color:rgba(31,29,26,.34) !important;
+  box-shadow:0 0 0 3px rgba(31,29,26,.08), inset 0 1px 0 rgba(255,255,255,.86) !important;
+}
+@media(max-width:380px){
+  .birthday-select-v267{ gap:6px !important; }
+  .birthday-select-v267 select{ font-size:14px !important; padding:0 8px !important; }
+}
+
 /* V124 force logout deleted member */
 .sky31-admin-logout-modal{
   position:fixed;
@@ -11472,7 +11502,12 @@ window.addEventListener("load", function() {
               '<label>姓名 Name</label>' +
               '<input id="memberRegName" placeholder="輸入姓名">' +
               '<label>生日 Birthday（必選）</label>' +
-              '<input id="memberRegBirthday" type="text" inputmode="numeric" autocomplete="bday" placeholder="YYYY-MM-DD 例如 1990-07-03" pattern="\\d{4}-\\d{2}-\\d{2}" required>' +
+              '<div class="birthday-select-v267" data-target="memberRegBirthday">' +
+                '<select id="memberRegBirthdayYear" data-part="year" aria-label="生日年份"></select>' +
+                '<select id="memberRegBirthdayMonth" data-part="month" aria-label="生日月份"></select>' +
+                '<select id="memberRegBirthdayDay" data-part="day" aria-label="生日日期"></select>' +
+              '</div>' +
+              '<input id="memberRegBirthday" type="hidden" required>' +
             '</div>' +
             '<div class="member-actions">' +
               '<button class="member-btn primary" type="button" onclick="memberRegisterSave()">註冊</button>' +
@@ -11494,6 +11529,7 @@ window.addEventListener("load", function() {
         '</div>' +
       '</div>';
     document.body.appendChild(div);
+    try{ if(typeof setupBirthdaySelectsV267 === "function") setupBirthdaySelectsV267(); }catch(e){}
 
     div.addEventListener("click", function(e){
       if(e.target === div) closeMemberModal();
@@ -11524,6 +11560,7 @@ window.addEventListener("load", function() {
     }else if(memberPage === "register"){
       $("memberPageRegister").classList.add("active");
       title = "會員註冊";
+      setTimeout(function(){ try{ if(typeof setupBirthdaySelectsV267 === "function") setupBirthdaySelectsV267(); }catch(e){} }, 0);
     }else if(memberPage === "tier"){
       $("memberPageTier").classList.add("active");
       title = "會員等級";
@@ -11563,7 +11600,8 @@ window.addEventListener("load", function() {
     var cups = Number(member.totalCups || member.cups || member.totalItems || 0);
     var redeemed = Number(member.rewardRedeemed || member.rewardsRedeemed || (member.rewards && member.rewards.redeemedRewards) || 0);
     var earned = Math.floor(cups / 10);
-    var available = Math.max(0, Number((member.rewards && member.rewards.availableRewards) || (earned - redeemed) || 0));
+    var reserved = Number(member.rewardReserved || member.rewardsReserved || (member.rewards && member.rewards.reservedRewards) || 0);
+    var available = Math.max(0, Number((member.rewards && member.rewards.availableRewards) ?? (earned - redeemed - reserved) ?? 0));
     var progress = cups % 10;
     var remain = progress === 0 && cups > 0 ? 0 : 10 - progress;
     var pct = cups > 0 && progress === 0 ? 100 : Math.round((progress / 10) * 100);
@@ -11717,6 +11755,9 @@ window.addEventListener("load", function() {
     var key = tierKey(member);
     var goldOrAbove = key === "gold" || key === "diamond" || key === "blackgold";
     if(!goldOrAbove) return 0;
+
+    var birthdayUsed = Number(member.birthdayVoucherRedeemedThisMonth || 0) + Number(member.birthdayVoucherReservedThisMonth || 0);
+    if(birthdayUsed > 0) return 0;
 
     var parts = birthday.split("-");
     var month = Number(parts[1] || 0);
@@ -12211,6 +12252,7 @@ window.addEventListener("load", function() {
   };
 
   window.memberRegisterSave = async function(){
+    try{ if(typeof setupBirthdaySelectsV267 === "function") setupBirthdaySelectsV267(); }catch(e){}
     var phone = phoneNorm(($("memberRegPhone") || {}).value || "");
     var name = (typeof formatMemberNameV265 === "function" ? formatMemberNameV265(($("memberRegName") || {}).value || "") : (($("memberRegName") || {}).value || "").trim());
     var birthday = (typeof normalizeBirthdayInputV265 === "function" ? normalizeBirthdayInputV265(($("memberRegBirthday") || {}).value || "") : (($("memberRegBirthday") || {}).value || "").trim());
@@ -12762,6 +12804,97 @@ window.addEventListener("load", function() {
     return String(y).padStart(4, "0") + "-" + String(mo).padStart(2, "0") + "-" + String(d).padStart(2, "0");
   };
 
+  window.setupBirthdaySelectsV267 = function setupBirthdaySelectsV267(){
+    function pad(n){ return String(n).padStart(2, "0"); }
+    function daysInMonth(y,m){
+      y = Number(y || 2000); m = Number(m || 1);
+      if(!y || !m) return 31;
+      return new Date(y, m, 0).getDate();
+    }
+    function fill(sel, values, placeholder){
+      if(!sel || sel.dataset.v267Ready === "1") return;
+      sel.innerHTML = '<option value="">' + placeholder + '</option>' + values.map(function(v){
+        return '<option value="' + v.value + '">' + v.label + '</option>';
+      }).join("");
+      sel.dataset.v267Ready = "1";
+    }
+    function yearValues(){
+      var now = new Date().getFullYear();
+      var arr = [];
+      for(var y = now; y >= 1920; y--) arr.push({value:String(y), label:String(y) + "年"});
+      return arr;
+    }
+    function monthValues(){
+      var arr = [];
+      for(var m=1; m<=12; m++) arr.push({value:pad(m), label:m + "月"});
+      return arr;
+    }
+    function dayValues(max){
+      var arr = [];
+      for(var d=1; d<=max; d++) arr.push({value:pad(d), label:d + "日"});
+      return arr;
+    }
+    function setupBox(box){
+      if(!box) return;
+      var targetId = box.getAttribute("data-target") || "";
+      var hidden = document.getElementById(targetId);
+      var y = box.querySelector('[data-part="year"]');
+      var m = box.querySelector('[data-part="month"]');
+      var d = box.querySelector('[data-part="day"]');
+      if(!hidden || !y || !m || !d) return;
+
+      fill(y, yearValues(), "年份");
+      fill(m, monthValues(), "月份");
+
+      function fillDays(){
+        var old = d.value;
+        var max = daysInMonth(y.value, m.value);
+        d.dataset.v267Ready = "";
+        fill(d, dayValues(max), "日期");
+        if(old && Number(old) <= max) d.value = old;
+        else d.value = "";
+      }
+      function sync(){
+        fillDays();
+        if(y.value && m.value && d.value){
+          hidden.value = y.value + "-" + m.value + "-" + d.value;
+        }else{
+          hidden.value = "";
+        }
+        try{ hidden.dispatchEvent(new Event("input", {bubbles:true})); }catch(e){}
+      }
+
+      if(!box.dataset.v267Bound){
+        y.addEventListener("change", sync);
+        m.addEventListener("change", sync);
+        d.addEventListener("change", sync);
+        box.dataset.v267Bound = "1";
+      }
+
+      var current = String(hidden.value || "").trim();
+      var parsed = current.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if(parsed && !y.value && !m.value && !d.value){
+        y.value = parsed[1];
+        m.value = parsed[2];
+        fillDays();
+        d.value = parsed[3];
+      }else{
+        fillDays();
+      }
+      sync();
+    }
+
+    document.querySelectorAll(".birthday-select-v267").forEach(setupBox);
+  };
+
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", function(){ try{ setupBirthdaySelectsV267(); }catch(e){} });
+  }else{
+    setTimeout(function(){ try{ setupBirthdaySelectsV267(); }catch(e){} }, 0);
+  }
+  document.addEventListener("click", function(){ setTimeout(function(){ try{ setupBirthdaySelectsV267(); }catch(e){} }, 60); }, true);
+
+
   function esc(s){
     return String(s == null ? "" : s).replace(/[&<>"']/g,function(c){
       return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
@@ -12936,7 +13069,12 @@ window.addEventListener("load", function() {
               '<label>姓名 Name</label>' +
               '<input id="checkoutRegName" placeholder="輸入姓名">' +
               '<label>生日 Birthday（必選）</label>' +
-              '<input id="checkoutRegBirthday" type="text" inputmode="numeric" autocomplete="bday" placeholder="YYYY-MM-DD 例如 1990-07-03" pattern="\\d{4}-\\d{2}-\\d{2}" required>' +
+              '<div class="birthday-select-v267" data-target="checkoutRegBirthday">' +
+                '<select id="checkoutRegBirthdayYear" data-part="year" aria-label="生日年份"></select>' +
+                '<select id="checkoutRegBirthdayMonth" data-part="month" aria-label="生日月份"></select>' +
+                '<select id="checkoutRegBirthdayDay" data-part="day" aria-label="生日日期"></select>' +
+              '</div>' +
+              '<input id="checkoutRegBirthday" type="hidden" required>' +
             '</div>' +
             '<div class="checkout-member-actions">' +
               '<button class="checkout-member-btn primary" type="button" onclick="checkoutMemberRegister()">確認註冊</button>' +
@@ -12947,6 +13085,7 @@ window.addEventListener("load", function() {
       '</div>';
 
     document.body.appendChild(div);
+    try{ if(typeof setupBirthdaySelectsV267 === "function") setupBirthdaySelectsV267(); }catch(e){}
 
     div.addEventListener("click", function(e){
       if(e.target === div) closeCheckoutMemberModal();
@@ -12975,6 +13114,7 @@ window.addEventListener("load", function() {
 
     modal.classList.add("show");
     document.body.style.overflow = "hidden";
+    setTimeout(function(){ try{ if(typeof setupBirthdaySelectsV267 === "function") setupBirthdaySelectsV267(); }catch(e){} }, 0);
 
     setTimeout(function(){
       if(phone) phone.focus();
@@ -13058,6 +13198,7 @@ window.addEventListener("load", function() {
 
   window.checkoutMemberRegister = async function(){
     ensureCheckoutMemberModal();
+    try{ if(typeof setupBirthdaySelectsV267 === "function") setupBirthdaySelectsV267(); }catch(e){}
 
     var phone = phoneNorm(($("checkoutRegPhone") || {}).value || "");
     var name = formatMemberNameV265(($("checkoutRegName") || {}).value || "");
@@ -16345,7 +16486,8 @@ window.addEventListener("load", function() {
     const cups = Number(member.totalCups || member.cups || member.totalItems || 0);
     const redeemed = Number(member.rewardRedeemed || member.rewardsRedeemed || (member.rewards && member.rewards.redeemedRewards) || 0);
     const earned = Math.floor(cups / 10);
-    const available = Math.max(0, Number((member.rewards && member.rewards.availableRewards) || (earned - redeemed) || 0));
+    const reserved = Number(member.rewardReserved || member.rewardsReserved || (member.rewards && member.rewards.reservedRewards) || 0);
+    const available = Math.max(0, Number((member.rewards && member.rewards.availableRewards) ?? (earned - redeemed - reserved) ?? 0));
 
     const expanded = [];
     let subtotal = 0;
@@ -17223,7 +17365,8 @@ window.addEventListener("load", function() {
     member = member || readMember214() || {};
     const cups = Number(member.totalCups || 0);
     const redeemed = Number(member.rewardRedeemed || member.rewardsRedeemed || (member.rewards && member.rewards.redeemedRewards) || 0);
-    const available = Math.max(0, Number((member.rewards && member.rewards.availableRewards) || (Math.floor(cups/10)-redeemed) || 0));
+    const reserved = Number(member.rewardReserved || member.rewardsReserved || (member.rewards && member.rewards.reservedRewards) || 0);
+    const available = Math.max(0, Number((member.rewards && member.rewards.availableRewards) ?? (Math.floor(cups/10) - redeemed - reserved) ?? 0));
     const units = [];
     cart214().forEach(function(item){
       const q = Math.max(1, Number(item.qty || item.quantity || 1));
@@ -18316,7 +18459,8 @@ window.addEventListener("load", function() {
     const cups = Number(member.totalCups || member.cups || member.totalItems || 0);
     const redeemed = Number(member.rewardRedeemed || member.rewardsRedeemed || (member.rewards && member.rewards.redeemedRewards) || 0);
     const earned = Math.floor(cups / 10);
-    const available = Math.max(0, Number((member.rewards && member.rewards.availableRewards) || (earned - redeemed) || 0));
+    const reserved = Number(member.rewardReserved || member.rewardsReserved || (member.rewards && member.rewards.reservedRewards) || 0);
+    const available = Math.max(0, Number((member.rewards && member.rewards.availableRewards) ?? (earned - redeemed - reserved) ?? 0));
     const rewardUnits = units.slice().sort(function(a,b){ return Number(b.rewardUnit || 0) - Number(a.rewardUnit || 0); });
     const useRewards = Math.min(available, rewardUnits.length);
     const freeItems = rewardUnits.slice(0, useRewards);
