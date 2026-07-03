@@ -11834,10 +11834,7 @@ window.addEventListener("load", function() {
   };
 
   function sky31CleanPhoneV232(phone){
-    var p = String(phone || "").replace(/\D/g,"");
-    // V237: display legacy forced-853 records without the forced prefix.
-    if(p.length > 3 && p.indexOf("853") === 0) p = p.slice(3);
-    return p;
+    return String(phone || "").replace(/\D/g,"");
   }
 
   function sky31MemberHomeHtmlV232(member){
@@ -18356,7 +18353,7 @@ window.addEventListener("load", function() {
 </style>
 
 <script>
-/* V240: final checkout calculation order + no forced 853 display + checkout close position guard.
+/* V240: final checkout calculation order + checkout close position guard.
    Rule: tier bean-surcharge waiver first, then reward/free-drink voucher on the discounted cup price.
    This allows both benefits together without discounting the same +MOP 5 twice. */
 (function(){
@@ -18377,9 +18374,7 @@ window.addEventListener("load", function() {
     try{ return JSON.parse(localStorage.getItem(MEMBER_KEY) || "null"); }catch(e){ return null; }
   }
   function displayPhone240(phone){
-    let p = String(phone || "").replace(/\D/g, "");
-    if(p.length > 3 && p.indexOf("853") === 0) p = p.slice(3);
-    return p;
+    return String(phone || "").replace(/\D/g, "");
   }
   function cart240(){
     try{ if(Array.isArray(window.cart)) return window.cart; if(Array.isArray(cart)) return cart; }catch(e){}
