@@ -9763,11 +9763,21 @@ function changeCartQty(i, delta) {
 function updateCartList() {
   const list = document.getElementById("cartList");
   const modalList = document.getElementById("cartModalList");
+  const confirmBtn = document.querySelector('#cartModal button.primary[onclick*="submitOrder"]');
 
   if (!cart.length) {
+    if (confirmBtn) {
+      confirmBtn.disabled = false;
+      if (confirmBtn.textContent === "提交中...") confirmBtn.textContent = "確認訂單 Checkout";
+    }
     list.innerHTML = '<p style="color:#777;">尚未加入飲品。</p>';
     if (modalList) modalList.innerHTML = '<p style="color:#777;">尚未加入飲品。</p>';
     return;
+  }
+
+  if (confirmBtn) {
+    confirmBtn.disabled = false;
+    if (confirmBtn.textContent === "提交中...") confirmBtn.textContent = "確認訂單 Checkout";
   }
 
   list.innerHTML = "";
@@ -10050,7 +10060,44 @@ function saveCustomerAndSubmit() {
   if (typeof openCartModal === "function") openCartModal();
 }
 
+
+function sky31HasCartItemsV283() {
+  try {
+    return Array.isArray(cart) && cart.some(function(item) {
+      return Number(item && (item.qty || item.quantity || 1)) > 0;
+    });
+  } catch(e) {
+    return false;
+  }
+}
+
+function sky31ShowEmptyCartV283() {
+  window.__SKY31_ORDER_SUBMITTING_V272 = false;
+
+  var btn = document.querySelector('#cartModal button.primary[onclick*="submitOrder"]');
+  if (btn) {
+    btn.disabled = false;
+    btn.textContent = "確認訂單 Checkout";
+  }
+
+  var summary = document.getElementById("summary");
+  if (summary) {
+    summary.innerHTML = "請先選擇餐品。";
+  }
+
+  var err = document.getElementById("errorMsg");
+  if (err) {
+    err.textContent = "請先選擇餐品後再確認訂單。";
+    err.style.display = "block";
+  }
+
+  try { if (typeof updateCartList === "function") updateCartList(); } catch(e) {}
+  return false;
+}
+
+
 async function submitOrder() {
+  if (!sky31HasCartItemsV283()) { sky31ShowEmptyCartV283(); return; }
   if (window.__SKY31_ORDER_SUBMITTING_V272) return;
   window.__SKY31_ORDER_SUBMITTING_V272 = true;
   var __sky31SubmitButtonV272 = document.querySelector('#cartModal button.primary[onclick*="submitOrder"]');
@@ -10060,7 +10107,7 @@ async function submitOrder() {
     window.__SKY31_ORDER_SUBMITTING_V272 = false;
     if(__sky31SubmitButtonV272){ __sky31SubmitButtonV272.disabled = false; __sky31SubmitButtonV272.textContent = __sky31SubmitButtonTextV272 || "確認訂單 Checkout"; }
   }
-  if (!cart.length){ __sky31UnlockSubmitV272(); return alert("請先選擇餐品"); }
+  if (!sky31HasCartItemsV283()){ __sky31UnlockSubmitV272(); sky31ShowEmptyCartV283(); return; }
   if (!val("name") || !val("phone")) { __sky31UnlockSubmitV272(); openCustomerModal(true); return; }
 
   const orderText = makeRobotOrder();
@@ -10112,7 +10159,13 @@ async function copyOrder() {
   try { await navigator.clipboard.writeText(text); alert("已複製訂單。"); }
   catch(e) { alert("請長按訂單內容手動複製。"); }
 }
-function clearCart() { cart = []; updateAll(); }
+function clearCart() {
+  cart = [];
+  window.__SKY31_ORDER_SUBMITTING_V272 = false;
+  var btn = document.querySelector('#cartModal button.primary[onclick*="submitOrder"]');
+  if(btn){ btn.disabled = false; btn.textContent = "確認訂單 Checkout"; }
+  updateAll();
+}
 function initCartDrag() {
   const btn = document.getElementById("floatCart");
   if (!btn) return;
@@ -11117,6 +11170,10 @@ window.addEventListener("load", function() {
   };
 
   window.submitOrder = async function(){
+    if(typeof sky31HasCartItemsV283 === "function" && !sky31HasCartItemsV283()){
+      if(typeof sky31ShowEmptyCartV283 === "function") sky31ShowEmptyCartV283();
+      return;
+    }
     if(window.__SKY31_ORDER_SUBMITTING_V272) return;
     window.__SKY31_ORDER_SUBMITTING_V272 = true;
     var __sky31SubmitButtonV272 = document.querySelector('#cartModal button.primary[onclick*="submitOrder"]');
@@ -11126,9 +11183,9 @@ window.addEventListener("load", function() {
       window.__SKY31_ORDER_SUBMITTING_V272 = false;
       if(__sky31SubmitButtonV272){ __sky31SubmitButtonV272.disabled = false; __sky31SubmitButtonV272.textContent = __sky31SubmitButtonTextV272 || "確認訂單 Checkout"; }
     }
-    if(!cart.length){
-      var err = document.getElementById("errorMsg");
-      if(err){ err.textContent = "請先選擇餐品"; err.style.display = "block"; }
+    if(typeof sky31HasCartItemsV283 === "function" && !sky31HasCartItemsV283()){
+      __sky31UnlockSubmitV272();
+      if(typeof sky31ShowEmptyCartV283 === "function") sky31ShowEmptyCartV283();
       return;
     }
     if(!val("name") || !val("phone")){
@@ -13273,8 +13330,8 @@ window.addEventListener("load", function() {
     var oldSubmit = window.submitOrder;
     window.submitOrder = async function(){
       try{
-        if(typeof cart !== "undefined" && Array.isArray(cart) && !cart.length){
-          if(typeof oldSubmit === "function") return oldSubmit.apply(this, arguments);
+        if(typeof sky31HasCartItemsV283 === "function" && !sky31HasCartItemsV283()){
+          if(typeof sky31ShowEmptyCartV283 === "function") sky31ShowEmptyCartV283();
           return;
         }
       }catch(e){}
@@ -13904,6 +13961,10 @@ window.addEventListener("load", function() {
 
     window.__sky31V128SubmitPatched = true;
     window.submitOrder = async function(){
+      if(typeof sky31HasCartItemsV283 === "function" && !sky31HasCartItemsV283()){
+        if(typeof sky31ShowEmptyCartV283 === "function") sky31ShowEmptyCartV283();
+        return;
+      }
       if(busyMap.submitOrder) return;
       if(!throttle("submitOrder", 1200)) return;
 
@@ -15732,6 +15793,11 @@ window.addEventListener("load", function() {
     var original = window.submitOrder;
 
     window.submitOrder = async function(){
+      if(typeof sky31HasCartItemsV283 === "function" && !sky31HasCartItemsV283()){
+        if(typeof sky31ShowEmptyCartV283 === "function") sky31ShowEmptyCartV283();
+        return;
+      }
+
       var member = getMember();
 
       if(!member || !member.phone){
