@@ -23,7 +23,7 @@ export async function onRequestPost(context) {
     const sky31MemberForRewardV192 = await sky31LoadMemberForRewardV192(context.env || env, phone || body.phone || body.customerPhone || (body.member && body.member.phone));
     const sky31RewardInfoV192 = sky31RewardsFromMemberV192(sky31MemberForRewardV192 || {});
     const birthdayVoucherCountV217 = sky31BirthdayVoucherCountOrderV217(activeMember || sky31MemberForRewardV192 || {});
-if (!cart.length && !String(body.orderText || "").trim()) {
+if (!cart.length) {
       return json({ ok: false, error: "請先選擇飲品" }, 400);
     }
 
