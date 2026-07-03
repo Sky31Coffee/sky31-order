@@ -4952,46 +4952,151 @@ async function deletePrefixedKeysV238(env, prefixes) {
   return count;
 }
 
-async function permanentDeleteMemberV238(env, phone) {
+
+async function collectKeysByExactAndPrefixV268(env, exactKeys, prefixes) {
+  const keys = new Set((exactKeys || []).filter(Boolean));
+  for (const prefix of (prefixes || []).filter(Boolean)) {
+    let cursor = undefined;
+    do {
+      const page = await env.ORDERS.list({ prefix, cursor });
+      for (const key of (page.keys || [])) {
+        if (key && key.name) keys.add(key.name);
+      }
+      cursor = page.cursor;
+      if (page.list_complete !== false) break;
+    } while (cursor);
+  }
+  return Array.from(keys);
+}
+
+async function collectOrderNosForPermanentDeleteV268(env, phone) {
   const candidates = memberPurgeCandidatePhonesV238(phone);
+  const orderNos = new Set(await collectOrderNosForPermanentDeleteV238(env, phone));
+
+  // Also scan a bounded order:* list to catch old orders whose phone index was broken or missing.
+  let cursor = undefined;
+  let checked = 0;
+  do {
+    const page = await env.ORDERS.list({ prefix: "order:", cursor });
+    for (const key of (page.keys || [])) {
+      checked += 1;
+      if (checked > 5000) break;
+      const raw = await env.ORDERS.get(key.name);
+      if (!raw) continue;
+      try {
+        const order = JSON.parse(raw);
+        const phones = [
+          order.phone,
+          order.memberPhone,
+          order.submittedPhone,
+          order.customerPhone,
+          order.member && order.member.phone
+        ].map(normalizePhone).filter(Boolean);
+        const hit = phones.some(p => {
+          if (candidates.includes(p)) return true;
+          const last = memberPurgeLastTokenV238(p);
+          return last && candidates.some(c => memberPurgeLastTokenV238(c) === last);
+        });
+        if (hit) orderNos.add(String(order.orderNo || key.name.replace(/^order:/, "")));
+      } catch (_) {}
+    }
+    cursor = page.cursor;
+    if (page.list_complete !== false || checked > 5000) break;
+  } while (cursor);
+
+  return Array.from(orderNos).filter(Boolean);
+}
+
+async function collectAllMemberRelatedKeysForPermanentDeleteV268(env, phone, orderNos) {
+  const candidates = memberPurgeCandidatePhonesV238(phone);
+  const last = memberPurgeLastTokenV238(phone);
+  const exact = new Set();
+  const prefixes = [];
+
+  for (const p of candidates) {
+    [
+      "member:",
+      "member_deleted:",
+      "member_purged:",
+      "member_tier_override:",
+      "member_purged:last8:",
+      "member_deleted_phone_index:",
+      "member_deleted_order_marker:"
+    ].forEach(prefix => exact.add(prefix + p));
+
+    [
+      "phone:" + p + ":",
+      "member_ordered:" + p + ":",
+      "member_deleted_order:" + p + ":",
+      "member_deleted_phone_index:" + p + ":",
+      "member_deleted_order_marker:" + p + ":",
+      "member_tier_override:" + p + ":"
+    ].forEach(prefix => prefixes.push(prefix));
+  }
+
+  if (last) {
+    exact.add("member_purged:last8:" + last);
+    exact.add("member_tier_override:" + last);
+    exact.add("member_deleted_phone_index:" + last);
+    exact.add("member_deleted_order_marker:" + last);
+    prefixes.push("member_deleted_order:" + last + ":");
+    prefixes.push("phone:" + last + ":");
+    prefixes.push("member_ordered:" + last + ":");
+  }
+
+  for (const orderNo of (orderNos || [])) {
+    exact.add("order:" + orderNo);
+    for (const p of candidates) {
+      exact.add("phone:" + p + ":" + orderNo);
+      exact.add("member_ordered:" + p + ":" + orderNo);
+      exact.add("member_deleted_order:" + p + ":" + orderNo);
+      exact.add("member_deleted_phone_index:" + p + ":" + orderNo);
+      exact.add("member_deleted_order_marker:" + p + ":" + orderNo);
+    }
+    if (last) {
+      exact.add("phone:" + last + ":" + orderNo);
+      exact.add("member_ordered:" + last + ":" + orderNo);
+      exact.add("member_deleted_order:" + last + ":" + orderNo);
+    }
+  }
+
+  return collectKeysByExactAndPrefixV268(env, Array.from(exact), prefixes);
+}
+
+
+async function permanentDeleteMemberV238(env, phone) {
   const now = new Date().toISOString();
-  const memberKeys = await collectMemberKeysForPhoneV238(env, phone);
-  const orderNos = await collectOrderNosForPermanentDeleteV238(env, phone);
+  const orderNos = await collectOrderNosForPermanentDeleteV268(env, phone);
+  const keys = await collectAllMemberRelatedKeysForPermanentDeleteV268(env, phone, orderNos);
+
   let deletedMemberKeys = 0;
   let deletedOrderKeys = 0;
   let deletedIndexKeys = 0;
   let deletedArchiveKeys = 0;
+  let deletedTombstoneKeys = 0;
 
-  for (const key of memberKeys) {
+  for (const key of keys) {
     await env.ORDERS.delete(key);
-    deletedMemberKeys += 1;
+    if (key.startsWith("member:") || key.startsWith("member_deleted:")) deletedMemberKeys += 1;
+    else if (key.startsWith("order:")) deletedOrderKeys += 1;
+    else if (key.startsWith("member_purged:")) deletedTombstoneKeys += 1;
+    else if (key.startsWith("member_deleted_")) deletedArchiveKeys += 1;
+    else deletedIndexKeys += 1;
   }
 
-  for (const orderNo of orderNos) {
-    await env.ORDERS.delete("order:" + orderNo);
-    deletedOrderKeys += 1;
-    for (const p of candidates) {
-      for (const key of [
-        "phone:" + p + ":" + orderNo,
-        "member_ordered:" + p + ":" + orderNo,
-        "member_deleted_order:" + p + ":" + orderNo
-      ]) {
-        await env.ORDERS.delete(key);
-        deletedIndexKeys += 1;
-      }
-    }
-  }
-
-  const archivePrefixes = [];
-  for (const p of candidates) {
-    archivePrefixes.push("member_deleted_order:" + p + ":");
-    archivePrefixes.push("member_deleted_phone_index:" + p + ":");
-    archivePrefixes.push("member_deleted_order_marker:" + p + ":");
-  }
-  deletedArchiveKeys += await deletePrefixedKeysV238(env, archivePrefixes);
-
-  const tombstone = await writeMemberPurgeTombstoneV238(env, phone);
-  return { purgedAt: now, deletedMemberKeys, deletedOrderKeys, deletedIndexKeys, deletedArchiveKeys, orderNos, tombstones: tombstone.tombstones };
+  // V268: Do NOT write member_purged tombstones anymore.
+  // Permanent delete now means the phone can re-register cleanly without stale KV blockers.
+  return {
+    purgedAt: now,
+    deletedMemberKeys,
+    deletedOrderKeys,
+    deletedIndexKeys,
+    deletedArchiveKeys,
+    deletedTombstoneKeys,
+    deletedTotalKeys: keys.length,
+    orderNos,
+    tombstones: []
+  };
 }
 
 const _oldListTelegramMembersV238 = listTelegramMembers;
@@ -5071,8 +5176,8 @@ handleMemberAction = async function(env, cq, data) {
         "",
         "目前狀態：" + (found.deleted ? "已刪除會員" : "有效會員"),
         "",
-        "確認後會永久刪除此會員資料、舊 853 alias、已刪除備份及會員訂單索引。",
-        "永久刪除後不會再於 Telegram 會員列表顯示，也不能按撤回恢復。"
+        "確認後會永久刪除此會員資料、舊 853 alias、已刪除備份、會員訂單索引、相關訂單及 purge 標記。",
+        "永久刪除後不會再於 Telegram 會員列表顯示；如日後重新註冊，會以全新會員資料開始。"
       ].join("\n");
       await editTelegramMessage(env, chatId, messageId, text, {
         inline_keyboard: [[
@@ -5102,8 +5207,10 @@ handleMemberAction = async function(env, cq, data) {
         "刪除會員 key：" + result.deletedMemberKeys,
         "刪除訂單：" + result.deletedOrderKeys,
         "刪除索引/備份：" + (result.deletedIndexKeys + result.deletedArchiveKeys),
+        "刪除 purge 標記：" + (result.deletedTombstoneKeys || 0),
+        "合共刪除 KV：" + (result.deletedTotalKeys || 0),
         "",
-        "此會員已加入永久刪除記錄，之後不會再於 Telegram 會員列表顯示。"
+        "此會員相關 KV 已徹底清除；日後同電話可重新註冊為全新會員。"
       ].join("\n");
       await editTelegramMessage(env, chatId, messageId, text, { inline_keyboard: [[{ text: "📋 返回用戶列表", callback_data: "member_list:all" }]] });
       return stop(env, cq, "已永久刪除會員");
