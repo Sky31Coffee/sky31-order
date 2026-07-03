@@ -41,6 +41,8 @@ if (!cart.length && !String(body.orderText || "").trim()) {
     const tierDiscountV213 = sky31DiscountCalcV240.tierDiscount;
     const totalAfterTierV213 = sky31DiscountCalcV240.totalAfterTier;
     const rewardUseV199 = sky31DiscountCalcV240.rewardUse;
+    const rewardBirthdayUseV266 = Math.min(Number(birthdayVoucherCountV217 || 0), Number(rewardUseV199 || 0));
+    const rewardNormalUseV266 = Math.max(0, Number(rewardUseV199 || 0) - rewardBirthdayUseV266);
     const rewardDiscountV199 = sky31DiscountCalcV240.rewardDiscount;
     const rewardFreeItemsV199 = sky31DiscountCalcV240.rewardFreeItems;
     const totalAfterTierAndRewardV240 = sky31DiscountCalcV240.totalAmount;
@@ -59,9 +61,12 @@ if (!cart.length && !String(body.orderText || "").trim()) {
       pickupTime,
       subtotalBeforeReward: subtotalBeforeRewardV199,
       rewardUse: rewardUseV199,
+      rewardNormalUse: rewardNormalUseV266,
+      rewardBirthdayUse: rewardBirthdayUseV266,
       rewardDiscount: rewardDiscountV199,
       rewardFreeItems: rewardFreeItemsV199,
-      birthdayVoucherCount: birthdayVoucherCountV217 || 0,
+      birthdayVoucherCount: rewardBirthdayUseV266 || 0,
+      birthdayVoucherMonthKey: birthdayVoucherMonthKeyV266(createdAt),
       memberTierKey: tierDiscountCalcV213.tier.key,
       memberTierName: tierDiscountCalcV213.tier.name,
       memberTierIcon: tierDiscountCalcV213.tier.icon,
@@ -283,6 +288,36 @@ function calcUnitPrice(item) {
 
 /* V213: final member tier discount calculation, based on backend member record. */
 
+
+function birthdayVoucherMonthKeyV266(dateLike) {
+  const d = dateLike ? new Date(dateLike) : new Date();
+  const ok = !Number.isNaN(d.getTime());
+  const x = ok ? d : new Date();
+  return x.getUTCFullYear() + "-" + String(x.getUTCMonth() + 1).padStart(2, "0");
+}
+
+function rewardNormalUseFromOrderV266(order) {
+  if (!order) return 0;
+  if (order.rewardNormalUse != null) return Math.max(0, Number(order.rewardNormalUse || 0));
+  if (order.rewardBirthdayUse != null) return Math.max(0, Number(order.rewardUse || order.rewardUseRequested || 0) - Number(order.rewardBirthdayUse || 0));
+  return Math.max(0, Number(order.rewardUse || order.rewardUseRequested || 0));
+}
+
+function rewardBirthdayUseFromOrderV266(order, monthKey) {
+  if (!order) return 0;
+  const use = Math.max(0, Number(order.rewardBirthdayUse || order.birthdayVoucherCount || 0));
+  if (!use) return 0;
+  const key = String(order.birthdayVoucherMonthKey || birthdayVoucherMonthKeyV266(order.createdAt || order.updatedAt || order.statusUpdatedAt || ""));
+  return !monthKey || key === monthKey ? use : 0;
+}
+
+function birthdayVoucherUsedOrReservedV266(member) {
+  member = member || {};
+  return Math.max(0, Number(member.birthdayVoucherRedeemedThisMonth || 0)) +
+         Math.max(0, Number(member.birthdayVoucherReservedThisMonth || 0));
+}
+
+
 function sky31BirthdayVoucherCountOrderV217(member) {
   member = member || {};
   const birthday = String(member.birthday || "").trim();
@@ -292,6 +327,8 @@ function sky31BirthdayVoucherCountOrderV217(member) {
   const key = String((tier && tier.key) || member.memberTierKey || member.manualTierKey || "").toLowerCase();
   const goldOrAbove = key === "gold" || key === "diamond" || key === "blackgold" || key === "vip";
   if (!goldOrAbove) return 0;
+
+  if (birthdayVoucherUsedOrReservedV266(member) > 0) return 0;
 
   const month = Number(birthday.split("-")[1] || 0);
   const now = new Date();
@@ -787,12 +824,14 @@ function sky31RewardsFromMemberV192(member) {
   member = member || {};
   const totalCups = Number(member.totalCups || member.cups || member.totalItems || member.orderCups || 0);
   const redeemed = Number(member.rewardRedeemed || member.rewardsRedeemed || 0);
+  const reserved = Number(member.rewardReserved || member.rewardsReserved || member.pendingRewardUse || 0);
   const earned = Math.floor(totalCups / 10);
-  const available = Math.max(0, earned - redeemed);
+  const available = Math.max(0, earned - redeemed - reserved);
   return {
     totalCups,
     earnedRewards: earned,
     redeemedRewards: redeemed,
+    reservedRewards: reserved,
     availableRewards: available,
     tier: sky31RewardTierV192(totalCups)
   };
@@ -900,6 +939,10 @@ async function sky31RecomputeMemberForRewardV199(env, member, phone) {
   let totalCups = 0;
   let totalSpent = 0;
   let rewardRedeemed = 0;
+  let rewardReserved = 0;
+  let birthdayVoucherRedeemedThisMonth = 0;
+  let birthdayVoucherReservedThisMonth = 0;
+  const currentMonthKey = birthdayVoucherMonthKeyV266(new Date());
 
   for (const no of orderNos) {
     const raw = await env.ORDERS.get("order:" + no);
@@ -908,11 +951,22 @@ async function sky31RecomputeMemberForRewardV199(env, member, phone) {
     try { order = JSON.parse(raw); } catch (_) { continue; }
     const phones = [order.phone, order.memberPhone, order.submittedPhone].map(normalizePhone).filter(Boolean);
     if (!phones.some(p => sky31SamePhoneV199(p, phone))) continue;
-    if (!sky31OrderSuccessV199(order)) continue;
-    totalOrders += 1;
-    totalCups += sky31OrderDrinkCupCountV192(order.cart);
-    totalSpent += Number(order.totalAmount || 0);
-    rewardRedeemed += Math.max(0, Number(order.rewardUse || order.rewardUseRequested || 0));
+
+    const success = sky31OrderSuccessV199(order);
+    const cancelled = isCancelledOrder(order);
+    const normalUse = rewardNormalUseFromOrderV266(order);
+    const birthdayUse = rewardBirthdayUseFromOrderV266(order, currentMonthKey);
+
+    if (success) {
+      totalOrders += 1;
+      totalCups += sky31OrderDrinkCupCountV192(order.cart);
+      totalSpent += Number(order.totalAmount || 0);
+      rewardRedeemed += normalUse;
+      birthdayVoucherRedeemedThisMonth += birthdayUse;
+    } else if (!cancelled) {
+      rewardReserved += normalUse;
+      birthdayVoucherReservedThisMonth += birthdayUse;
+    }
   }
 
   const scannedTotalSpent = Math.round(totalSpent * 100) / 100;
@@ -924,6 +978,10 @@ async function sky31RecomputeMemberForRewardV199(env, member, phone) {
     totalCups,
     totalSpent: scannedTotalSpent,
     rewardRedeemed,
-    rewardsRedeemed: rewardRedeemed
+    rewardsRedeemed: rewardRedeemed,
+    rewardReserved,
+    rewardsReserved: rewardReserved,
+    birthdayVoucherRedeemedThisMonth,
+    birthdayVoucherReservedThisMonth
   };
 }

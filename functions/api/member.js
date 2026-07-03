@@ -230,6 +230,36 @@ async function loadMember(env, phone) {
   return await enrichMemberWithOrders(env, applyMemberTierOverrideV262(member, override));
 }
 
+
+function memberBirthdayVoucherMonthKeyV266(dateLike) {
+  const d = dateLike ? new Date(dateLike) : new Date();
+  const ok = !Number.isNaN(d.getTime());
+  const x = ok ? d : new Date();
+  return x.getUTCFullYear() + "-" + String(x.getUTCMonth() + 1).padStart(2, "0");
+}
+
+function memberRewardNormalUseFromOrderV266(order) {
+  if (!order) return 0;
+  if (order.rewardNormalUse != null) return Math.max(0, Number(order.rewardNormalUse || 0));
+  if (order.rewardBirthdayUse != null) return Math.max(0, Number(order.rewardUse || order.rewardUseRequested || 0) - Number(order.rewardBirthdayUse || 0));
+  return Math.max(0, Number(order.rewardUse || order.rewardUseRequested || 0));
+}
+
+function memberRewardBirthdayUseFromOrderV266(order, monthKey) {
+  if (!order) return 0;
+  const use = Math.max(0, Number(order.rewardBirthdayUse || order.birthdayVoucherCount || 0));
+  if (!use) return 0;
+  const key = String(order.birthdayVoucherMonthKey || memberBirthdayVoucherMonthKeyV266(order.createdAt || order.updatedAt || order.statusUpdatedAt || ""));
+  return !monthKey || key === monthKey ? use : 0;
+}
+
+function memberBirthdayVoucherUsedOrReservedV266(member) {
+  member = member || {};
+  return Math.max(0, Number(member.birthdayVoucherRedeemedThisMonth || 0)) +
+         Math.max(0, Number(member.birthdayVoucherReservedThisMonth || 0));
+}
+
+
 async function enrichMemberWithOrders(env, member) {
   const phone = normalizePhone(member.phone);
   const orderNos = await collectMemberOrderNos(env, phone, member);
@@ -239,6 +269,10 @@ async function enrichMemberWithOrders(env, member) {
   let totalCups = 0;
   let totalSpent = 0;
   let redeemedRewards = 0;
+  let reservedRewards = 0;
+  let birthdayVoucherRedeemedThisMonth = 0;
+  let birthdayVoucherReservedThisMonth = 0;
+  const currentBirthdayMonthKey = memberBirthdayVoucherMonthKeyV266(new Date());
   const historyStartAt = member.historyStartAt ? new Date(member.historyStartAt).getTime() : 0;
 
   for (const no of orderNos) {
@@ -262,11 +296,18 @@ async function enrichMemberWithOrders(env, member) {
     const amount = Number(order.totalAmount || cartTotal(order.cart) || 0);
     const successful = isMemberLifetimeSuccessfulOrderV202(order);
 
+    const normalRewardUse = memberRewardNormalUseFromOrderV266(order);
+    const birthdayRewardUse = memberRewardBirthdayUseFromOrderV266(order, currentBirthdayMonthKey);
+
     if (successful) {
       totalOrders += 1;
       totalCups += cups;
       totalSpent += amount;
-      redeemedRewards += Math.max(0, Number(order.rewardUse || order.rewardUseRequested || 0));
+      redeemedRewards += normalRewardUse;
+      birthdayVoucherRedeemedThisMonth += birthdayRewardUse;
+    } else if (!isCancelledOrder(order)) {
+      reservedRewards += normalRewardUse;
+      birthdayVoucherReservedThisMonth += birthdayRewardUse;
     }
 
     allOrders.push({
@@ -309,6 +350,7 @@ async function enrichMemberWithOrders(env, member) {
   const scannedTotalCups = totalCups;
   const scannedTotalSpent = Math.round(totalSpent * 100) / 100;
   const scannedRewardRedeemed = redeemedRewards;
+  const scannedRewardReserved = reservedRewards;
 
   // V239: use exact recomputed values, not Math.max(old, scanned).
   // Math.max prevented cups/free-drink counts from decreasing after undo pickup or cancel.
@@ -328,6 +370,10 @@ async function enrichMemberWithOrders(env, member) {
     totalSpent: Math.round(finalTotalSpent * 100) / 100,
     rewardRedeemed: finalRewardRedeemed,
     rewardsRedeemed: finalRewardRedeemed,
+    rewardReserved: scannedRewardReserved,
+    rewardsReserved: scannedRewardReserved,
+    birthdayVoucherRedeemedThisMonth,
+    birthdayVoucherReservedThisMonth,
     recentOrderNos: sortedOrders.map(o => o.orderNo).filter(Boolean).slice(0, 2000)
   };
 
@@ -339,6 +385,7 @@ async function enrichMemberWithOrders(env, member) {
       Number(member.totalCups || 0) !== fixedMember.totalCups ||
       Number(member.totalSpent || 0) !== fixedMember.totalSpent ||
       Number(member.rewardRedeemed || member.rewardsRedeemed || 0) !== Number(fixedMember.rewardRedeemed || 0) ||
+      Number(member.rewardReserved || member.rewardsReserved || 0) !== Number(fixedMember.rewardReserved || 0) ||
       JSON.stringify(member.recentOrderNos || []) !== JSON.stringify(fixedMember.recentOrderNos || [])
     ) {
       await env.ORDERS.put("member:" + phone, JSON.stringify(fixedMember));
@@ -373,6 +420,10 @@ async function enrichMemberWithOrders(env, member) {
     birthdayUpdatedBy: fixedMember.birthdayUpdatedBy || "",
     rewardRedeemed: Number(fixedMember.rewardRedeemed || 0),
     rewardsRedeemed: Number(fixedMember.rewardRedeemed || 0),
+    rewardReserved: Number(fixedMember.rewardReserved || fixedMember.rewardsReserved || 0),
+    rewardsReserved: Number(fixedMember.rewardReserved || fixedMember.rewardsReserved || 0),
+    birthdayVoucherRedeemedThisMonth: Number(fixedMember.birthdayVoucherRedeemedThisMonth || 0),
+    birthdayVoucherReservedThisMonth: Number(fixedMember.birthdayVoucherReservedThisMonth || 0),
     recentOrders: sortedOrders,
     historyOrders: sortedOrders,
     orders: sortedOrders
@@ -637,13 +688,15 @@ function sky31RewardsFromMemberV192(member) {
   member = member || {};
   const totalCups = Number(member.totalCups || member.cups || member.totalItems || member.orderCups || 0);
   const redeemed = Number(member.rewardRedeemed || member.rewardsRedeemed || 0);
+  const reserved = Number(member.rewardReserved || member.rewardsReserved || member.pendingRewardUse || 0);
   const earned = Math.floor(totalCups / 10);
-  const available = Math.max(0, earned - redeemed);
+  const available = Math.max(0, earned - redeemed - reserved);
   const tier = sky31RewardTierV192(totalCups);
   return {
     totalCups,
     earnedRewards: earned,
     redeemedRewards: redeemed,
+    reservedRewards: reserved,
     availableRewards: available,
     cupsToNextReward: Math.max(0, 10 - (totalCups % 10 || 10)),
     rule: "成功領取累計 10 杯，可免費兌換任何 1 杯飲品",
@@ -677,8 +730,9 @@ function sky31RewardsFromMemberV196(member) {
   member = member || {};
   const totalCups = Number(member.totalCups || member.cups || member.totalItems || member.orderCups || 0);
   const redeemed = Number(member.rewardRedeemed || member.rewardsRedeemed || 0);
+  const reserved = Number(member.rewardReserved || member.rewardsReserved || member.pendingRewardUse || 0);
   const earned = Math.floor(totalCups / 10);
-  const available = Math.max(0, earned - redeemed);
+  const available = Math.max(0, earned - redeemed - reserved);
   const progress = totalCups % 10;
   const cupsToNextReward = progress === 0 && totalCups > 0 ? 0 : 10 - progress;
   const tier = sky31RewardTierV196(totalCups);
@@ -686,6 +740,7 @@ function sky31RewardsFromMemberV196(member) {
     totalCups,
     earnedRewards: earned,
     redeemedRewards: redeemed,
+    reservedRewards: reserved,
     availableRewards: available,
     cupsToNextReward,
     nextRewardAt: (earned + 1) * 10,
@@ -714,6 +769,9 @@ function sky31DecorateMemberV196(member) {
     availableRewards: rewards.availableRewards,
     earnedRewards: rewards.earnedRewards,
     redeemedRewards: rewards.redeemedRewards,
+    reservedRewards: rewards.reservedRewards,
+    rewardReserved: rewards.reservedRewards,
+    rewardsReserved: rewards.reservedRewards,
     cupsToNextReward: rewards.cupsToNextReward,
     naturalMemberTier: rewards.tier.name,
     naturalMemberTierIcon: rewards.tier.icon,
@@ -823,6 +881,8 @@ function sky31BirthdayVoucherCountV217(member) {
   const key = String((tier && tier.key) || member.memberTierKey || member.manualTierKey || "").toLowerCase();
   const goldOrAbove = key === "gold" || key === "diamond" || key === "blackgold" || key === "vip";
   if (!goldOrAbove) return 0;
+
+  if (memberBirthdayVoucherUsedOrReservedV266(member) > 0) return 0;
 
   const month = Number(birthday.split("-")[1] || 0);
   const now = new Date();
