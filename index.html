@@ -8701,12 +8701,12 @@ button,
 }
 
 
-/* V288 mobile keyboard / viewport stability.
-   Keep modals from being compressed by iOS/Android keyboard resize. */
+
+/* V289 mobile keyboard stability.
+   Keep keyboard usable without pushing the whole modal/window upward. */
 :root{
   --sky31-stable-vh: 1vh;
   --sky31-visual-vh: 1vh;
-  --sky31-keyboard-bottom: 0px;
 }
 
 #cartModal.cart-modal.show,
@@ -8721,6 +8721,8 @@ button,
   overflow:hidden !important;
 }
 
+/* Do not force the whole modal to jump upward when keyboard opens.
+   Only the inner sheet remains scrollable. */
 .cart-sheet,
 .customer-sheet,
 .member-sheet,
@@ -8728,24 +8730,11 @@ button,
 .order-status-sheet,
 #orderStatusModal .order-status-sheet,
 #overlay .sheet{
-  max-height:calc((var(--sky31-visual-vh, var(--sky31-stable-vh, 1vh)) * 100) - env(safe-area-inset-top, 0px) - 18px) !important;
+  max-height:calc((var(--sky31-stable-vh, 1vh) * 100) - env(safe-area-inset-top, 0px) - 18px) !important;
   overflow-y:auto !important;
   -webkit-overflow-scrolling:touch !important;
   overscroll-behavior:contain !important;
   transform:translateZ(0);
-  will-change:scroll-position;
-}
-
-body.sky31-keyboard-open .cart-modal,
-body.sky31-keyboard-open .customer-modal,
-body.sky31-keyboard-open .member-modal,
-body.sky31-keyboard-open #orderStatusModal,
-body.sky31-keyboard-open .checkout-member-modal,
-body.sky31-keyboard-open #overlay{
-  align-items:flex-start !important;
-  justify-content:flex-start !important;
-  padding-top:calc(env(safe-area-inset-top, 0px) + 6px) !important;
-  box-sizing:border-box !important;
 }
 
 body.sky31-keyboard-open .cart-sheet,
@@ -8754,24 +8743,16 @@ body.sky31-keyboard-open .member-sheet,
 body.sky31-keyboard-open .checkout-member-card,
 body.sky31-keyboard-open .order-status-sheet,
 body.sky31-keyboard-open #overlay .sheet{
-  max-height:calc((var(--sky31-visual-vh, 1vh) * 100) - 8px) !important;
-  padding-bottom:calc(22px + env(safe-area-inset-bottom, 0px)) !important;
-  scroll-padding-bottom:140px !important;
+  padding-bottom:calc(24px + env(safe-area-inset-bottom, 0px)) !important;
+  scroll-padding-bottom:120px !important;
 }
 
 input,
 textarea,
 select{
-  scroll-margin-top:82px !important;
-  scroll-margin-bottom:180px !important;
+  scroll-margin-top:72px !important;
+  scroll-margin-bottom:120px !important;
 }
-
-body.sky31-keyboard-open input:focus,
-body.sky31-keyboard-open textarea:focus,
-body.sky31-keyboard-open select:focus{
-  transform:translateZ(0);
-}
-
 </style>
 
 <style>
@@ -9446,9 +9427,10 @@ document.addEventListener("DOMContentLoaded", sky31ShowSuccessFromUrl);
 
 
 
-(function sky31MobileKeyboardViewportFixV288(){
-  if (window.__SKY31_MOBILE_KEYBOARD_FIX_V288) return;
-  window.__SKY31_MOBILE_KEYBOARD_FIX_V288 = true;
+
+(function sky31MobileKeyboardViewportFixV289(){
+  if (window.__SKY31_MOBILE_KEYBOARD_FIX_V289) return;
+  window.__SKY31_MOBILE_KEYBOARD_FIX_V289 = true;
 
   var root = document.documentElement;
   var initialHeight = Math.max(window.innerHeight || 0, root.clientHeight || 0, 1);
@@ -9477,25 +9459,7 @@ document.addEventListener("DOMContentLoaded", sky31ShowSuccessFromUrl);
 
     root.style.setProperty("--sky31-stable-vh", (stableHeight * 0.01) + "px");
     root.style.setProperty("--sky31-visual-vh", (Math.max(visualHeight, 260) * 0.01) + "px");
-
-    var offsetTop = vv && vv.offsetTop ? vv.offsetTop : 0;
-    var keyboardBottom = Math.max(0, stableHeight - visualHeight - offsetTop);
-    root.style.setProperty("--sky31-keyboard-bottom", keyboardBottom + "px");
-
     document.body.classList.toggle("sky31-keyboard-open", !!keyboardLikelyOpen);
-  }
-
-  function focusedScrollIntoView(){
-    var el = document.activeElement;
-    if (!isEditable(el)) return;
-    setVars();
-    setTimeout(function(){
-      try {
-        el.scrollIntoView({ block:"center", inline:"nearest", behavior:"smooth" });
-      } catch(e) {
-        try { el.scrollIntoView(false); } catch(_) {}
-      }
-    }, 120);
   }
 
   setVars();
@@ -9515,7 +9479,7 @@ document.addEventListener("DOMContentLoaded", sky31ShowSuccessFromUrl);
   if (window.visualViewport) {
     window.visualViewport.addEventListener("resize", function(){
       setTimeout(setVars, 20);
-      setTimeout(focusedScrollIntoView, 180);
+      setTimeout(setVars, 180);
     }, { passive:true });
     window.visualViewport.addEventListener("scroll", function(){
       setTimeout(setVars, 20);
@@ -9526,8 +9490,6 @@ document.addEventListener("DOMContentLoaded", sky31ShowSuccessFromUrl);
     if (!isEditable(e.target)) return;
     document.body.classList.add("sky31-keyboard-open");
     setVars();
-    setTimeout(setVars, 80);
-    setTimeout(focusedScrollIntoView, 260);
   }, true);
 
   document.addEventListener("focusout", function(){
@@ -9539,8 +9501,6 @@ document.addEventListener("DOMContentLoaded", sky31ShowSuccessFromUrl);
     }, 180);
   }, true);
 })();
-
-
 function openOrderStatusModal() {
   const modal = document.getElementById("orderStatusModal");
   if (!modal) return;
