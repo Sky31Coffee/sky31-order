@@ -5498,7 +5498,12 @@ async function collectAllMemberRelatedKeysForPermanentDeleteV268(env, phone, ord
       "member_tier_override:",
       "member_purged:last8:",
       "member_deleted_phone_index:",
-      "member_deleted_order_marker:"
+      "member_deleted_order_marker:",
+      "gift_voucher:",
+      "voucher_lock:",
+      "voucher_reservation:",
+      "reward_lock:",
+      "reward_reservation:"
     ].forEach(prefix => exact.add(prefix + p));
 
     [
@@ -5507,7 +5512,14 @@ async function collectAllMemberRelatedKeysForPermanentDeleteV268(env, phone, ord
       "member_deleted_order:" + p + ":",
       "member_deleted_phone_index:" + p + ":",
       "member_deleted_order_marker:" + p + ":",
-      "member_tier_override:" + p + ":"
+      "member_tier_override:" + p + ":",
+      "member_stats_counted:" + p + ":",
+      "gift_voucher:" + p + ":",
+      "gift_voucher_history:" + p + ":",
+      "voucher_lock:" + p + ":",
+      "voucher_reservation:" + p + ":",
+      "reward_lock:" + p + ":",
+      "reward_reservation:" + p + ":"
     ].forEach(prefix => prefixes.push(prefix));
   }
 
@@ -5516,9 +5528,21 @@ async function collectAllMemberRelatedKeysForPermanentDeleteV268(env, phone, ord
     exact.add("member_tier_override:" + last);
     exact.add("member_deleted_phone_index:" + last);
     exact.add("member_deleted_order_marker:" + last);
+    exact.add("gift_voucher:" + last);
+    exact.add("voucher_lock:" + last);
+    exact.add("voucher_reservation:" + last);
+    exact.add("reward_lock:" + last);
+    exact.add("reward_reservation:" + last);
     prefixes.push("member_deleted_order:" + last + ":");
     prefixes.push("phone:" + last + ":");
     prefixes.push("member_ordered:" + last + ":");
+    prefixes.push("member_stats_counted:" + last + ":");
+    prefixes.push("gift_voucher:" + last + ":");
+    prefixes.push("gift_voucher_history:" + last + ":");
+    prefixes.push("voucher_lock:" + last + ":");
+    prefixes.push("voucher_reservation:" + last + ":");
+    prefixes.push("reward_lock:" + last + ":");
+    prefixes.push("reward_reservation:" + last + ":");
   }
 
   for (const orderNo of (orderNos || [])) {
@@ -5529,11 +5553,25 @@ async function collectAllMemberRelatedKeysForPermanentDeleteV268(env, phone, ord
       exact.add("member_deleted_order:" + p + ":" + orderNo);
       exact.add("member_deleted_phone_index:" + p + ":" + orderNo);
       exact.add("member_deleted_order_marker:" + p + ":" + orderNo);
+      exact.add("member_stats_counted:" + p + ":" + orderNo);
+      exact.add("gift_voucher:" + p + ":" + orderNo);
+      exact.add("gift_voucher_history:" + p + ":" + orderNo);
+      exact.add("voucher_lock:" + p + ":" + orderNo);
+      exact.add("voucher_reservation:" + p + ":" + orderNo);
+      exact.add("reward_lock:" + p + ":" + orderNo);
+      exact.add("reward_reservation:" + p + ":" + orderNo);
     }
     if (last) {
       exact.add("phone:" + last + ":" + orderNo);
       exact.add("member_ordered:" + last + ":" + orderNo);
       exact.add("member_deleted_order:" + last + ":" + orderNo);
+      exact.add("member_stats_counted:" + last + ":" + orderNo);
+      exact.add("gift_voucher:" + last + ":" + orderNo);
+      exact.add("gift_voucher_history:" + last + ":" + orderNo);
+      exact.add("voucher_lock:" + last + ":" + orderNo);
+      exact.add("voucher_reservation:" + last + ":" + orderNo);
+      exact.add("reward_lock:" + last + ":" + orderNo);
+      exact.add("reward_reservation:" + last + ":" + orderNo);
     }
   }
 
@@ -5685,7 +5723,7 @@ handleMemberAction = async function(env, cq, data) {
         "電話：" + requestedPhone,
         "刪除會員 key：" + result.deletedMemberKeys,
         "刪除訂單：" + result.deletedOrderKeys,
-        "刪除索引/備份：" + (result.deletedIndexKeys + result.deletedArchiveKeys),
+        "刪除索引/備份/券鎖定：" + (result.deletedIndexKeys + result.deletedArchiveKeys),
         "刪除 purge 標記：" + (result.deletedTombstoneKeys || 0),
         "合共刪除 KV：" + (result.deletedTotalKeys || 0),
         "",
