@@ -11938,15 +11938,11 @@ window.addEventListener("load", function() {
     var phone = sky31CleanPhoneV232(member.phone);
     var tierName = member.memberTier || member.memberTierName || "普通會員";
     var tierIcon = member.memberTierIcon || "🌱";
-    var available = Number(member.availableRewards || (member.rewards && member.rewards.availableRewards) || 0);
     return '' +
       '<div class="member-row"><span>會員</span><strong>' + esc(member.name || "-") + '</strong></div>' +
       '<div class="member-row"><span>電話</span><strong>' + esc(phone || "-") + '</strong></div>' +
       (member.birthday ? '<div class="member-row"><span>生日</span><strong>' + esc(member.birthday) + '</strong></div>' : '') +
       '<div class="member-row"><span>目前等級</span><strong>' + esc(tierName + " " + tierIcon) + '</strong></div>' +
-      '<div class="member-row"><span>實付累計杯數</span><strong>' + Number(member.totalCups || 0) + ' 杯</strong></div>' +
-      '<div class="member-row"><span>成功兌換免費杯數</span><strong>' + Number(member.successfulFreeCups || member.redeemedFreeCups || 0) + ' 杯</strong></div>' +
-      '<div class="member-row"><span>可用餐品券</span><strong>' + available + ' 張</strong></div>' +
       sky31MemberRewardHtml(member);
   }
 
