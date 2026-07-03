@@ -19635,5 +19635,66 @@ window.addEventListener("load", function() {
 .sky31-maintenance-card-v218 .small{ display:none !important; }
 </style>
 
+
+
+<style id="sky31-v291-member-safe-area-fix">
+/* V291: iPhone safe-area fix for Sky31 member center.
+   Problem: previous V109 used translateY(-3vh/-4vh) and vh max-height.
+   On iPhone/Safari the visual viewport plus safe-area can push the member sheet under the status/browser bar,
+   hiding the top title and close button. */
+.member-modal.show{
+  display:flex !important;
+}
+.member-modal{
+  box-sizing:border-box !important;
+  align-items:flex-start !important;
+  justify-content:center !important;
+  padding-top:calc(14px + env(safe-area-inset-top, 0px)) !important;
+  padding-right:12px !important;
+  padding-bottom:calc(14px + env(safe-area-inset-bottom, 0px)) !important;
+  padding-left:12px !important;
+  overflow:hidden !important;
+}
+.member-sheet{
+  box-sizing:border-box !important;
+  width:min(540px, 100%) !important;
+  margin:0 auto !important;
+  transform:none !important;
+  max-height:calc(100dvh - 28px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) !important;
+  overflow:auto !important;
+  -webkit-overflow-scrolling:touch !important;
+  overscroll-behavior:contain !important;
+}
+.member-topbar{
+  top:0 !important;
+  min-height:56px !important;
+}
+.member-nav-btn.close,
+.member-nav-btn.back{
+  z-index:8 !important;
+}
+@supports not (height: 100dvh){
+  .member-sheet{
+    max-height:calc(100vh - 28px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
+@media(max-width:430px){
+  .member-modal{
+    align-items:flex-start !important;
+    padding-top:calc(12px + env(safe-area-inset-top, 0px)) !important;
+    padding-right:8px !important;
+    padding-bottom:calc(12px + env(safe-area-inset-bottom, 0px)) !important;
+    padding-left:8px !important;
+  }
+  .member-sheet{
+    width:100% !important;
+    margin:0 auto !important;
+    transform:none !important;
+    max-height:calc(100dvh - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) !important;
+    border-radius:26px !important;
+  }
+}
+</style>
+
 </body>
 </html>
