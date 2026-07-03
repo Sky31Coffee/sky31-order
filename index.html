@@ -8700,6 +8700,78 @@ button,
   touch-action:manipulation !important;
 }
 
+
+/* V288 mobile keyboard / viewport stability.
+   Keep modals from being compressed by iOS/Android keyboard resize. */
+:root{
+  --sky31-stable-vh: 1vh;
+  --sky31-visual-vh: 1vh;
+  --sky31-keyboard-bottom: 0px;
+}
+
+#cartModal.cart-modal.show,
+#customerModal.customer-modal.show,
+#memberModal.member-modal.show,
+#orderStatusModal.order-status-modal.show,
+#orderStatusModal.show,
+#overlay.overlay.show,
+.checkout-member-modal.show{
+  height:calc(var(--sky31-stable-vh, 1vh) * 100) !important;
+  max-height:calc(var(--sky31-stable-vh, 1vh) * 100) !important;
+  overflow:hidden !important;
+}
+
+.cart-sheet,
+.customer-sheet,
+.member-sheet,
+.checkout-member-card,
+.order-status-sheet,
+#orderStatusModal .order-status-sheet,
+#overlay .sheet{
+  max-height:calc((var(--sky31-visual-vh, var(--sky31-stable-vh, 1vh)) * 100) - env(safe-area-inset-top, 0px) - 18px) !important;
+  overflow-y:auto !important;
+  -webkit-overflow-scrolling:touch !important;
+  overscroll-behavior:contain !important;
+  transform:translateZ(0);
+  will-change:scroll-position;
+}
+
+body.sky31-keyboard-open .cart-modal,
+body.sky31-keyboard-open .customer-modal,
+body.sky31-keyboard-open .member-modal,
+body.sky31-keyboard-open #orderStatusModal,
+body.sky31-keyboard-open .checkout-member-modal,
+body.sky31-keyboard-open #overlay{
+  align-items:flex-start !important;
+  justify-content:flex-start !important;
+  padding-top:calc(env(safe-area-inset-top, 0px) + 6px) !important;
+  box-sizing:border-box !important;
+}
+
+body.sky31-keyboard-open .cart-sheet,
+body.sky31-keyboard-open .customer-sheet,
+body.sky31-keyboard-open .member-sheet,
+body.sky31-keyboard-open .checkout-member-card,
+body.sky31-keyboard-open .order-status-sheet,
+body.sky31-keyboard-open #overlay .sheet{
+  max-height:calc((var(--sky31-visual-vh, 1vh) * 100) - 8px) !important;
+  padding-bottom:calc(22px + env(safe-area-inset-bottom, 0px)) !important;
+  scroll-padding-bottom:140px !important;
+}
+
+input,
+textarea,
+select{
+  scroll-margin-top:82px !important;
+  scroll-margin-bottom:180px !important;
+}
+
+body.sky31-keyboard-open input:focus,
+body.sky31-keyboard-open textarea:focus,
+body.sky31-keyboard-open select:focus{
+  transform:translateZ(0);
+}
+
 </style>
 
 <style>
@@ -9371,6 +9443,102 @@ function sky31ShowSuccessFromUrl(){
 }
 
 document.addEventListener("DOMContentLoaded", sky31ShowSuccessFromUrl);
+
+
+
+(function sky31MobileKeyboardViewportFixV288(){
+  if (window.__SKY31_MOBILE_KEYBOARD_FIX_V288) return;
+  window.__SKY31_MOBILE_KEYBOARD_FIX_V288 = true;
+
+  var root = document.documentElement;
+  var initialHeight = Math.max(window.innerHeight || 0, root.clientHeight || 0, 1);
+  var stableHeight = initialHeight;
+
+  function isEditable(el){
+    if (!el) return false;
+    var tag = String(el.tagName || "").toLowerCase();
+    return tag === "input" || tag === "textarea" || tag === "select" || !!el.isContentEditable;
+  }
+
+  function isMobileViewport(){
+    return /iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent || "") || Math.min(window.innerWidth || 0, window.innerHeight || 0) <= 820;
+  }
+
+  function setVars(){
+    var vv = window.visualViewport;
+    var visualHeight = vv && vv.height ? vv.height : (window.innerHeight || stableHeight);
+    var active = isEditable(document.activeElement);
+    var keyboardLikelyOpen = isMobileViewport() && active && visualHeight < stableHeight - 80;
+
+    if (!keyboardLikelyOpen) {
+      var currentHeight = Math.max(window.innerHeight || 0, root.clientHeight || 0, visualHeight || 0, 1);
+      if (currentHeight > stableHeight || !active) stableHeight = currentHeight;
+    }
+
+    root.style.setProperty("--sky31-stable-vh", (stableHeight * 0.01) + "px");
+    root.style.setProperty("--sky31-visual-vh", (Math.max(visualHeight, 260) * 0.01) + "px");
+
+    var offsetTop = vv && vv.offsetTop ? vv.offsetTop : 0;
+    var keyboardBottom = Math.max(0, stableHeight - visualHeight - offsetTop);
+    root.style.setProperty("--sky31-keyboard-bottom", keyboardBottom + "px");
+
+    document.body.classList.toggle("sky31-keyboard-open", !!keyboardLikelyOpen);
+  }
+
+  function focusedScrollIntoView(){
+    var el = document.activeElement;
+    if (!isEditable(el)) return;
+    setVars();
+    setTimeout(function(){
+      try {
+        el.scrollIntoView({ block:"center", inline:"nearest", behavior:"smooth" });
+      } catch(e) {
+        try { el.scrollIntoView(false); } catch(_) {}
+      }
+    }, 120);
+  }
+
+  setVars();
+
+  window.addEventListener("resize", function(){
+    setTimeout(setVars, 40);
+    setTimeout(setVars, 260);
+  }, { passive:true });
+
+  window.addEventListener("orientationchange", function(){
+    setTimeout(function(){
+      stableHeight = Math.max(window.innerHeight || 0, root.clientHeight || 0, stableHeight);
+      setVars();
+    }, 360);
+  }, { passive:true });
+
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", function(){
+      setTimeout(setVars, 20);
+      setTimeout(focusedScrollIntoView, 180);
+    }, { passive:true });
+    window.visualViewport.addEventListener("scroll", function(){
+      setTimeout(setVars, 20);
+    }, { passive:true });
+  }
+
+  document.addEventListener("focusin", function(e){
+    if (!isEditable(e.target)) return;
+    document.body.classList.add("sky31-keyboard-open");
+    setVars();
+    setTimeout(setVars, 80);
+    setTimeout(focusedScrollIntoView, 260);
+  }, true);
+
+  document.addEventListener("focusout", function(){
+    setTimeout(function(){
+      if (!isEditable(document.activeElement)) {
+        document.body.classList.remove("sky31-keyboard-open");
+        setVars();
+      }
+    }, 180);
+  }, true);
+})();
 
 
 function openOrderStatusModal() {
