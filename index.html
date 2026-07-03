@@ -12771,26 +12771,64 @@ window.addEventListener("load", function() {
   function refreshCheckoutAfterMemberChange(member){
     if(!member || !member.phone) return false;
 
-    try{ saveMember(member); }catch(e){}
-    try{ if(typeof saveStoredMember === "function") saveStoredMember(member); }catch(e){}
-    try{ if(typeof applyMember === "function") applyMember(member); }catch(e){}
-    try{ if(typeof updateMemberProfileButton === "function") updateMemberProfileButton(member); }catch(e){}
-    try{ setOrderCustomerFromMember(member); }catch(e){}
-    try{ if(typeof fillMemberForm === "function") fillMemberForm(member); }catch(e){}
-    try{ if(typeof renderHomeQuickCard === "function") renderHomeQuickCard(); }catch(e){}
-    try{ if(typeof renderMemberTierPageV210 === "function") renderMemberTierPageV210(); }catch(e){}
+    function saveEverywhere(){
+      try{ saveMember(member); }catch(e){}
+      try{ localStorage.setItem("sky31_member_v1", JSON.stringify(member)); }catch(e){}
+      try{ localStorage.setItem("sky31_member", JSON.stringify(member)); }catch(e){}
+      try{ sessionStorage.setItem("sky31_member_v1", JSON.stringify(member)); }catch(e){}
 
-    try{ if(typeof updateCheckoutCustomerInfo === "function") updateCheckoutCustomerInfo(); }catch(e){}
-    try{ if(typeof updateAll === "function") updateAll(); }catch(e){}
-    try{ if(typeof window.SKY31_RENDER_SUMMARY_V244 === "function") window.SKY31_RENDER_SUMMARY_V244(member); }catch(e){}
-    try{ if(typeof window.SKY31_RENDER_SUMMARY_V242 === "function") window.SKY31_RENDER_SUMMARY_V242(member); }catch(e){}
-    try{ if(typeof window.SKY31_RENDER_SUMMARY_V240 === "function") window.SKY31_RENDER_SUMMARY_V240(member); }catch(e){}
-    try{ if(typeof makeCustomerSummary === "function") makeCustomerSummary(); }catch(e){}
+      try{ window.__SKY31_FORCE_LOGGED_OUT_V234 = false; }catch(e){}
+      try{ window.__SKY31_HARD_LOGOUT_ACTIVE_V225 = false; }catch(e){}
+      try{ window.__SKY31_MEMBER_LOGGED_OUT_V224 = false; }catch(e){}
+      try{ window.__SKY31_REAL_LOGGED_OUT_V235 = false; }catch(e){}
+      try{ window.currentMember = member; }catch(e){}
+      try{ window.loggedMember = member; }catch(e){}
+      try{ window.memberData = member; }catch(e){}
+      try{ window.memberInfo = member; }catch(e){}
+      try{ window.currentCustomer = {name:member.name || "", phone:member.phone || ""}; }catch(e){}
+      try{ window.customer = window.currentCustomer; }catch(e){}
+      try{ window.customerInfo = window.currentCustomer; }catch(e){}
+      try{ window.checkoutCustomer = window.currentCustomer; }catch(e){}
+    }
 
-    try{
-      var cartModal = $("cartModal");
-      if(cartModal && cartModal.classList.contains("show")) document.body.style.overflow = "hidden";
-    }catch(e){}
+    function renderEverywhere(){
+      try{ if(typeof saveStoredMember === "function") saveStoredMember(member); }catch(e){}
+      try{ if(typeof applyMember === "function") applyMember(member); }catch(e){}
+      try{ if(typeof updateMemberProfileButton === "function") updateMemberProfileButton(member); }catch(e){}
+      try{ if(typeof window.SKY31_MEMBER_SYNC_V235 === "function") window.SKY31_MEMBER_SYNC_V235(member); }catch(e){}
+      try{ setOrderCustomerFromMember(member); }catch(e){}
+      try{ if(typeof fillMemberForm === "function") fillMemberForm(member); }catch(e){}
+      try{ if(typeof renderHomeQuickCard === "function") renderHomeQuickCard(); }catch(e){}
+      try{ if(typeof renderMemberTierPageV210 === "function") renderMemberTierPageV210(); }catch(e){}
+
+      try{ if(typeof updateCheckoutCustomerInfo === "function") updateCheckoutCustomerInfo(); }catch(e){}
+      try{ if(typeof updateAll === "function") updateAll(); }catch(e){}
+      try{ if(typeof window.SKY31_RENDER_SUMMARY_V244 === "function") window.SKY31_RENDER_SUMMARY_V244(member); }catch(e){}
+      try{ if(typeof window.SKY31_RENDER_SUMMARY_V242 === "function") window.SKY31_RENDER_SUMMARY_V242(member); }catch(e){}
+      try{ if(typeof window.SKY31_RENDER_SUMMARY_V240 === "function") window.SKY31_RENDER_SUMMARY_V240(member); }catch(e){}
+      try{ if(typeof makeCustomerSummary === "function") makeCustomerSummary(); }catch(e){}
+
+      try{
+        var err = $("errorMsg");
+        if(err){ err.textContent = ""; err.style.display = "none"; }
+      }catch(e){}
+
+      try{
+        var cartModal = $("cartModal");
+        if(cartModal && cartModal.classList.contains("show")) document.body.style.overflow = "hidden";
+      }catch(e){}
+    }
+
+    saveEverywhere();
+    renderEverywhere();
+
+    // Keep the login state after checkout-login even if an older logout timer is still pending.
+    [80, 260, 720, 1300].forEach(function(ms){
+      setTimeout(function(){
+        saveEverywhere();
+        renderEverywhere();
+      }, ms);
+    });
 
     try{
       window.dispatchEvent(new CustomEvent("sky31:member-updated", {detail:{member:member, source:"checkout"}}));
@@ -17342,7 +17380,7 @@ window.addEventListener("load", function() {
       '<div class="sky31-maintenance-card-v218">' +
         '<div class="sky31-maintenance-brand-v241">Sky31</div>' +
         '<div class="icon">⚠️</div>' +
-        '<h2><strong>正在維護</strong></h2>' +
+        '<h2><strong>維護升級中</strong></h2>' +
         '<p id="sky31MaintenanceMsgV218">正在維護升級，系統會儘快恢復，感謝你的耐心等候。</p>' +
         '' +
       '</div>';
@@ -17417,7 +17455,7 @@ window.addEventListener("load", function() {
     const p = document.getElementById("sky31MaintenanceMsgV218");
     const small = el.querySelector(".small");
     if(icon) icon.textContent = "⚠️";
-    if(title) title.innerHTML = "<strong>正在維護</strong>";
+    if(title) title.innerHTML = "<strong>維護升級中</strong>";
     if(p) p.textContent = "正在維護升級，系統會儘快恢復，感謝你的耐心等候。";
     if(small) small.remove();
     if(active) forceMaintenanceLogoutV246();
@@ -18631,7 +18669,7 @@ window.addEventListener("load", function() {
 
   var oldSetMaint = window.SKY31_CHECK_MAINTENANCE_V218;
   window.SKY31_MAINTENANCE_TEXT_V241 = {
-    title:"正在維護",
+    title:"維護升級中",
     message:"正在維護升級，系統會儘快恢復，感謝你的耐心等候。",
     small:""
   };
