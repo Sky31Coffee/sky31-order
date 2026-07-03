@@ -11628,6 +11628,7 @@ window.addEventListener("load", function() {
     var giftRedeemed = Number(member.giftVoucherRedeemed || member.giftVoucherUsed || (member.rewards && (member.rewards.giftVoucherRedeemed || member.rewards.giftVoucherUsed)) || 0);
     var giftReserved = Number(member.giftVoucherReserved || member.giftVoucherReservedRewards || (member.rewards && member.rewards.giftVoucherReserved) || 0);
     var available = Math.max(0, Number((member.rewards && member.rewards.availableRewards) ?? (earned + Math.max(0, gifted - giftRedeemed - giftReserved) - redeemed - reserved) ?? 0));
+    var successfulFreeCups = Number(member.successfulFreeCups || member.redeemedFreeCups || redeemed + giftRedeemed + Number(member.birthdayVoucherRedeemedThisMonth || 0));
     var progress = cups % 10;
     var remain = progress === 0 && cups > 0 ? 0 : 10 - progress;
     var pct = cups > 0 && progress === 0 ? 100 : Math.round((progress / 10) * 100);
@@ -11687,10 +11688,10 @@ window.addEventListener("load", function() {
           '<div class="member-reward-icon-v196" title="目前等級">' + esc(t.icon || "🌱") + '</div>' +
         '</div>' +
         '<div class="member-reward-grid-v196">' +
-          '<div class="member-reward-stat-v196"><b>' + cups + '</b><span>總累計<br>杯數</span></div>' +
-          '<div class="member-reward-stat-v196"><b>' + earned + '</b><span>累計獎賞<br>次數</span></div>' +
-          '<div class="member-reward-stat-v196"><b>' + redeemed + '</b><span>已成功兌換<br>免費杯數</span></div>' +
-          '<div class="member-reward-stat-v196"><b>' + available + '</b><span>目前可用<br>免單次數</span></div>' +
+          '<div class="member-reward-stat-v196"><b>' + cups + '</b><span>實付累計<br>杯數</span></div>' +
+          '<div class="member-reward-stat-v196"><b>' + earned + '</b><span>10杯自動券<br>總獲得</span></div>' +
+          '<div class="member-reward-stat-v196"><b>' + successfulFreeCups + '</b><span>成功兌換<br>免費杯數</span></div>' +
+          '<div class="member-reward-stat-v196"><b>' + available + '</b><span>目前可用<br>餐品券</span></div>' +
         '</div>' +
         '<div class="member-reward-bar-v196"><i style="width:' + pct + '%"></i></div>' +
         '<div class="member-reward-line-v196">🎁 成功領取累計 10 杯，可免費兌換任何 1 杯飲品。<br>' + esc(rewardText) + ' 免單只扣可用次數，不扣總累計杯數。</div>' +
@@ -11850,8 +11851,9 @@ window.addEventListener("load", function() {
       '<div class="member-row"><span>電話</span><strong>' + esc(phone || "-") + '</strong></div>' +
       (member.birthday ? '<div class="member-row"><span>生日</span><strong>' + esc(member.birthday) + '</strong></div>' : '') +
       '<div class="member-row"><span>目前等級</span><strong>' + esc(tierName + " " + tierIcon) + '</strong></div>' +
-      '<div class="member-row"><span>累計杯數</span><strong>' + Number(member.totalCups || 0) + ' 杯</strong></div>' +
-      '<div class="member-row"><span>可用免單</span><strong>' + available + ' 次</strong></div>' +
+      '<div class="member-row"><span>實付累計杯數</span><strong>' + Number(member.totalCups || 0) + ' 杯</strong></div>' +
+      '<div class="member-row"><span>成功兌換免費杯數</span><strong>' + Number(member.successfulFreeCups || member.redeemedFreeCups || 0) + ' 杯</strong></div>' +
+      '<div class="member-row"><span>可用餐品券</span><strong>' + available + ' 張</strong></div>' +
       sky31MemberRewardHtml(member);
   }
 
@@ -12050,7 +12052,8 @@ window.addEventListener("load", function() {
       '<div class="member-row"><span>會員</span><strong>' + esc(member.name || "-") + '</strong></div>' +
       '<div class="member-grid">' +
         '<div class="member-stat"><b>' + Number(member.totalOrders || 0) + '</b><span>總累計<br>訂單</span></div>' +
-        '<div class="member-stat"><b>' + Number(member.totalCups || 0) + '</b><span>總累計<br>杯數</span></div>' +
+        '<div class="member-stat"><b>' + Number(member.totalCups || 0) + '</b><span>實付累計<br>杯數</span></div>' +
+        '<div class="member-stat"><b>' + Number(member.successfulFreeCups || member.redeemedFreeCups || 0) + '</b><span>成功兌換<br>免費杯數</span></div>' +
         '<div class="member-stat"><b>' + money(member.totalSpent || 0).replace("MOP ","") + '</b><span>總消費<br>MOP</span></div>' +
       '</div>' + sky31MemberRewardHtml(member);
 
@@ -12129,7 +12132,7 @@ window.addEventListener("load", function() {
       return '<div class="member-order" id="memberOrder' + globalIdx + '">' +
         '<div class="member-order-summary">' +
           '<div><div class="member-order-no">#' + esc(o.orderNo || "") + '</div>' +
-          '<div class="member-order-meta">' + esc(dateText(o.createdAt)) + '｜' + esc(statusText(o.status)) + '｜' + Number(o.totalCups || 0) + ' 杯</div></div>' +
+          '<div class="member-order-meta">' + esc(dateText(o.createdAt)) + '｜' + esc(statusText(o.status)) + '｜' + Number(o.orderCups || o.totalOrderCups || o.totalCups || 0) + ' 杯' + (Number(o.redeemedFreeCups || o.freeRedeemedCups || o.voucherCups || 0) ? '｜累計+' + Number(o.loyaltyCups || o.paidCups || o.accumulatedCups || 0) + '｜兌換免費' + Number(o.redeemedFreeCups || o.freeRedeemedCups || o.voucherCups || 0) : '') + '</div></div>' +
           '<div class="member-order-total">' + money(o.totalAmount || 0) + '</div>' +
         '</div>' +
         '<button class="member-order-toggle" type="button" onclick="memberToggleOrder(' + globalIdx + ')">查看詳情 ▼</button>' +
@@ -18880,16 +18883,32 @@ window.addEventListener("load", function() {
     var tierDiscount = Number(o.tierDiscount || 0);
     var rewardDiscount = Number(o.rewardDiscount || 0);
     var rewardUse = Number(o.rewardUse || o.rewardUseRequested || 0);
-    var birthday = Number(o.birthdayVoucherCount || 0);
+    var birthday = Number(o.birthdayVoucherCount || o.rewardBirthdayUse || 0);
+    var giftUse = Number(o.rewardGiftUse || 0);
+    var earnedUse = Number(o.rewardEarnedUse || 0);
+    var voucherUse = Math.max(rewardUse, giftUse + earnedUse + birthday);
     var total = Number(o.totalAmount || 0);
     var tierName = String(o.memberTierName || "會員等級優惠");
     var tierDetail = Array.isArray(o.tierDiscountDetails) && o.tierDiscountDetails.length ? "（" + o.tierDiscountDetails.join("、") + "）" : "";
     var freeNames = Array.isArray(o.rewardFreeItems) && o.rewardFreeItems.length ? o.rewardFreeItems.map(function(x){return x.title || x.name || "飲品";}).slice(0,4).join("、") : "";
+    var orderCups = Number(o.orderCups || o.totalOrderCups || o.totalCups || 0);
+    if(!orderCups && Array.isArray(o.cart)){
+      orderCups = o.cart.reduce(function(sum,item){ return sum + Number(item.qty || item.quantity || 1); }, 0);
+    }
+    var loyaltyCups = Number(o.loyaltyCups || o.paidCups || o.accumulatedCups || Math.max(0, orderCups - voucherUse));
+    var freeCups = Number(o.redeemedFreeCups || o.freeRedeemedCups || o.voucherCups || voucherUse || 0);
+
     function row(label, value){ rows.push('<div class="' + cls + '"><span>' + esc241(label) + '</span><strong>' + esc241(value) + '</strong></div>'); }
+
+    if(orderCups > 0){
+      row(o.status === "picked_up" ? "已領取杯數" : "訂單杯數", orderCups + " 杯");
+      if(freeCups > 0) row("此單計入10杯累計", loyaltyCups + " 杯");
+      if(freeCups > 0) row("此單成功兌換免費杯數", freeCups + " 杯");
+    }
     if(subtotal > 0) row("原本總額", money241(subtotal));
     if(tierDiscount > 0) row(tierName + "優惠", "-" + money241(tierDiscount) + tierDetail);
-    if(rewardDiscount > 0) row("會員免單券", "-" + money241(rewardDiscount) + (rewardUse ? "（使用 " + rewardUse + " 張" + (freeNames ? "｜" + freeNames : "") + "）" : ""));
-    if(birthday > 0) row("生日月飲品券", birthday + " 張已計入可用免單");
+    if(rewardDiscount > 0) row("餐品券扣減", "-" + money241(rewardDiscount) + (voucherUse ? "（使用 " + voucherUse + " 張" + (freeNames ? "｜" + freeNames : "") + "）" : ""));
+    if(birthday > 0) row("生日月券", birthday + " 張");
     if(subtotal > 0 || tierDiscount > 0 || rewardDiscount > 0) row("實付金額", money241(total));
     return rows.length ? '<div class="sky31-order-discount-detail-v241">' + rows.join("") + '</div>' : "";
   }
