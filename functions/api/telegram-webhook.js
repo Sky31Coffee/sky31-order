@@ -24,6 +24,10 @@ export async function onRequest(context) {
 async function handleTelegramPost(context) {
   const { request } = context;
   const env = withD1Store(context.env);
+  // V290-D1-Fast: allow long member-stat recalculation to run after Telegram UI is updated.
+  if (typeof context.waitUntil === "function") {
+    env.__SKY31_WAIT_UNTIL = context.waitUntil.bind(context);
+  }
   const update = await request.json();
 
   if (!update.callback_query) {
@@ -1583,9 +1587,18 @@ async function saveAndRefresh(env, cq, order) {
 
   // V170: keep edited orders long-term. Do not revert to old 14-day TTL when Telegram buttons are pressed.
   await env.ORDERS.put("order:" + order.orderNo, JSON.stringify(order), { expirationTtl: 60 * 60 * 24 * 3650 });
-  try { await recalcMemberFromOrdersV199(env, order); } catch (_) {}
 
+  // V290-D1-Fast: update the Telegram message first.
+  // D1 is immediate, but member lifetime-stat recalculation scans order history and can make
+  // Telegram buttons feel slow. Run that recalculation in the background when possible.
   await editTelegramMessage(env, cq.message.chat.id, cq.message.message_id, buildTelegramText(order), buildReplyMarkup(order));
+
+  const recalcJob = recalcMemberFromOrdersV199(env, order).catch(() => {});
+  if (env && typeof env.__SKY31_WAIT_UNTIL === "function") {
+    env.__SKY31_WAIT_UNTIL(recalcJob);
+  } else {
+    await recalcJob;
+  }
 }
 
 function normalizeStatus(s) {
