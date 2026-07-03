@@ -874,62 +874,24 @@ function tgRewardEarnedUseFromOrderV270(order) {
 async function applyGiftVoucherActiveDeductV270(env, order, mode) {
   const giftUse = tgRewardGiftUseFromOrderV270(order);
   if (!giftUse || !order || !env || !env.ORDERS) return order;
-  const phone = normalizePhone(order.memberPhone || order.phone || order.submittedPhone);
-  if (!phone) return order;
 
-  const key = "member:" + phone;
-  let member = null;
-  try {
-    const raw = await env.ORDERS.get(key);
-    member = raw ? JSON.parse(raw) : null;
-  } catch (_) {
-    member = null;
-  }
-  if (!member || typeof member !== "object") return order;
-
+  // V277: Do not mutate giftVoucherBalance on pickup.
+  // giftVoucherBalance is the total staff-adjusted voucher pool.
+  // Available balance is recalculated from successful orders + pending locks:
+  // total staff-adjusted vouchers - picked_up gift use - pending gift use.
   const now = new Date().toISOString();
-  let balance = Math.max(0, Number(member.giftVoucherBalance || member.giftVouchers || member.manualGiftVouchers || 0));
 
   if (mode === "pickup") {
-    if (order.giftVoucherDeductedAt) return order;
-    const deduct = Math.min(balance, giftUse);
-    const shortfall = Math.max(0, giftUse - deduct);
-
-    balance = Math.max(0, balance - deduct);
-    member.giftVoucherBalance = balance;
-    member.giftVouchers = balance;
-    member.manualGiftVouchers = balance;
-    member.giftVoucherUpdatedAt = now;
-    member.giftVoucherUpdatedBy = "order_pickup";
-    member.giftVoucherLastDeductOrderNo = String(order.orderNo || order.orderId || "");
-
-    order.giftVoucherDeductedAt = now;
-    order.giftVoucherDeductedCount = deduct;
-
-    if (shortfall > 0) {
-      order.rewardGiftUse = deduct;
-      order.rewardEarnedUse = Math.max(0, Number(order.rewardEarnedUse || 0) + shortfall);
+    if (!order.giftVoucherDeductedAt) {
+      order.giftVoucherDeductedAt = now;
+      order.giftVoucherDeductedCount = giftUse;
     }
-
-    await env.ORDERS.put(key, JSON.stringify(member), { expirationTtl: 60 * 60 * 24 * 3650 });
     return order;
   }
 
   if (mode === "undo_pickup") {
-    const restore = Math.max(0, Number(order.giftVoucherDeductedCount || giftUse || 0));
-    if (!order.giftVoucherDeductedAt && !restore) return order;
-
-    balance = Math.max(0, balance + restore);
-    member.giftVoucherBalance = balance;
-    member.giftVouchers = balance;
-    member.manualGiftVouchers = balance;
-    member.giftVoucherUpdatedAt = now;
-    member.giftVoucherUpdatedBy = "order_undo_pickup";
-
     order.giftVoucherDeductedAt = null;
     order.giftVoucherDeductedCount = 0;
-
-    await env.ORDERS.put(key, JSON.stringify(member), { expirationTtl: 60 * 60 * 24 * 3650 });
     return order;
   }
 
@@ -977,6 +939,7 @@ async function enrichMemberStatsForTelegram(env, member) {
   let totalSpent = 0;
   let rewardRedeemed = 0;
   let rewardReserved = 0;
+  let giftVoucherRedeemed = 0;
   let giftVoucherReserved = 0;
   const seenOrderNosV272 = new Set();
   const recentOrders = [];
@@ -1008,6 +971,7 @@ async function enrichMemberStatsForTelegram(env, member) {
         totalCups += cups;
         totalSpent += amount;
         rewardRedeemed += earnedUse;
+        giftVoucherRedeemed += giftUse;
       } else if (!cancelled) {
         rewardReserved += earnedUse;
         giftVoucherReserved += giftUse;
@@ -1045,7 +1009,7 @@ async function enrichMemberStatsForTelegram(env, member) {
   const giftVoucherBalance = Math.max(0, Number(member.giftVoucherBalance || member.giftVouchers || member.manualGiftVouchers || 0));
   const earnedRewards = Math.floor(totalCups / 10);
   const earnedAvailable = Math.max(0, earnedRewards - rewardRedeemed - rewardReserved);
-  const giftAvailable = Math.max(0, giftVoucherBalance - giftVoucherReserved);
+  const giftAvailable = Math.max(0, giftVoucherBalance - giftVoucherRedeemed - giftVoucherReserved);
   const availableRewards = Math.max(0, earnedAvailable + giftAvailable);
 
   return {
@@ -1070,6 +1034,8 @@ async function enrichMemberStatsForTelegram(env, member) {
       earnedRewards,
       giftedRewards: giftVoucherBalance,
       giftVoucherBalance,
+      giftVoucherRedeemed,
+      giftVoucherUsed: giftVoucherRedeemed,
       giftVoucherReserved,
       giftVoucherAvailableRewards: giftAvailable,
       redeemedRewards: rewardRedeemed,
@@ -4067,6 +4033,7 @@ async function recalcMemberFromOrdersV199(env, changedOrder) {
   let totalSpent = 0;
   let rewardRedeemed = 0;
   let rewardReserved = 0;
+  let giftVoucherRedeemed = 0;
   let giftVoucherReserved = 0;
   const seenOrderNosV272 = new Set();
   let lastOrderAt = "";
@@ -4100,6 +4067,7 @@ async function recalcMemberFromOrdersV199(env, changedOrder) {
       totalCups += Math.max(0, Number(tgLoyaltyCupsForMemberQueryV275(order) || 0));
       totalSpent += Math.max(0, Number(order.totalAmount || cartTotalForMemberQuery(order.cart) || 0));
       rewardRedeemed += earnedUse;
+      giftVoucherRedeemed += giftUse;
     } else if (!cancelled) {
       rewardReserved += earnedUse;
       giftVoucherReserved += giftUse;
@@ -4127,6 +4095,8 @@ async function recalcMemberFromOrdersV199(env, changedOrder) {
     member.totalSpent = totalSpent;
     member.rewardRedeemed = rewardRedeemed;
     member.rewardsRedeemed = rewardRedeemed;
+    member.giftVoucherRedeemed = giftVoucherRedeemed;
+    member.giftVoucherUsed = giftVoucherRedeemed;
     member.rewardReserved = entryRewardReservedV272;
     member.rewardsReserved = entryRewardReservedV272;
     member.giftVoucherReserved = entryGiftVoucherReservedV272;
@@ -4574,12 +4544,13 @@ buildMemberDetailText = function(member, deleted = false) {
   const tier = memberDisplayTierV211(member);
   const rewards = member && member.rewards ? member.rewards : {};
   const earnedRewards = Number(member.earnedRewards ?? rewards.earnedRewards ?? Math.floor(Number(member.totalCups || 0) / 10));
-  const giftVoucherBalance = Math.max(0, Number(member.giftVoucherBalance ?? rewards.giftVoucherBalance ?? rewards.giftedRewards ?? 0));
+  const giftVoucherTotal = Math.max(0, Number(member.giftVoucherBalance ?? rewards.giftVoucherBalance ?? rewards.giftedRewards ?? 0));
+  const giftVoucherRedeemed = Math.max(0, Number(member.giftVoucherRedeemed ?? member.giftVoucherUsed ?? rewards.giftVoucherRedeemed ?? rewards.giftVoucherUsed ?? 0));
   const giftVoucherReserved = Math.max(0, Number(member.giftVoucherReserved ?? member.giftVoucherReservedRewards ?? rewards.giftVoucherReserved ?? 0));
   const rewardRedeemed = Number(member.rewardRedeemed ?? member.rewardsRedeemed ?? rewards.redeemedRewards ?? 0);
   const rewardReserved = Number(member.rewardReserved ?? member.rewardsReserved ?? rewards.reservedRewards ?? 0);
   const earnedAvailable = Math.max(0, earnedRewards - rewardRedeemed - rewardReserved);
-  const giftAvailable = Math.max(0, giftVoucherBalance - giftVoucherReserved);
+  const giftAvailable = Math.max(0, giftVoucherTotal - giftVoucherRedeemed - giftVoucherReserved);
   const availableRewards = Math.max(0, Number(member.availableRewards ?? rewards.availableRewards ?? (earnedAvailable + giftAvailable)));
 
   const lines = [];
@@ -4601,8 +4572,10 @@ buildMemberDetailText = function(member, deleted = false) {
   lines.push("");
   lines.push("🎁 餐品券");
   lines.push("10杯自動券餘額：" + earnedAvailable + " 張");
-  lines.push("店員調整券餘額：" + giftVoucherBalance + " 張");
+  lines.push("店員調整券總數：" + giftVoucherTotal + " 張");
+  if (giftVoucherRedeemed) lines.push("店員調整券已使用：" + giftVoucherRedeemed + " 張");
   if (giftVoucherReserved) lines.push("店員調整券已被未完成訂單佔用：" + giftVoucherReserved + " 張");
+  lines.push("店員調整券可用：" + giftAvailable + " 張");
   if (rewardReserved) lines.push("10杯券已被未完成訂單佔用：" + rewardReserved + " 張");
   lines.push("已使用10杯券：" + rewardRedeemed + " 張");
   lines.push("目前總可用餐品券：" + availableRewards + " 張");
@@ -4615,7 +4588,7 @@ buildMemberDetailText = function(member, deleted = false) {
   }
 
   lines.push("");
-  lines.push(deleted ? "此會員已刪除。" : "可在下方修改會員等級或調整餐品券。");
+  lines.push(deleted ? "此會員已刪除。" : "餐品券是統一名稱；10杯自動券、店員調整券、生日月券只是不同來源。");
   return lines.join("\n").trim();
 };
 
@@ -4706,13 +4679,14 @@ function giftVoucherCountV269(member) {
   return Math.max(0, Number((member && (member.giftVoucherBalance ?? member.giftVouchers ?? member.manualGiftVouchers)) || 0));
 }
 
-function clampGiftVoucherDeltaV269(delta, currentGift) {
+function clampGiftVoucherDeltaV269(delta, currentGift, minTotal) {
   delta = Math.round(Number(delta || 0));
   currentGift = giftVoucherCountV269({ giftVoucherBalance: currentGift });
+  minTotal = Math.max(0, Number(minTotal || 0));
   if (!Number.isFinite(delta)) delta = 0;
   if (delta > 50) delta = 50;
   if (delta < -50) delta = -50;
-  if (currentGift + delta < 0) delta = -currentGift;
+  if (currentGift + delta < minTotal) delta = minTotal - currentGift;
   return delta;
 }
 
@@ -4755,20 +4729,21 @@ function giftVoucherStatsV269(member) {
   const totalCups = Number(member.totalCups || rewards.totalCups || 0);
   const earned = Number(member.earnedRewards ?? rewards.earnedRewards ?? Math.floor(totalCups / 10));
   const gifted = giftVoucherCountV269(member);
+  const giftRedeemed = Number(member.giftVoucherRedeemed ?? member.giftVoucherUsed ?? rewards.giftVoucherRedeemed ?? rewards.giftVoucherUsed ?? 0);
   const giftReserved = Number(member.giftVoucherReserved ?? member.giftVoucherReservedRewards ?? rewards.giftVoucherReserved ?? 0);
   const redeemed = Number(member.rewardRedeemed ?? member.rewardsRedeemed ?? rewards.redeemedRewards ?? 0);
   const reserved = Number(member.rewardReserved ?? member.rewardsReserved ?? rewards.reservedRewards ?? 0);
   const earnedAvailable = Math.max(0, earned - redeemed - reserved);
-  const giftAvailable = Math.max(0, gifted - giftReserved);
+  const giftAvailable = Math.max(0, gifted - giftRedeemed - giftReserved);
   const available = Math.max(0, earnedAvailable + giftAvailable);
-  return { totalCups, earned, gifted, giftReserved, giftAvailable, redeemed, reserved, available };
+  return { totalCups, earned, gifted, giftRedeemed, giftReserved, giftAvailable, redeemed, reserved, available };
 }
 
 function buildGiftVoucherAdjustTextV269(member, delta) {
   const stats = giftVoucherStatsV269(member);
-  delta = clampGiftVoucherDeltaV269(delta, stats.gifted);
+  delta = clampGiftVoucherDeltaV269(delta, stats.gifted, stats.giftRedeemed + stats.giftReserved);
   const afterGift = Math.max(0, stats.gifted + delta);
-  const afterGiftAvailable = Math.max(0, afterGift - stats.giftReserved);
+  const afterGiftAvailable = Math.max(0, afterGift - stats.giftRedeemed - stats.giftReserved);
   const earnedAvailable = Math.max(0, stats.earned - stats.redeemed - stats.reserved);
   const afterAvailable = Math.max(0, earnedAvailable + afterGiftAvailable);
   const lines = [];
@@ -4778,27 +4753,29 @@ function buildGiftVoucherAdjustTextV269(member, delta) {
   lines.push("電話：" + (member.phone || "-"));
   lines.push("");
   lines.push("10杯自動券餘額：" + earnedAvailable + " 張");
-  lines.push("店員調整券餘額：" + stats.gifted + " 張");
+  lines.push("店員調整券總數：" + stats.gifted + " 張");
+  if (stats.giftRedeemed) lines.push("店員調整券已使用：" + stats.giftRedeemed + " 張");
   if (stats.giftReserved) lines.push("店員調整券被未完成訂單佔用：" + stats.giftReserved + " 張");
+  lines.push("店員調整券可用：" + stats.giftAvailable + " 張");
   if (stats.reserved) lines.push("10杯券被未完成訂單佔用：" + stats.reserved + " 張");
   lines.push("目前總可用餐品券：" + stats.available + " 張");
   lines.push("");
-  if (delta > 0) lines.push("本次：增加店員調整券 +" + delta + " 張");
-  else if (delta < 0) lines.push("本次：扣除店員調整券 " + Math.abs(delta) + " 張");
+  if (delta > 0) lines.push("本次：增加店員調整券總數 +" + delta + " 張");
+  else if (delta < 0) lines.push("本次：扣除店員調整券總數 " + Math.abs(delta) + " 張");
   else lines.push("本次：0 張");
-  lines.push("確定後店員調整券：" + afterGift + " 張");
+  lines.push("確定後店員調整券總數：" + afterGift + " 張");
   lines.push("預計總可用餐品券：" + afterAvailable + " 張");
   lines.push("");
-  lines.push("注意：10杯自動券不會被手動修改，避免會員杯數重算時資料混亂。");
+  lines.push("統一名稱：餐品券。10杯自動券、店員調整券、生日月券只是不同來源。");
   return lines.join("\n");
 }
 
 function buildGiftVoucherAdjustMarkupV269(member, delta) {
   const phone = normalizePhone(member && member.phone);
   const stats = giftVoucherStatsV269(member);
-  delta = clampGiftVoucherDeltaV269(delta, stats.gifted);
-  const dec1 = clampGiftVoucherDeltaV269(delta - 1, stats.gifted);
-  const inc1 = clampGiftVoucherDeltaV269(delta + 1, stats.gifted);
+  delta = clampGiftVoucherDeltaV269(delta, stats.gifted, stats.giftRedeemed + stats.giftReserved);
+  const dec1 = clampGiftVoucherDeltaV269(delta - 1, stats.gifted, stats.giftRedeemed + stats.giftReserved);
+  const inc1 = clampGiftVoucherDeltaV269(delta + 1, stats.gifted, stats.giftRedeemed + stats.giftReserved);
   return {
     inline_keyboard: [
       [
@@ -4844,7 +4821,8 @@ async function handleGiftVoucherActionV269(env, cq, data) {
     const { member } = await loadGiftVoucherMemberV269(env, phone);
     if (!member) return stop(env, cq, "找不到有效會員");
     const requested = action === "gift_voucher_reset" ? 0 : Number(parts[2] || 0);
-    const delta = clampGiftVoucherDeltaV269(requested, giftVoucherCountV269(member));
+    const statsForClamp = giftVoucherStatsV269(member);
+    const delta = clampGiftVoucherDeltaV269(requested, statsForClamp.gifted, statsForClamp.giftRedeemed + statsForClamp.giftReserved);
     await editTelegramMessage(env, chatId, messageId, buildGiftVoucherAdjustTextV269(member, delta), buildGiftVoucherAdjustMarkupV269(member, delta));
     return stop(env, cq, "已更新調整數量");
   }
@@ -4861,8 +4839,10 @@ async function handleGiftVoucherActionV269(env, cq, data) {
     const loaded = await findActiveMemberV223(env, phone);
     if (!loaded.member) return stop(env, cq, "找不到有效會員");
 
-    const before = giftVoucherCountV269(loaded.member);
-    const delta = clampGiftVoucherDeltaV269(requested, before);
+    const enrichedForClamp = await enrichMemberStatsForTelegram(env, loaded.member).catch(() => loaded.member);
+    const statsForClamp = giftVoucherStatsV269(enrichedForClamp);
+    const before = giftVoucherCountV269(enrichedForClamp);
+    const delta = clampGiftVoucherDeltaV269(requested, before, statsForClamp.giftRedeemed + statsForClamp.giftReserved);
     if (!delta) {
       const enrichedNoChange = await enrichMemberStatsForTelegram(env, loaded.member).catch(() => loaded.member);
       await editTelegramMessage(env, chatId, messageId, buildGiftVoucherAdjustTextV269(enrichedNoChange, 0), buildGiftVoucherAdjustMarkupV269(enrichedNoChange, 0));

@@ -965,8 +965,9 @@ function sky31RewardsFromMemberV192(member) {
   const redeemed = Number(member.rewardRedeemed || member.rewardsRedeemed || 0);
   const reserved = Number(member.rewardReserved || member.rewardsReserved || member.pendingRewardUse || 0);
   const gifted = Math.max(0, Number(member.giftVoucherBalance || member.giftVouchers || member.manualGiftVouchers || 0));
+  const giftRedeemed = Math.max(0, Number(member.giftVoucherRedeemed || member.giftVoucherUsed || 0));
   const giftReserved = Math.max(0, Number(member.giftVoucherReserved || member.giftVoucherReservedRewards || 0));
-  const giftAvailable = Math.max(0, gifted - giftReserved);
+  const giftAvailable = Math.max(0, gifted - giftRedeemed - giftReserved);
   const earned = Math.floor(totalCups / 10);
   const earnedAvailable = Math.max(0, earned - redeemed - reserved);
   const available = Math.max(0, earnedAvailable + giftAvailable);
@@ -975,6 +976,8 @@ function sky31RewardsFromMemberV192(member) {
     earnedRewards: earned,
     giftedRewards: gifted,
     giftVoucherBalance: gifted,
+    giftVoucherRedeemed: giftRedeemed,
+    giftVoucherUsed: giftRedeemed,
     giftVoucherReserved: giftReserved,
     giftVoucherAvailableRewards: giftAvailable,
     redeemedRewards: redeemed,
@@ -1106,6 +1109,7 @@ async function sky31RecomputeMemberForRewardV199(env, member, phone) {
   let totalSpent = 0;
   let rewardRedeemed = 0;
   let rewardReserved = 0;
+  let giftVoucherRedeemed = 0;
   let giftVoucherReserved = 0;
   let birthdayVoucherRedeemedThisMonth = 0;
   let birthdayVoucherReservedThisMonth = 0;
@@ -1132,6 +1136,7 @@ async function sky31RecomputeMemberForRewardV199(env, member, phone) {
       totalCups += sky31LoyaltyCupCountV275(order);
       totalSpent += Number(order.totalAmount || 0);
       rewardRedeemed += normalUse;
+      giftVoucherRedeemed += giftUse;
       birthdayVoucherRedeemedThisMonth += birthdayUse;
     } else if (!cancelled) {
       rewardReserved += normalUse;
@@ -1160,6 +1165,8 @@ async function sky31RecomputeMemberForRewardV199(env, member, phone) {
     totalSpent: scannedTotalSpent,
     rewardRedeemed,
     rewardsRedeemed: rewardRedeemed,
+    giftVoucherRedeemed,
+    giftVoucherUsed: giftVoucherRedeemed,
     rewardReserved,
     rewardsReserved: rewardReserved,
     giftVoucherReserved,
