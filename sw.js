@@ -1,4 +1,4 @@
-const SKY31_SW_VERSION = 'v301-push';
+const SKY31_SW_VERSION = 'v303-push';
 
 self.addEventListener('install', event => {
   self.skipWaiting();
@@ -19,7 +19,7 @@ self.addEventListener('push', event => {
   } catch (_) {}
   event.waitUntil(self.registration.showNotification(title, {
     body,
-    tag: 'sky31-order-ready',
+    tag: 'sky31-order-status',
     renotify: true,
     icon: '/apple-touch-icon.png',
     badge: '/favicon.png',

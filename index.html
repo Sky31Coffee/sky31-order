@@ -20407,7 +20407,7 @@ window.addEventListener("load", function() {
     return out;
   }
   async function registerSW(){
-    var reg = await navigator.serviceWorker.register("/sw.js?v=301", {scope:"/"});
+    var reg = await navigator.serviceWorker.register("/sw.js?v=303", {scope:"/"});
     try{ await navigator.serviceWorker.ready; }catch(e){}
     return reg;
   }
@@ -20467,7 +20467,7 @@ window.addEventListener("load", function() {
     box.id = "sky31PushBoxV301";
     box.className = "sky31-push-checkout-v301";
     box.innerHTML = '<div class="sky31-push-title-v301">🔔 取餐完成通知</div>' +
-      '<div class="sky31-push-text-v301">開啟後，店員在 Telegram 按「完成訂單」時，手機會收到可以取餐的通知。</div>' +
+      '<div class="sky31-push-text-v301">開啟後，店員在 Telegram 按「確認訂單」及「完成訂單」時，手機會收到訂單狀態通知。</div>' +
       '<button type="button" id="sky31PushBtnV301" class="sky31-push-btn-v301">🔔 開啟取餐通知</button>' +
       '<div class="sky31-push-tip-v301">iPhone 如未彈出通知權限，請先用 Safari「加入主畫面」，再從主畫面打開 Sky31。</div>';
     anchor.parentNode.insertBefore(box, anchor.nextSibling);
@@ -20480,7 +20480,7 @@ window.addEventListener("load", function() {
       try{
         await enablePush(btn);
         btn.textContent = "✅ 已開啟取餐通知";
-        alert("已開啟取餐通知。之後訂單完成時，手機會收到提醒。");
+        alert("已開啟訂單通知。之後店家確認訂單及完成取餐時，手機會收到提醒。");
       }catch(e){
         btn.textContent = old || "🔔 開啟取餐通知";
         alert((e && e.message) || "開啟通知失敗");
