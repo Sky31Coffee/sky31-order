@@ -9,7 +9,7 @@ export async function onRequest(context) {
     return json({
       ok: true,
       endpoint: "telegram-webhook",
-      version: "V303",
+      version: "V307-LimitedBeanShelf",
       method,
       message: "Webhook endpoint reachable. Telegram sends POST updates here."
     });
@@ -330,8 +330,10 @@ function isLimitedMenuCommand(text) {
     t.startsWith("刪除限定") ||
     t.startsWith("删除限定") ||
     t.startsWith("停用限定") ||
+    t.startsWith("下架限定") ||
     t.startsWith("啟用限定") ||
     t.startsWith("启用限定") ||
+    t.startsWith("上架限定") ||
     t.startsWith("清空限定")
   );
 }
@@ -1883,8 +1885,10 @@ isLimitedMenuCommand = function(text) {
     t.startsWith("刪除限定") ||
     t.startsWith("删除限定") ||
     t.startsWith("停用限定") ||
+    t.startsWith("下架限定") ||
     t.startsWith("啟用限定") ||
     t.startsWith("启用限定") ||
+    t.startsWith("上架限定") ||
     t.startsWith("清空限定")
   );
 }
@@ -1966,21 +1970,29 @@ handleLimitedMenuTextCommand = async function(env, message, text) {
     return json({ ok: true });
   }
 
-  if (t.startsWith("停用限定") || t.startsWith("啟用限定") || t.startsWith("启用限定")) {
-    const enable = t.startsWith("啟用限定") || t.startsWith("启用限定");
-    const id = cleanLimitedId(t.replace(/^停用限定|^啟用限定|^启用限定/, "").trim());
-    const config = await getLimitedMenuConfig(env);
+  if (t.startsWith("停用限定") || t.startsWith("下架限定") || t.startsWith("啟用限定") || t.startsWith("启用限定") || t.startsWith("上架限定")) {
+    const publish = t.startsWith("啟用限定") || t.startsWith("启用限定") || t.startsWith("上架限定");
+    const id = cleanLimitedId(t.replace(/^停用限定|^下架限定|^啟用限定|^启用限定|^上架限定/, "").trim());
+    let config = await getLimitedMenuConfig(env);
+    config.limitedItems = Array.isArray(config.limitedItems) ? config.limitedItems : [];
     let found = false;
     config.limitedItems.forEach(item => {
       if (cleanLimitedId(item.id) === id || String(item.name || "").trim() === id || String(item.cn || "").trim() === id) {
-        item.active = enable;
+        const itemId = cleanLimitedId(item.id);
+        item.active = publish;
+        item.deleted = false;
         item.updatedAt = new Date().toISOString();
+        let ids = currentLimitedBeanIdsV191(config).filter(x => x !== itemId);
+        if (publish) ids = [itemId, ...ids].slice(0, 2);
+        config.currentLimitedBeanIds = ids;
+        config.currentLimitedBeanId = ids[0] || "";
         found = true;
       }
     });
-    config.cleared = config.limitedItems.length === 0;
+    config.updatedAt = new Date().toISOString();
     await saveLimitedMenuConfig(env, config);
-    await sendTelegramMessage(env, chatId, found ? (enable ? "已啟用限定豆子：" : "已停用限定豆子：") + id : "找不到限定豆子：" + id, buildLimitedListMarkup(config));
+    config = await normalizeLimitedCurrentV184(env, await getLimitedMenuConfig(env));
+    await sendTelegramMessage(env, chatId, found ? (publish ? "已上架限定豆子：" : "已下架限定豆子：") + id : "找不到限定豆子：" + id, buildLimitedListMarkup(config));
     return json({ ok: true });
   }
 
@@ -2381,8 +2393,10 @@ isLimitedMenuCommand = function(text) {
     t.startsWith("刪除限定") ||
     t.startsWith("删除限定") ||
     t.startsWith("停用限定") ||
+    t.startsWith("下架限定") ||
     t.startsWith("啟用限定") ||
     t.startsWith("启用限定") ||
+    t.startsWith("上架限定") ||
     t.startsWith("清空限定")
   );
 }
@@ -2955,8 +2969,10 @@ isLimitedMenuCommand = function(text) {
     t.startsWith("刪除限定") ||
     t.startsWith("删除限定") ||
     t.startsWith("停用限定") ||
+    t.startsWith("下架限定") ||
     t.startsWith("啟用限定") ||
     t.startsWith("启用限定") ||
+    t.startsWith("上架限定") ||
     t.startsWith("顯示限定") ||
     t.startsWith("显示限定") ||
     t.startsWith("設為顯示") ||
@@ -3481,7 +3497,8 @@ saveLimitedDraftToMenuV183 = async function(env, chatId, draft) {
 function limitedBeanDetailTextV187(item, isCurrent) {
   if (!item) return "找不到限定豆子。";
   const deleted = item.deleted === true;
-  const status = deleted ? "已刪除" : (item.active === false ? "已停用" : "上架中");
+  const isPublished = item.active !== false && isCurrent;
+  const status = deleted ? "已刪除" : (isPublished ? "上架中｜網站顯示" : (item.active === false ? "已下架｜網站不顯示" : "已保存｜未上架"));
   return [
     "✨ 限定豆子資料",
     "",
@@ -3491,7 +3508,7 @@ function limitedBeanDetailTextV187(item, isCurrent) {
     item.desc ? "描述：" + item.desc : "",
     item.note ? "備註：" + item.note : "",
     "編號：" + cleanLimitedId(item.id),
-    "狀態：" + status + (isCurrent ? "｜目前顯示" : ""),
+    "狀態：" + status,
     "價格：客人選擇時自動 +MOP 5"
   ].filter(Boolean).join("\n");
 }
@@ -3860,7 +3877,8 @@ limitedBeanDetailMarkupV187 = function(item, isCurrent) {
     rows.push([{ text: "↩️ 恢復豆子", callback_data: "limited_restore:" + id }]);
     rows.push([{ text: "⚠️ 永久刪除", callback_data: "limited_permanent_delete:" + id }]);
   } else {
-    rows.push([{ text: isCurrent ? "從網站顯示移除" : "加入網站顯示", callback_data: "limited_toggle_display:" + id }]);
+    const isPublished = item.active !== false && isCurrent;
+    rows.push([{ text: isPublished ? "下架（網站不顯示）" : "上架到網站", callback_data: (isPublished ? "limited_unpublish:" : "limited_publish:") + id }]);
     rows.push([{ text: "✏️ 編輯豆子", callback_data: "limited_wizard_edit:" + id }]);
     rows.push([{ text: "🗑️ 刪除豆子", callback_data: "limited_delete:" + id }]);
   }
@@ -3881,7 +3899,7 @@ buildLimitedListText = function(config) {
   lines.push("");
   lines.push("保存豆子：" + activeSaved.length);
   if (deletedCount) lines.push("已刪除可恢復：" + deletedCount + "（可永久刪除）");
-  lines.push("網站顯示：" + (currentBeans.length ? currentBeans.map(x => x.bean || x.name || "-").join(" / ") : "暫無"));
+  lines.push("網站上架：" + (currentBeans.length ? currentBeans.map(x => x.bean || x.name || "-").join(" / ") : "暫無"));
   lines.push("");
   if (!items.length) {
     lines.push("目前沒有保存限定豆子。");
@@ -3891,15 +3909,16 @@ buildLimitedListText = function(config) {
     items.forEach(item => lines.push(limitedItemLineWithCurrentV184(item, ids)));
   }
   lines.push("");
-  lines.push("提示：普通刪除可恢復；永久刪除後不會再出現在列表。");
-  lines.push("網站最多顯示 2 款限定豆子。");
+  lines.push("提示：下架只是不在網站顯示，資料仍保留；刪除後仍可恢復，永久刪除才會徹底移除。");
+  lines.push("網站最多上架 2 款限定豆子；如只上架 1 款，網站只顯示 1 款。");
   return lines.join("\n");
 };
 
 limitedItemLineWithCurrentV184 = function(item, currentIds) {
   currentIds = Array.isArray(currentIds) ? currentIds : [currentIds].filter(Boolean);
-  const status = item.deleted === true ? "已刪除" : (item.active === false ? "停用" : "啟用");
-  const current = currentIds.includes(cleanLimitedId(item.id)) && item.deleted !== true ? "｜網站顯示" : "";
+  const isCurrent = currentIds.includes(cleanLimitedId(item.id)) && item.deleted !== true && item.active !== false;
+  const status = item.deleted === true ? "已刪除" : (isCurrent ? "上架中" : (item.active === false ? "已下架" : "已保存"));
+  const current = isCurrent ? "｜網站顯示" : "";
   const surcharge = Number(item.surcharge || item.limitedSurcharge || 5) || 5;
   return [
     "• [" + status + "] " + (item.bean || item.name || "-") + current,
@@ -3918,7 +3937,8 @@ buildLimitedListMarkup = function(config) {
 
   items.slice(0, 12).forEach(item => {
     const id = cleanLimitedId(item.id);
-    const prefix = item.deleted === true ? "🗑️ " : (currentIds.includes(id) ? "✅ " : "☕ ");
+    const isCurrent = currentIds.includes(id) && item.active !== false;
+    const prefix = item.deleted === true ? "🗑️ " : (isCurrent ? "✅ " : (item.active === false ? "📦 " : "☕ "));
     const label = (prefix + (item.name || item.bean || id)).slice(0, 48);
     if (item.deleted === true) {
       rows.push([
@@ -3927,6 +3947,7 @@ buildLimitedListMarkup = function(config) {
       ]);
     } else {
       rows.push([{ text: label, callback_data: "limited_detail:" + id }]);
+      rows.push([{ text: isCurrent ? "下架" : "上架", callback_data: (isCurrent ? "limited_unpublish:" : "limited_publish:") + id }]);
     }
   });
 
@@ -3990,33 +4011,52 @@ handleLimitedMenuAction = async function(env, cq, data) {
     return stop(env, cq, before !== config.limitedItems.length ? "已永久刪除：" + ((removed && (removed.bean || removed.name)) || id) : "找不到豆子");
   }
 
-  if (action === "limited_toggle_display") {
+  if (action === "limited_publish" || action === "limited_unpublish") {
+    const publish = action === "limited_publish";
     let config = await getLimitedMenuConfig(env);
     config.limitedItems = Array.isArray(config.limitedItems) ? config.limitedItems : [];
     const item = config.limitedItems.find(x => cleanLimitedId(x.id) === id);
-    if (!item || item.deleted === true) return stop(env, cq, "找不到可顯示豆子");
+    if (!item || item.deleted === true) return stop(env, cq, "找不到可操作豆子");
 
-    item.active = true;
-    let ids = currentLimitedBeanIdsV191(config);
-    if (ids.includes(id)) {
-      ids = ids.filter(x => x !== id);
-    } else {
-      ids = [id, ...ids].slice(0, 2);
-    }
+    item.active = publish;
+    item.deleted = false;
+    item.updatedAt = new Date().toISOString();
+
+    let ids = currentLimitedBeanIdsV191(config).filter(x => x !== id);
+    if (publish) ids = [id, ...ids].slice(0, 2);
     config.currentLimitedBeanIds = ids;
     config.currentLimitedBeanId = ids[0] || "";
     config.updatedAt = new Date().toISOString();
+    config.updatedBy = publish ? "telegram-publish" : "telegram-unpublish";
     await saveLimitedMenuConfig(env, config);
     config = await normalizeLimitedCurrentV184(env, await getLimitedMenuConfig(env));
 
     const currentIds = currentLimitedBeansV191(config).map(x => cleanLimitedId(x.id));
     const refreshed = findLimitedItemV183(config, id);
     await editOrSendV183(env, chatId, messageId, limitedBeanDetailTextV187(refreshed, currentIds.includes(id)), limitedBeanDetailMarkupV187(refreshed, currentIds.includes(id)));
-    return stop(env, cq, currentIds.includes(id) ? "已加入網站顯示" : "已從網站顯示移除");
+    return stop(env, cq, publish ? "已上架到網站" : "已下架，網站不再顯示");
+  }
+
+  if (action === "limited_toggle_display") {
+    // Backward compatibility for old Telegram buttons.
+    let config = await getLimitedMenuConfig(env);
+    config.limitedItems = Array.isArray(config.limitedItems) ? config.limitedItems : [];
+    const item = config.limitedItems.find(x => cleanLimitedId(x.id) === id);
+    if (!item || item.deleted === true) return stop(env, cq, "找不到可操作豆子");
+    const isCurrent = currentLimitedBeanIdsV191(config).includes(id) && item.active !== false;
+    return handleLimitedMenuAction(env, cq, (isCurrent ? "limited_unpublish:" : "limited_publish:") + id);
   }
 
   if (action === "limited_set_current") {
     let config = await getLimitedMenuConfig(env);
+    config.limitedItems = Array.isArray(config.limitedItems) ? config.limitedItems : [];
+    config.limitedItems.forEach(item => {
+      if (cleanLimitedId(item.id) === id) {
+        item.active = true;
+        item.deleted = false;
+        item.updatedAt = new Date().toISOString();
+      }
+    });
     config.currentLimitedBeanIds = [id, ...currentLimitedBeanIdsV191(config).filter(x => x !== id)].slice(0, 2);
     config.currentLimitedBeanId = config.currentLimitedBeanIds[0] || "";
     await saveLimitedMenuConfig(env, config);
