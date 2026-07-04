@@ -1,5 +1,5 @@
 // Sky31 Web Push helpers
-// V303: order status notifications with encrypted payload messages. Uses D1-only env.ORDERS store.
+// V304: cleaner professional notification wording. Uses D1-only env.ORDERS store.
 
 const DEFAULT_VAPID_PUBLIC_KEY = "BH6_njul0KgPix_FVFwoLh1Si87hWlINKA4FuFBM-uXJO68zj_ln7A2nsfi8wTwzQhjDAmQSygeH12cnk8iZsbc";
 const DEFAULT_VAPID_PRIVATE_KEY = "kKSXGlZlIDiUbc2cryMiU6Nu0wmhvXU5Ssthm3MOYDI";
@@ -44,7 +44,7 @@ export async function savePushSubscriptionV301(env, phone, subscription, meta = 
     createdAt: meta.createdAt || now,
     updatedAt: now,
     enabled: true,
-    version: "v301"
+    version: "v304"
   };
   await env.ORDERS.put(pushKey(phone, endpointHash), JSON.stringify(record), { expirationTtl: 60 * 60 * 24 * 3650 });
   await env.ORDERS.put("push_endpoint:" + endpointHash, JSON.stringify({ phone, key: pushKey(phone, endpointHash), updatedAt: now }), { expirationTtl: 60 * 60 * 24 * 3650 });
@@ -54,16 +54,16 @@ export async function savePushSubscriptionV301(env, phone, subscription, meta = 
 export async function sendOrderReadyPushV301(env, order) {
   const no = String((order && order.orderNo) || "").trim();
   const msg = no
-    ? "你的訂單 #" + no + " 已完成，可以取餐了 ☕"
-    : "你的訂單已完成，可以取餐了 ☕";
+    ? "可以取餐啦。你的訂單 #" + no + " 已完成，請到店取餐。"
+    : "可以取餐啦。你的訂單已完成，請到店取餐。";
   return sendOrderStatusPushV303(env, order, msg, "ready");
 }
 
 export async function sendOrderConfirmedPushV303(env, order) {
   const no = String((order && order.orderNo) || "").trim();
   const msg = no
-    ? "店家已接收並確認你的訂單 #" + no + "，會按取餐時間準備 ☕"
-    : "店家已接收並確認你的訂單，會按取餐時間準備 ☕";
+    ? "訂單已確認。店家已接收你的訂單 #" + no + "，會按取餐時間準備。"
+    : "訂單已確認。店家已接收你的訂單，會按取餐時間準備。";
   return sendOrderStatusPushV303(env, order, msg, "confirmed");
 }
 
@@ -76,7 +76,7 @@ export async function sendOrderStatusPushV303(env, order, message, kind = "statu
   let sent = 0;
   let failed = 0;
   const staleKeys = [];
-  const payload = String(message || "你的 Sky31 訂單狀態已更新。");
+  const payload = String(message || "你的訂單狀態已更新。");
   await Promise.all(subs.map(async rec => {
     try {
       const res = await sendRawPush(env, rec.subscription || rec, payload);
@@ -103,7 +103,7 @@ export async function sendTestPushToPhoneV301(env, phone) {
   let failed = 0;
   for (const rec of subs) {
     try {
-      const res = await sendRawPush(env, rec.subscription || rec, "Sky31 測試通知：如果你收到這條訊息，代表取餐通知已成功開啟 ☕");
+      const res = await sendRawPush(env, rec.subscription || rec, "Sky31 測試通知：如果你收到這條訊息，代表取餐通知已成功開啟。");
       if (res && res.ok) sent += 1; else failed += 1;
     } catch (_) { failed += 1; }
   }
