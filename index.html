@@ -20002,5 +20002,338 @@ window.addEventListener("load", function() {
 })();
 </script>
 
+
+
+<script id="sky31-v300-americano-price-sync">
+/* V300: final price source of truth.
+   Americano iced base is MOP 40; Limited bean +MOP 5 is added after base price.
+   Subtotal must count iced and limited surcharges first, then member tier discount, then full-cup voucher. */
+(function(){
+  if(window.__SKY31_V300_PRICE_SYNC__) return;
+  window.__SKY31_V300_PRICE_SYNC__ = true;
+
+  const PRICE_TABLE_V300 = {
+    americano: { hot:35, iced:40 },
+    latte: { hot:40, iced:45 },
+    cappuccino: { hot:40, iced:45 },
+    mocha: { hot:38, iced:43 },
+    chocolate: { hot:30, iced:35 },
+    dirty: { fixed:38 }
+  };
+  const LIMITED_SURCHARGE_V300 = 5;
+  const MEMBER_KEY_V300 = 'sky31_member_v1';
+
+  function round(n){ return Math.round(Number(n || 0) * 100) / 100; }
+  function money(n){
+    if(typeof sky31Money === 'function') return sky31Money(n);
+    return 'MOP ' + round(n).toString();
+  }
+  function esc(s){
+    if(typeof window.esc === 'function') return window.esc(s);
+    return String(s == null ? '' : s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});
+  }
+  function norm(s){ return String(s || '').toLowerCase().replace(/\s+/g,''); }
+  function keyOf(name, cn){
+    const n = norm(name) + ' ' + norm(cn);
+    if(n.indexOf('dirty') >= 0 || n.indexOf('髒') >= 0 || n.indexOf('脏') >= 0) return 'dirty';
+    if(n.indexOf('americano') >= 0 || n.indexOf('美式') >= 0) return 'americano';
+    if(n.indexOf('latte') >= 0 || n.indexOf('拿鐵') >= 0 || n.indexOf('拿铁') >= 0) return 'latte';
+    if(n.indexOf('cappuccino') >= 0 || n.indexOf('卡布') >= 0) return 'cappuccino';
+    if(n.indexOf('mocha') >= 0 || n.indexOf('摩卡') >= 0) return 'mocha';
+    if(n.indexOf('chocolate') >= 0 || n.indexOf('可可') >= 0) return 'chocolate';
+    return '';
+  }
+  function isIced(temp){
+    temp = String(temp || '');
+    return temp.indexOf('Iced') >= 0 || temp.indexOf('凍') >= 0 || temp.indexOf('冻') >= 0;
+  }
+  function isLimited(bean){
+    const s = String(bean || '');
+    return s.indexOf('Limited｜') === 0 || s.indexOf('Limited|') === 0 || s.indexOf('限定豆子') >= 0;
+  }
+  function selectedBean(){
+    try{ if(typeof window.SKY31_SELECTED_BEAN_TEXT_V208 === 'function') return window.SKY31_SELECTED_BEAN_TEXT_V208() || ''; }catch(e){}
+    try{ if(typeof selectedBeanText === 'function') return selectedBeanText() || ''; }catch(e){}
+    const el = document.querySelector('[data-field="bean"] .chip.active');
+    return el ? (el.getAttribute('data-value') || el.textContent || '').trim() : '';
+  }
+  function beanSurcharge(bean){ return isLimited(bean) ? LIMITED_SURCHARGE_V300 : 0; }
+  function productBase(product, temp){
+    product = product || {};
+    const key = keyOf(product.name || product.title, product.cn || product.zh);
+    const table = PRICE_TABLE_V300[key];
+    if(table){
+      if(table.fixed) return Number(table.fixed || 0);
+      return isIced(temp || product.temp || product.temperature) ? Number(table.iced || 0) : Number(table.hot || 0);
+    }
+    const explicit = Number(product.basePrice || product.unitPrice || product.price || product.finalPrice || 0);
+    const sur = beanSurcharge(product.bean);
+    return Math.max(0, explicit - sur);
+  }
+  function hotBase(product){
+    product = product || {};
+    const key = keyOf(product.name || product.title, product.cn || product.zh);
+    const table = PRICE_TABLE_V300[key];
+    if(table){
+      if(table.fixed) return Number(table.fixed || 0);
+      return Number(table.hot || 0);
+    }
+    return Number(product.hotBasePrice || product.drinkBasePrice || product.basePrice || 0);
+  }
+  function coldSurcharge(product, temp){
+    const base = productBase(product, temp);
+    const hot = hotBase(product);
+    return Math.max(0, base - hot);
+  }
+  function currentCart(){
+    try{ if(Array.isArray(window.cart)) return window.cart; if(typeof cart !== 'undefined' && Array.isArray(cart)) return cart; }catch(e){}
+    return [];
+  }
+  function enrich(item){
+    const x = Object.assign({}, item || {});
+    const qty = Math.max(1, Number(x.qty || x.quantity || 1));
+    const temp = x.temp || x.temperature || '';
+    const base = productBase(x, temp); // includes cold/iced up-charge, excludes limited bean
+    const hot = hotBase(x);
+    const cold = Math.max(0, base - hot);
+    const sur = beanSurcharge(x.bean);
+    const unit = round(base + sur);
+    x.qty = qty;
+    x.quantity = qty;
+    x.basePrice = base;
+    x.displayBasePrice = base;
+    x.hotBasePrice = hot;
+    x.drinkBasePrice = hot;
+    x.coldSurcharge = cold;
+    x.icedSurcharge = cold;
+    x.beanSurcharge = sur;
+    x.limitedSurcharge = sur;
+    x.unitPrice = unit;
+    x.price = unit;
+    x.subtotal = round(unit * qty);
+    x.currency = 'MOP';
+    return x;
+  }
+  function syncCart(){
+    const c = currentCart();
+    c.forEach(function(item){ Object.assign(item, enrich(item)); });
+    return c;
+  }
+  function tierByKey(key){
+    key = String(key || '').toLowerCase();
+    if(key === 'vip') key = 'blackgold';
+    const map = {
+      regular:{key:'regular',name:'普通會員',icon:'🌱',cups:0},
+      silver:{key:'silver',name:'銀卡會員',icon:'🥈',cups:30},
+      gold:{key:'gold',name:'金卡會員',icon:'🥇',cups:60},
+      diamond:{key:'diamond',name:'鑽石會員',icon:'💎',cups:100},
+      blackgold:{key:'blackgold',name:'黑金會員',icon:'👑',cups:180}
+    };
+    return map[key] || null;
+  }
+  function tierByCups(cups){
+    cups = Number(cups || 0);
+    if(cups >= 180) return tierByKey('blackgold');
+    if(cups >= 100) return tierByKey('diamond');
+    if(cups >= 60) return tierByKey('gold');
+    if(cups >= 30) return tierByKey('silver');
+    return tierByKey('regular');
+  }
+  function displayTier(member){
+    member = member || {};
+    const cups = Number(member.totalCups || member.cups || member.totalItems || 0);
+    const manual = tierByKey(member.manualTierKey || member.memberTierOverrideKey || member.memberTierManualKey || '');
+    if(manual){
+      const baseCups = Number(member.manualTierBaseCups || manual.cups || 0);
+      const hasStart = member.manualTierStartCups != null || member.manualTierSetAtCups != null || member.manualTierOriginalCups != null;
+      const start = hasStart ? Number(member.manualTierStartCups ?? member.manualTierSetAtCups ?? member.manualTierOriginalCups ?? 0) : 0;
+      return tierByCups(hasStart ? baseCups + Math.max(0, cups - start) : Math.max(cups, baseCups));
+    }
+    return tierByKey(member.memberTierKey || '') || tierByCups(cups);
+  }
+  function availableRewards(member){
+    member = member || {};
+    if(member.rewards && member.rewards.availableRewards != null) return Math.max(0, Math.floor(Number(member.rewards.availableRewards || 0)));
+    const cups = Number(member.totalCups || member.cups || member.totalItems || 0);
+    const earned = Math.floor(cups / 10);
+    const redeemed = Number(member.rewardRedeemed || member.rewardsRedeemed || (member.rewards && member.rewards.redeemedRewards) || 0);
+    const reserved = Number(member.rewardReserved || member.rewardsReserved || (member.rewards && member.rewards.reservedRewards) || 0);
+    const gifted = Number(member.giftVoucherBalance || member.giftVouchers || member.manualGiftVouchers || (member.rewards && member.rewards.giftedRewards) || 0);
+    const giftRedeemed = Number(member.giftVoucherRedeemed || member.giftVoucherUsed || (member.rewards && (member.rewards.giftVoucherRedeemed || member.rewards.giftVoucherUsed)) || 0);
+    const giftReserved = Number(member.giftVoucherReserved || member.giftVoucherReservedRewards || (member.rewards && member.rewards.giftVoucherReserved) || 0);
+    return Math.max(0, Math.floor(earned + Math.max(0, gifted - giftRedeemed - giftReserved) - redeemed - reserved));
+  }
+  function calculate(member){
+    member = member || {};
+    const items = syncCart().map(enrich);
+    const units = [];
+    items.forEach(function(item, itemIndex){
+      const qty = Math.max(1, Number(item.qty || 1));
+      for(let i=0;i<qty;i++){
+        units.push({
+          itemIndex:itemIndex,
+          title:item.name || item.title || item.cn || '飲品',
+          unit:Number(item.unitPrice || 0),
+          surcharge:Number(item.beanSurcharge || item.limitedSurcharge || 0),
+          tierWaiver:0,
+          rewardUnit:Number(item.unitPrice || 0)
+        });
+      }
+    });
+    const subtotal = round(items.reduce(function(s,x){ return s + Number(x.subtotal || 0); }, 0));
+    const tier = displayTier(member);
+    const details = [];
+    let tierDiscount = 0;
+    if(tier.key === 'silver' || tier.key === 'gold' || tier.key === 'diamond'){
+      const max = tier.key === 'silver' ? 1 : (tier.key === 'gold' ? 2 : Infinity);
+      let used = 0;
+      units.forEach(function(u){
+        if(used >= max || u.surcharge <= 0) return;
+        u.tierWaiver = Math.min(u.surcharge, LIMITED_SURCHARGE_V300);
+        u.rewardUnit = Math.max(0, Number(u.unit || 0) - Number(u.tierWaiver || 0));
+        tierDiscount += u.tierWaiver;
+        used += 1;
+      });
+      if(tierDiscount > 0) details.push(tier.key === 'diamond' ? '限定豆子加價全數豁免' : '限定豆子加價豁免 ×' + used);
+    }else if(tier.key === 'blackgold'){
+      tierDiscount = Math.min(15, subtotal);
+      if(tierDiscount > 0) details.push('黑金會員 MOP 15 優惠');
+    }
+    tierDiscount = Math.min(subtotal, round(tierDiscount));
+    const afterTier = Math.max(0, round(subtotal - tierDiscount));
+    const avail = availableRewards(member);
+    const rewardUnits = units.slice().sort(function(a,b){ return Number(b.rewardUnit || 0) - Number(a.rewardUnit || 0); });
+    const useRewards = Math.min(avail, rewardUnits.length);
+    const freeItems = rewardUnits.slice(0, useRewards);
+    const rewardDiscount = Math.min(afterTier, round(freeItems.reduce(function(s,u){ return s + Number(u.rewardUnit || 0); }, 0)));
+    const cups = Number(member.totalCups || member.cups || member.totalItems || 0);
+    return {
+      subtotal:subtotal,
+      subtotalBeforeReward:subtotal,
+      tier:tier,
+      tierDiscount:tierDiscount,
+      tierDetails:details,
+      tierDiscountDetails:details,
+      afterTier:afterTier,
+      cups:cups,
+      earned:Math.floor(cups / 10),
+      redeemed:Number(member.rewardRedeemed || member.rewardsRedeemed || (member.rewards && member.rewards.redeemedRewards) || 0),
+      available:avail,
+      useRewards:useRewards,
+      rewardDiscount:rewardDiscount,
+      freeItems:freeItems,
+      rewardFreeItems:freeItems,
+      finalTotal:Math.max(0, round(afterTier - rewardDiscount))
+    };
+  }
+
+  window.sky31BasePriceForProductV300 = productBase;
+  window.sky31PriceForProduct = function(product, temp){ return round(productBase(product, temp) + beanSurcharge(selectedBean())); };
+  window.sky31PriceForItem = function(item){ return enrich(item).unitPrice; };
+  window.sky31EnrichedItem = enrich;
+  window.sky31EnrichedCart = function(){ return syncCart().map(enrich); };
+  window.sky31CartTotal = function(c){ return (Array.isArray(c) ? c : window.sky31EnrichedCart()).reduce(function(s,x){ const y = enrich(x); return s + Number(y.subtotal || 0); }, 0); };
+  window.SKY31_CALCULATE_CHECKOUT_V240 = calculate;
+  window.SKY31_CALCULATE_CHECKOUT_V300 = calculate;
+
+  window.sky31UpdateDetailPrice = function(){
+    if(typeof current === 'undefined' || !current) return;
+    let box = document.getElementById('detailPriceBox');
+    if(!box){
+      box = document.createElement('div');
+      box.id = 'detailPriceBox';
+      box.className = 'detail-price-box';
+      const qtyEl = document.getElementById('detailQty');
+      const qtyBlock = qtyEl ? qtyEl.parentElement : null;
+      const desc = document.getElementById('detailDesc');
+      if(qtyBlock && qtyBlock.parentNode) qtyBlock.parentNode.insertBefore(box, qtyBlock.nextSibling);
+      else if(desc && desc.parentNode) desc.parentNode.insertBefore(box, desc.nextSibling);
+    }
+    const temp = current.forceIced ? 'Iced 凍' : (typeof chipValue === 'function' ? chipValue('temp') : 'Hot 熱');
+    const bean = selectedBean();
+    const base = productBase(current, temp);
+    const sur = beanSurcharge(bean);
+    const unit = round(base + sur);
+    let qty = Number((document.getElementById('detailQty') || {}).textContent || (typeof detailQty !== 'undefined' ? detailQty : 1) || 1);
+    if(!qty || isNaN(qty)) qty = 1;
+    const beanRow = bean ? '<span>豆子</span><strong>' + esc((window.sky31BeanDisplayV204 ? window.sky31BeanDisplayV204(bean) : bean)) + '</strong>' : '';
+    const surchargeRow = sur > 0 ? '<span>限定豆子加價</span><strong class="v208-limited-surcharge">+' + money(sur) + '</strong>' : '';
+    const note = sur > 0 ? '<div class="v208-price-note">已選限定豆子，系統會自動每杯 +MOP ' + sur + '；增加杯量時會同步計算。</div>' : '';
+    box.innerHTML = '<div class="detail-price-title">價格明細 Price Details</div>' +
+      '<div class="detail-price-grid">' +
+        '<span>飲品</span><strong>' + esc(current.name || current.cn || '飲品') + '</strong>' +
+        '<span>規格</span><strong>' + esc(temp || '-') + '</strong>' +
+        beanRow +
+        '<span>原單價</span><strong>' + money(base) + '</strong>' +
+        surchargeRow +
+        '<span>單杯合計</span><strong>' + money(unit) + '</strong>' +
+        '<span>杯量</span><strong>' + qty + ' 杯</strong>' +
+        '<span>小計</span><strong class="detail-subtotal">' + money(unit * qty) + '</strong>' +
+      '</div>' + note;
+  };
+
+  window.addToCart = addToCart = function(){
+    if(typeof current === 'undefined' || !current) return;
+    const temp = current.forceIced ? 'Iced 凍' : (typeof chipValue === 'function' ? chipValue('temp') : 'Hot 熱');
+    const iceBox = document.getElementById('iceBox');
+    const ice = iceBox && iceBox.classList.contains('hidden') ? '不適用' : (typeof chipValue === 'function' ? chipValue('ice') : '');
+    const bean = selectedBean();
+    const qty = Math.max(1, Number((document.getElementById('detailQty') || {}).textContent || (typeof detailQty !== 'undefined' ? detailQty : 1) || 1));
+    const base = productBase(current, temp);
+    const hot = hotBase(current);
+    const sur = beanSurcharge(bean);
+    const unit = round(base + sur);
+    const item = {
+      name: current.name,
+      cn: current.cn,
+      image: current.image,
+      temp: temp,
+      ice: ice,
+      milk: current.milk && typeof chipValue === 'function' ? chipValue('milk') : 'No Milk 不加奶',
+      bean: bean,
+      pickup: typeof chipValue === 'function' ? chipValue('pickup') : '',
+      note: (typeof val === 'function' ? val('note') : '') || '無備註',
+      qty: qty,
+      quantity: qty,
+      basePrice: base,
+      hotBasePrice: hot,
+      drinkBasePrice: hot,
+      coldSurcharge: Math.max(0, base - hot),
+      icedSurcharge: Math.max(0, base - hot),
+      beanSurcharge: sur,
+      limitedSurcharge: sur,
+      unitPrice: unit,
+      price: unit,
+      subtotal: round(unit * qty),
+      currency: 'MOP'
+    };
+    const c = currentCart();
+    c.push(item);
+    try{ if(typeof updateAll === 'function') updateAll(); }catch(e){}
+    try{ if(typeof closeDetail === 'function') closeDetail(); }catch(e){}
+  };
+
+  const oldUpdateAllV300 = window.updateAll || (typeof updateAll === 'function' ? updateAll : null);
+  window.updateAll = updateAll = function(){
+    syncCart();
+    let r;
+    if(typeof oldUpdateAllV300 === 'function') r = oldUpdateAllV300.apply(this, arguments);
+    syncCart();
+    try{ if(typeof window.SKY31_RENDER_SUMMARY_V244 === 'function') window.SKY31_RENDER_SUMMARY_V244(); else if(typeof window.SKY31_RENDER_SUMMARY_V240 === 'function') window.SKY31_RENDER_SUMMARY_V240(); }catch(e){}
+    return r;
+  };
+
+  document.addEventListener('click', function(e){
+    const t = e.target && e.target.closest ? e.target.closest('.chip,.qty-btn,.cart-qty-btn,button,[onclick]') : null;
+    if(!t) return;
+    setTimeout(function(){ try{ window.sky31UpdateDetailPrice(); }catch(e){} syncCart(); try{ if(typeof window.SKY31_RENDER_SUMMARY_V244 === 'function') window.SKY31_RENDER_SUMMARY_V244(); }catch(e){} }, 80);
+    setTimeout(function(){ try{ window.sky31UpdateDetailPrice(); }catch(e){} syncCart(); try{ if(typeof window.SKY31_RENDER_SUMMARY_V244 === 'function') window.SKY31_RENDER_SUMMARY_V244(); }catch(e){} }, 260);
+  }, true);
+  document.addEventListener('DOMContentLoaded', function(){
+    setTimeout(function(){ try{ window.sky31UpdateDetailPrice(); }catch(e){} syncCart(); try{ if(typeof window.SKY31_RENDER_SUMMARY_V244 === 'function') window.SKY31_RENDER_SUMMARY_V244(); }catch(e){} }, 500);
+  }, {once:true});
+})();
+</script>
+
 </body>
 </html>
