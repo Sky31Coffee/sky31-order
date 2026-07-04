@@ -12992,26 +12992,10 @@ window.addEventListener("load", function() {
 
 
 <script>
-/* V113 auto logout text fix */
+/* V311: auto logout removed.
+   The 10-minute member idle logout copy is disabled; maintenance mode still forces logout via V218/V246. */
 (function(){
-  function fixAutoLogoutText(){
-    document.querySelectorAll(".member-security-text").forEach(function(el){
-      el.textContent = "為確保安全，10分鐘自動登出";
-    });
-  }
-
-  if(document.readyState === "loading"){
-    document.addEventListener("DOMContentLoaded", fixAutoLogoutText);
-  }else{
-    fixAutoLogoutText();
-  }
-
-  setTimeout(fixAutoLogoutText, 200);
-  setTimeout(fixAutoLogoutText, 800);
-
-  document.addEventListener("click", function(){
-    setTimeout(fixAutoLogoutText, 80);
-  }, true);
+  window.__SKY31_AUTO_LOGOUT_REMOVED_V311 = true;
 })();
 </script>
 
@@ -15097,389 +15081,37 @@ window.addEventListener("load", function() {
 
 
 <script>
-/* V161 real member logout 10min */
+/* V311: 10-minute automatic member logout removed.
+   Keep manual logout and maintenance-mode forced logout only. */
 (function(){
-  var MEMBER_KEY = "sky31_member_v1";
-  var LAST_ACTIVITY_KEY = "sky31_member_last_activity_v161";
-  var IDLE_MS = 10 * 60 * 1000;
-  var CHECK_MS = 3000;
-  var PROMPT_TEXT = "為確保安全，10分鐘自動登出";
-  var timer = null;
-  var interval = null;
-  var lastWrite = 0;
-  var loggingOut = false;
-
-  function $(id){ return document.getElementById(id); }
-  function now(){ return Date.now(); }
-  function digits(v){ return String(v || "").replace(/\D/g, ""); }
-
-  function getMember(){
-    try{
-      var raw = localStorage.getItem(MEMBER_KEY);
-      if(!raw) return null;
-      var obj = JSON.parse(raw);
-      if(!obj || !digits(obj.phone)) return null;
-      return obj;
-    }catch(e){
-      return null;
-    }
-  }
-
-  function hasMember(){
-    return !!getMember();
-  }
-
-  function stopTimer(){
-    if(timer){
-      clearTimeout(timer);
-      timer = null;
-    }
-  }
-
-  function removeKey(key){
+  var LAST_KEYS = [
+    "sky31_member_last_activity_v161",
+    "sky31_member_last_activity_v143",
+    "sky31_member_last_activity_v144",
+    "sky31_member_last_activity_v159",
+    "sky31_member_last_activity_v160"
+  ];
+  LAST_KEYS.forEach(function(key){
     try{ localStorage.removeItem(key); }catch(e){}
     try{ sessionStorage.removeItem(key); }catch(e){}
-  }
-
-  function removeMemberKeys(){
-    [
-      MEMBER_KEY,
-      LAST_ACTIVITY_KEY,
-      "sky31_member_last_activity_v143",
-      "sky31_member_last_activity_v144",
-      "sky31_member_last_activity_v159",
-      "sky31_member_last_activity_v160",
-      "sky31_member_login_at_v1",
-      "sky31_member_notice_read_v1",
-      "sky31_member_notice_seen_v1",
-      "sky31_customer_v1",
-      "sky31_customer_info",
-      "sky31_checkout_customer"
-    ].forEach(removeKey);
-  }
-
-  function clearMemberGlobals(){
-    ["currentMember","loggedMember","memberData","memberInfo","currentCustomer","customer","customerInfo","checkoutCustomer"].forEach(function(k){
-      try{ window[k] = null; }catch(e){}
-    });
-  }
-
-  function updateLogoutUI(){
-    try{
-      document.documentElement.removeAttribute("data-member-phone");
-      document.body.removeAttribute("data-member-phone");
-      document.body.classList.remove("member-logged","member-logged-in","is-member");
-      document.body.classList.add("member-logged-out");
-    }catch(e){}
-
-    var profileButton = $("profileButton");
-    if(profileButton){
-      profileButton.classList.remove("logged","member-logged","active","is-logged","selected");
-      profileButton.removeAttribute("data-phone");
-      profileButton.removeAttribute("data-member-phone");
-      profileButton.title = "會員中心";
-      profileButton.setAttribute("aria-label", "會員中心");
-    }
-
-    var bulb = $("memberNoticeBulb");
-    if(bulb){
-      bulb.classList.remove("active","show","member-notice-active");
-      bulb.style.display = "none";
-    }
-
-    var checkoutInfo = $("checkoutCustomerInfo");
-    if(checkoutInfo){
-      checkoutInfo.innerHTML = "";
-      checkoutInfo.classList.remove("show");
-      checkoutInfo.style.display = "none";
-    }
-
-    ["memberMsg","checkoutMemberMsg","memberProfileBody","memberOrders","memberRecentOrders","memberNoticeList","memberNoticeRecords"].forEach(function(id){
-      var el = $(id);
-      if(el) el.innerHTML = "";
-    });
-
-    ["checkoutMemberPhone","checkoutMemberName","checkoutMemberBirthday"].forEach(function(id){
-      var el = $(id);
-      if(el) el.value = "";
-    });
-  }
-
-  function closeMemberPanels(){
-    ["memberModal","checkoutMemberModal","memberNoticeModal","memberProfileModal","memberRegisterModal","memberLoginModal"].forEach(function(id){
-      var el = $(id);
-      if(el){
-        el.classList.remove("show");
-        el.style.display = "";
-      }
-    });
-    try{ document.body.style.overflow = ""; }catch(e){}
-  }
-
-  function callNativeLogoutIfAny(){
-    // Use the site's own logout flow first if it exists.
-    // This makes auto logout behave like manual logout.
-    var names = [
-      "logoutMember",
-      "memberLogout",
-      "logout",
-      "handleMemberLogout",
-      "clearMemberLogin",
-      "clearMember",
-      "signOutMember"
-    ];
-
-    for(var i=0; i<names.length; i++){
-      var fn = window[names[i]];
-      if(typeof fn === "function"){
-        try{
-          fn.call(window);
-          return true;
-        }catch(e){}
-      }
-    }
-
-    return false;
-  }
-
-  function realLogout(){
-    if(loggingOut) return;
-    loggingOut = true;
-
-    stopTimer();
-
-    // First: execute native logout if site has it.
-    callNativeLogoutIfAny();
-
-    // Then: ensure keys and visible state are actually logged out.
-    removeMemberKeys();
-    clearMemberGlobals();
-    updateLogoutUI();
-    closeMemberPanels();
-
-    // Run UI renderers after clearing data, so submit logic sees no member.
-    [
-      "updateCheckoutCustomerInfo",
-      "updateMemberProfileButton",
-      "renderHomeQuickCard",
-      "renderNotice",
-      "renderMemberNotice",
-      "renderMemberCenter",
-      "renderMemberProfile",
-      "refreshMemberUI",
-      "renderProfileButton"
-    ].forEach(function(fn){
-      try{
-        if(typeof window[fn] === "function"){
-          window[fn]();
-        }
-      }catch(e){}
-    });
-
-    // Apply again in case renderer repainted old state.
-    setTimeout(function(){
-      removeMemberKeys();
-      clearMemberGlobals();
-      updateLogoutUI();
-      closeMemberPanels();
-    }, 50);
-
-    setTimeout(function(){
-      removeMemberKeys();
-      clearMemberGlobals();
-      updateLogoutUI();
-      closeMemberPanels();
-      loggingOut = false;
-    }, 300);
-  }
-
-  function ensureModal(){
-    var modal = $("memberSecurityModal");
-    if(!modal){
-      modal = document.createElement("div");
-      modal.id = "memberSecurityModal";
-      modal.className = "member-security-modal";
-      document.body.appendChild(modal);
-    }
-
-    modal.innerHTML =
-      '<div class="member-security-card">' +
-        '<div class="member-security-icon">🔒</div>' +
-        '<div class="member-security-title">已自動登出</div>' +
-        '<div class="member-security-text">' + PROMPT_TEXT + '</div>' +
-        '<button class="member-security-btn" type="button" id="memberSecurityConfirmBtn">知道了</button>' +
-      '</div>';
-
-    var btn = $("memberSecurityConfirmBtn");
-    if(btn){
-      btn.onclick = function(){
-        realLogout();
-        var m = $("memberSecurityModal");
-        if(m) m.classList.remove("show");
-        setTimeout(realLogout, 80);
-      };
-    }
-
-    return modal;
-  }
-
-  window.closeMemberSecurityModal = function(){
-    realLogout();
-    var modal = $("memberSecurityModal");
-    if(modal) modal.classList.remove("show");
-    setTimeout(realLogout, 80);
-  };
-
-  function showPrompt(){
-    var modal = ensureModal();
-    modal.classList.add("show");
-  }
-
-  function autoLogout(){
-    realLogout();
-    showPrompt();
-  }
-
-  function readActivity(){
-    try{
-      var t = Number(localStorage.getItem(LAST_ACTIVITY_KEY) || 0);
-      return isFinite(t) ? t : 0;
-    }catch(e){
-      return 0;
-    }
-  }
-
-  function writeActivity(force){
-    if(!hasMember()){
-      removeKey(LAST_ACTIVITY_KEY);
-      stopTimer();
-      return;
-    }
-
-    var t = now();
-    if(!force && t - lastWrite < 3000) return;
-
-    lastWrite = t;
-    try{ localStorage.setItem(LAST_ACTIVITY_KEY, String(t)); }catch(e){}
-    scheduleTimer();
-  }
-
-  function scheduleTimer(){
-    stopTimer();
-
-    if(!hasMember()) return;
-
-    var last = readActivity();
-    if(!last){
-      writeActivity(true);
-      return;
-    }
-
-    var remaining = IDLE_MS - (now() - last);
-    if(remaining <= 0){
-      autoLogout();
-      return;
-    }
-
-    timer = setTimeout(autoLogout, Math.min(remaining, 2147483647));
-  }
-
-  function checkExpiry(){
-    if(!hasMember()){
-      removeKey(LAST_ACTIVITY_KEY);
-      stopTimer();
-      return;
-    }
-
-    var last = readActivity();
-    if(!last){
-      writeActivity(true);
-      return;
-    }
-
-    if(now() - last >= IDLE_MS){
-      autoLogout();
-    }else{
-      scheduleTimer();
-    }
-  }
-
-  function activity(){
-    if(!hasMember()) return;
-    writeActivity(false);
-  }
-
-  function boot(){
-    if(hasMember() && !readActivity()){
-      writeActivity(true);
-    }
-
-    checkExpiry();
-
-    if(!interval){
-      interval = setInterval(checkExpiry, CHECK_MS);
-    }
-  }
-
-  // New login/register writes member key -> restart timer.
-  try{
-    if(!window.__sky31V161RealLogoutStoragePatched){
-      var originalSetItem = Storage.prototype.setItem;
-      Storage.prototype.setItem = function(key, value){
-        var result = originalSetItem.apply(this, arguments);
-        if(this === localStorage && key === MEMBER_KEY){
-          setTimeout(function(){
-            if(hasMember()){
-              writeActivity(true);
-              scheduleTimer();
-            }
-          }, 30);
-        }
-        return result;
-      };
-      window.__sky31V161RealLogoutStoragePatched = true;
-    }
-  }catch(e){}
-
-  ["pointerdown","touchstart","keydown","wheel","scroll","mousedown"].forEach(function(evt){
-    window.addEventListener(evt, activity, {passive:true});
-    document.addEventListener(evt, activity, {passive:true});
   });
-
-  document.addEventListener("visibilitychange", function(){
-    if(document.hidden) return;
-    checkExpiry();
-    if(hasMember()) writeActivity(true);
-  });
-
-  window.addEventListener("focus", function(){
-    checkExpiry();
-    if(hasMember()) writeActivity(true);
-  });
-
-  if(document.readyState === "loading"){
-    document.addEventListener("DOMContentLoaded", boot);
-  }else{
-    boot();
-  }
-
-  setTimeout(boot, 500);
-  setTimeout(boot, 1500);
-  setTimeout(boot, 3000);
-
   window.sky31IdleLogoutDebug = {
+    disabled:true,
     logoutNow:function(){
-      autoLogout();
+      if(typeof window.memberLogout === "function") return window.memberLogout();
+      if(typeof window.logoutMember === "function") return window.logoutMember();
+      try{ localStorage.removeItem("sky31_member_v1"); }catch(e){}
     },
-    realLogout:realLogout,
-    isLoggedIn:hasMember,
-    remainingMs:function(){
-      if(!hasMember()) return 0;
-      return Math.max(0, IDLE_MS - (now() - readActivity()));
+    realLogout:function(){
+      if(typeof window.memberLogout === "function") return window.memberLogout();
+      if(typeof window.logoutMember === "function") return window.logoutMember();
+      try{ localStorage.removeItem("sky31_member_v1"); }catch(e){}
     },
-    reset:function(){
-      writeActivity(true);
-    }
+    isLoggedIn:function(){
+      try{ return !!localStorage.getItem("sky31_member_v1"); }catch(e){ return false; }
+    },
+    remainingMs:function(){ return null; },
+    reset:function(){}
   };
 })();
 </script>
@@ -20412,14 +20044,14 @@ window.addEventListener("load", function() {
     return reg;
   }
   async function enablePush(btn){
-    if(!isSupported()) throw new Error("此瀏覽器暫不支援後台通知。iPhone 需要先用 Safari 加入主畫面，再從主畫面打開。 ");
+    if(!isSupported()) throw new Error("此瀏覽器暫不支援後台通知。");
     var phone = currentPhone();
-    if(!phone) throw new Error("請先登入會員 / 填寫電話，再開啟取餐通知。");
+    if(!phone) throw new Error("請先登入會員 / 填寫電話，再開啟訂單通知。");
     var perm = Notification.permission;
     if(perm !== "granted"){
       perm = await Notification.requestPermission();
     }
-    if(perm !== "granted") throw new Error("你未允許通知，暫時不能發送取餐提醒。");
+    if(perm !== "granted") throw new Error("你未允許通知，暫時不能發送訂單通知。");
     var reg = await registerSW();
     var keyRes = await fetch("/api/push-key", {cache:"no-store"});
     var keyData = await keyRes.json().catch(function(){ return {}; });
@@ -20449,9 +20081,9 @@ window.addEventListener("load", function() {
       return;
     }
     if(Notification.permission === "granted" && phone && saved === phone){
-      btn.textContent = "✅ 已開啟取餐通知";
+      btn.textContent = "✅ 已開啟訂單通知";
     }else{
-      btn.textContent = "🔔 開啟取餐通知";
+      btn.textContent = "🔔 開啟訂單通知";
     }
   }
   function ensurePushBox(){
@@ -20466,10 +20098,10 @@ window.addEventListener("load", function() {
     var box = document.createElement("div");
     box.id = "sky31PushBoxV301";
     box.className = "sky31-push-checkout-v301";
-    box.innerHTML = '<div class="sky31-push-title-v301">🔔 取餐完成通知</div>' +
-      '<div class="sky31-push-text-v301">開啟後，店員在 Telegram 按「確認訂單」及「完成訂單」時，手機會收到訂單狀態通知。</div>' +
-      '<button type="button" id="sky31PushBtnV301" class="sky31-push-btn-v301">🔔 開啟取餐通知</button>' +
-      '<div class="sky31-push-tip-v301">iPhone 如未彈出通知權限，請先用 Safari「加入主畫面」，再從主畫面打開 Sky31。</div>';
+    box.innerHTML = '<div class="sky31-push-title-v301">🔔 手機訂單通知</div>' +
+      '<div class="sky31-push-text-v301">開啟後，店員「確認訂單」及「完成訂單」時，手機會收到訂單狀態通知。</div>' +
+      '<button type="button" id="sky31PushBtnV301" class="sky31-push-btn-v301">🔔 開啟訂單通知</button>' +
+      '';
     anchor.parentNode.insertBefore(box, anchor.nextSibling);
     var btn = $("sky31PushBtnV301");
     setBtnState(btn);
@@ -20479,10 +20111,10 @@ window.addEventListener("load", function() {
       btn.textContent = "正在開啟...";
       try{
         await enablePush(btn);
-        btn.textContent = "✅ 已開啟取餐通知";
-        alert("已開啟訂單通知。之後店家確認訂單及完成取餐時，手機會收到提醒。");
+        btn.textContent = "✅ 已開啟訂單通知";
+        alert("已開啟訂單通知。之後店員確認訂單及完成訂單時，手機會收到訂單狀態提醒。");
       }catch(e){
-        btn.textContent = old || "🔔 開啟取餐通知";
+        btn.textContent = old || "🔔 開啟訂單通知";
         alert((e && e.message) || "開啟通知失敗");
       }finally{
         btn.disabled = false;
@@ -20524,7 +20156,7 @@ window.addEventListener("load", function() {
 <script id="sky31-v302-auto-push-after-order">
 /* V302: Auto ask/save pickup notification during checkout submit.
    Browser rules still require the customer to allow notification permission; this only removes the extra manual button step.
-   The subscription is saved to D1 before/while the order is being submitted, so future Telegram 「完成訂單」 can push pickup-ready notification even after auto logout. */
+   The subscription is saved to D1 before/while the order is being submitted, so future Telegram 「完成訂單」 can push pickup-ready notification even after the customer leaves the page or manually logs out. */
 (function(){
   if(window.__SKY31_V302_AUTO_PUSH_AFTER_ORDER__) return;
   window.__SKY31_V302_AUTO_PUSH_AFTER_ORDER__ = true;
