@@ -20808,3 +20808,187 @@ window.addEventListener("load", function() {
 })();
 </script>
 
+
+<script id="sky31-v306-limited-beans-showcase-no-duplicate">
+/* V306: Replace the V305 extra landing popup/teaser with one clean Limited Beans showcase card.
+   Goal: no duplicate limited-bean notice, two limited beans visible together on landing page. */
+(function(){
+  if(window.__SKY31_V306_LIMITED_SHOWCASE__) return;
+  window.__SKY31_V306_LIMITED_SHOWCASE__ = true;
+
+  var STYLE_ID = 'sky31V306LimitedShowcaseStyle';
+  var SEEN_KEY = 'sky31_limited_beans_showcase_seen_v306';
+
+  function injectStyle(){
+    if(document.getElementById(STYLE_ID)) return;
+    var css = '' +
+      /* Disable V305 duplicate popup/teaser completely. */
+      '.sky31-limited-teaser-v305,.sky31-limited-modal-v305,#sky31LimitedTeaserV305,#sky31LimitedModalV305{display:none!important;visibility:hidden!important;pointer-events:none!important;opacity:0!important;}' +
+      '.landing-limited-beans-card.sky31-v306-showcase{position:relative!important;overflow:hidden!important;}' +
+      '.landing-limited-beans-card.sky31-v306-showcase::after{content:"";position:absolute;inset:auto -70px -90px auto;width:190px;height:190px;border-radius:999px;background:radial-gradient(circle,rgba(255,220,135,.34),rgba(255,220,135,0) 68%);pointer-events:none;}' +
+      '.sky31-v306-new-pill{margin-left:auto;align-self:flex-start;display:inline-flex;align-items:center;gap:6px;padding:6px 9px;border-radius:999px;background:rgba(255,245,219,.72);border:1px solid rgba(218,156,54,.22);color:rgba(126,80,12,.82);font-size:10.5px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;box-shadow:inset 0 1px 0 rgba(255,255,255,.78);}' +
+      '.landing-limited-beans-card.sky31-new-limited-v306{animation:sky31LimitedGlowV306 1.6s ease-out 1;}' +
+      '@keyframes sky31LimitedGlowV306{0%{box-shadow:0 0 0 rgba(218,156,54,0),0 22px 58px rgba(44,65,100,.10)}35%{box-shadow:0 0 0 5px rgba(218,156,54,.16),0 26px 72px rgba(130,88,20,.16)}100%{box-shadow:0 22px 58px rgba(44,65,100,.10)}}' +
+      '#limitedBeanPreview.sky31-v306-limited-grid{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px!important;margin-top:12px!important;align-items:stretch!important;}' +
+      '#limitedBeanPreview.sky31-v306-limited-grid:has(.sky31-v306-bean-card:only-child){grid-template-columns:1fr!important;}' +
+      '.sky31-v306-bean-card{position:relative!important;min-width:0!important;display:flex!important;flex-direction:column!important;gap:8px!important;min-height:118px!important;padding:13px 13px 12px!important;border-radius:21px!important;background:linear-gradient(135deg,rgba(255,255,255,.80),rgba(255,249,232,.66))!important;border:1px solid rgba(255,232,166,.82)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.86),0 12px 28px rgba(151,104,22,.10)!important;overflow:hidden!important;text-align:left!important;}' +
+      '.sky31-v306-bean-card::before{content:"";position:absolute;top:-42px;right:-42px;width:100px;height:100px;border-radius:999px;background:radial-gradient(circle,rgba(255,218,120,.34),rgba(255,218,120,0) 70%);pointer-events:none;}' +
+      '.sky31-v306-bean-head{display:flex!important;align-items:flex-start!important;gap:10px!important;position:relative!important;z-index:1!important;}' +
+      '.sky31-v306-bean-icon{width:32px!important;height:32px!important;flex:0 0 32px!important;border-radius:14px!important;display:grid!important;place-items:center!important;background:rgba(255,255,255,.68)!important;border:1px solid rgba(255,255,255,.78)!important;font-size:16px!important;box-shadow:0 7px 16px rgba(130,90,20,.08)!important;}' +
+      '.sky31-v306-bean-title{min-width:0!important;flex:1!important;}' +
+      '.sky31-v306-bean-kicker{font-size:10px!important;line-height:1.1!important;letter-spacing:.13em!important;text-transform:uppercase!important;color:rgba(130,82,14,.58)!important;font-weight:950!important;margin-bottom:4px!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;}' +
+      '.sky31-v306-bean-name{font-size:clamp(13px,3.3vw,15.5px)!important;line-height:1.18!important;font-weight:950!important;color:rgba(24,38,58,.94)!important;letter-spacing:-.04em!important;overflow:hidden!important;display:-webkit-box!important;-webkit-line-clamp:2!important;-webkit-box-orient:vertical!important;}' +
+      '.sky31-v306-bean-flavor{position:relative!important;z-index:1!important;font-size:12.2px!important;line-height:1.45!important;color:rgba(42,56,78,.66)!important;font-weight:760!important;display:-webkit-box!important;-webkit-line-clamp:2!important;-webkit-box-orient:vertical!important;overflow:hidden!important;}' +
+      '.sky31-v306-bean-note{position:relative!important;z-index:1!important;margin-top:auto!important;font-size:11.2px!important;line-height:1.35!important;color:rgba(43,55,72,.47)!important;font-weight:700!important;display:-webkit-box!important;-webkit-line-clamp:2!important;-webkit-box-orient:vertical!important;overflow:hidden!important;}' +
+      '.sky31-v306-bean-meta{position:relative!important;z-index:1!important;display:flex!important;align-items:center!important;justify-content:space-between!important;gap:8px!important;margin-top:1px!important;}' +
+      '.sky31-v306-bean-price{flex:0 0 auto!important;padding:4px 8px!important;border-radius:999px!important;background:rgba(255,255,255,.70)!important;border:1px solid rgba(255,255,255,.78)!important;color:rgba(128,79,10,.86)!important;font-size:11px!important;font-weight:950!important;}' +
+      '.sky31-v306-bean-use{min-width:0!important;font-size:10.8px!important;color:rgba(42,56,78,.42)!important;font-weight:760!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;}' +
+      '.sky31-v306-limited-empty{grid-column:1/-1!important;padding:13px!important;border-radius:20px!important;background:rgba(255,255,255,.52)!important;border:1px dashed rgba(80,115,160,.28)!important;color:rgba(45,67,96,.62)!important;font-size:12.5px!important;line-height:1.45!important;font-weight:760!important;text-align:left!important;}' +
+      '.sky31-v306-limited-cta{grid-column:1/-1!important;margin-top:0!important;display:flex!important;align-items:center!important;justify-content:space-between!important;gap:10px!important;padding:10px 12px!important;border-radius:18px!important;background:rgba(255,255,255,.52)!important;border:1px solid rgba(255,255,255,.72)!important;color:rgba(34,45,62,.64)!important;font-size:12px!important;line-height:1.35!important;font-weight:760!important;}' +
+      '.sky31-v306-limited-cta button{border:0!important;border-radius:999px!important;padding:8px 11px!important;background:rgba(31,29,26,.90)!important;color:#fff!important;font-size:12px!important;font-weight:950!important;white-space:nowrap!important;}' +
+      '#limitedBeanPreview.sky31-v306-limited-grid .landing-bean-panel,#limitedBeanPreview.sky31-v306-limited-grid .v197-limited-card,#limitedBeanPreview.sky31-v306-limited-grid .v198-limited-empty{display:none!important;}' +
+      '@media(max-width:430px){#limitedBeanPreview.sky31-v306-limited-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important}.sky31-v306-bean-card{min-height:126px!important;padding:12px 10px!important;border-radius:19px!important}.sky31-v306-bean-head{gap:8px!important}.sky31-v306-bean-icon{width:28px!important;height:28px!important;flex-basis:28px!important;border-radius:12px!important;font-size:14px!important}.sky31-v306-bean-name{font-size:12.8px!important}.sky31-v306-bean-flavor{font-size:11.5px!important;-webkit-line-clamp:2!important}.sky31-v306-bean-note{font-size:10.6px!important}.sky31-v306-bean-meta{flex-direction:column!important;align-items:flex-start!important;gap:5px!important}.sky31-v306-limited-cta{font-size:11.5px!important;padding:9px 10px!important}.sky31-v306-limited-cta button{padding:7px 9px!important;font-size:11.5px!important}}';
+    var s = document.createElement('style');
+    s.id = STYLE_ID;
+    s.textContent = css;
+    document.head.appendChild(s);
+  }
+
+  function esc(s){
+    return String(s == null ? '' : s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c];});
+  }
+  function pick(obj, keys){
+    for(var i=0;i<keys.length;i++){
+      var v = obj && obj[keys[i]];
+      if(v != null && String(v).trim()) return String(v).trim();
+    }
+    return '';
+  }
+  function norm(item){
+    item = item || {};
+    var label = pick(item, ['label','beanName','name','title','cn','zh','bean']) || '期間限定豆子';
+    var flavor = pick(item, ['flavor','beanFlavor','tasting','taste','notes']) || '限時供應，售完即止。';
+    var note = pick(item, ['descLabel','note','beanNote','desc','description','subtitle','origin','region']) || '適合想試新風味的客人。';
+    return {
+      id: String(item.id || item.limitedId || label).replace(/[^a-zA-Z0-9_-]/g,'').slice(0,40),
+      label: label,
+      flavor: flavor,
+      note: note,
+      surcharge: Number(item.surcharge || item.limitedSurcharge || 5) || 5,
+      updatedAt: String(item.updatedAt || '')
+    };
+  }
+  function sig(beans){
+    return (beans || []).map(function(b){return [b.id,b.label,b.flavor,b.note,b.surcharge,b.updatedAt].join('|');}).join(';;');
+  }
+  function removeV305(){
+    document.querySelectorAll('#sky31LimitedTeaserV305,#sky31LimitedModalV305,.sky31-limited-teaser-v305,.sky31-limited-modal-v305').forEach(function(el){ try{ el.remove(); }catch(e){} });
+  }
+  async function loadBeans(){
+    var beans = [];
+    try{
+      if(Array.isArray(window.SKY31_LIMITED_BEANS_V207) && window.SKY31_LIMITED_BEANS_V207.length){
+        beans = window.SKY31_LIMITED_BEANS_V207;
+      }else if(Array.isArray(window.SKY31_LIMITED_BEANS_V198) && window.SKY31_LIMITED_BEANS_V198.length){
+        beans = window.SKY31_LIMITED_BEANS_V198;
+      }
+      if(!beans.length){
+        var res = await fetch('/api/menu?t=' + Date.now(), {cache:'no-store', headers:{'Cache-Control':'no-cache'}});
+        var data = await res.json().catch(function(){ return {}; });
+        var list = [];
+        if(data && Array.isArray(data.limitedItems)) list = data.limitedItems;
+        if((!list || !list.length) && data && Array.isArray(data.allLimitedItems)) list = data.allLimitedItems;
+        beans = list || [];
+      }
+      return beans.map(norm).filter(function(b){return b && b.label;}).slice(0,2);
+    }catch(e){ return []; }
+  }
+  function setPill(card, isNew, count){
+    var head = card && card.querySelector('.landing-beans-head');
+    if(!head) return;
+    var pill = document.getElementById('sky31LimitedNewPillV306');
+    if(!pill){
+      pill = document.createElement('div');
+      pill.id = 'sky31LimitedNewPillV306';
+      pill.className = 'sky31-v306-new-pill';
+      head.appendChild(pill);
+    }
+    pill.textContent = isNew ? '新豆上架' : (count > 1 ? '雙限定供應' : '期間限定');
+  }
+  function enterOrder(){
+    try{ if(typeof window.enterOrderPage === 'function') return window.enterOrderPage(); }catch(e){}
+    try{ if(typeof enterOrderPage === 'function') return enterOrderPage(); }catch(e){}
+  }
+  function render(beans){
+    injectStyle();
+    removeV305();
+    var card = document.getElementById('limitedBeansCard');
+    var box = document.getElementById('limitedBeanPreview');
+    if(!card || !box) return;
+    card.classList.add('sky31-v306-showcase');
+    var signature = sig(beans);
+    var seen = '';
+    try{ seen = localStorage.getItem(SEEN_KEY) || ''; }catch(e){}
+    var isNew = !!(beans && beans.length && signature && seen !== signature);
+    if(isNew){
+      card.classList.add('sky31-new-limited-v306');
+      setTimeout(function(){ card.classList.remove('sky31-new-limited-v306'); }, 1900);
+      try{ localStorage.setItem(SEEN_KEY, signature); }catch(e){}
+    }
+    setPill(card, isNew, beans ? beans.length : 0);
+    box.className = 'sky31-v306-limited-grid';
+    if(!beans || !beans.length){
+      box.innerHTML = '<div class="sky31-v306-limited-empty">期間限定暫未上架。下一支驚喜豆單正在準備中，敬請期待。</div>';
+      return;
+    }
+    box.innerHTML = beans.map(function(bean, idx){
+      var num = beans.length > 1 ? ('限定 ' + (idx + 1)) : '期間限定';
+      return '' +
+        '<div class="sky31-v306-bean-card" data-limited-id="' + esc(bean.id) + '">' +
+          '<div class="sky31-v306-bean-head">' +
+            '<div class="sky31-v306-bean-icon">✨</div>' +
+            '<div class="sky31-v306-bean-title">' +
+              '<div class="sky31-v306-bean-kicker">' + esc(num) + '</div>' +
+              '<div class="sky31-v306-bean-name">' + esc(bean.label) + '</div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="sky31-v306-bean-flavor">' + esc(bean.flavor) + '</div>' +
+          '<div class="sky31-v306-bean-note">' + esc(bean.note) + '</div>' +
+          '<div class="sky31-v306-bean-meta">' +
+            '<span class="sky31-v306-bean-use">美式 / 拿鐵 / 卡布可選</span>' +
+            '<span class="sky31-v306-bean-price">+MOP ' + esc(bean.surcharge) + '</span>' +
+          '</div>' +
+        '</div>';
+    }).join('') +
+      '<div class="sky31-v306-limited-cta"><span>今日限定風味已更新，兩款豆子可於點餐時選擇。</span><button type="button" id="sky31LimitedOrderBtnV306">立即點餐</button></div>';
+    var btn = document.getElementById('sky31LimitedOrderBtnV306');
+    if(btn) btn.onclick = enterOrder;
+    box.querySelectorAll('.sky31-v306-bean-card').forEach(function(el){ el.onclick = enterOrder; });
+  }
+  async function boot(){
+    var beans = await loadBeans();
+    render(beans);
+    setTimeout(removeV305, 50);
+    setTimeout(removeV305, 600);
+    setTimeout(removeV305, 1500);
+  }
+
+  var oldRefresh = window.SKY31_REFRESH_LIMITED_BEANS;
+  if(typeof oldRefresh === 'function' && !oldRefresh.__sky31V306Wrapped){
+    var wrapped = async function(){
+      var result;
+      try{ result = await oldRefresh.apply(this, arguments); }catch(e){}
+      setTimeout(boot, 80);
+      setTimeout(boot, 500);
+      return result;
+    };
+    wrapped.__sky31V306Wrapped = true;
+    window.SKY31_REFRESH_LIMITED_BEANS = wrapped;
+  }
+
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function(){ setTimeout(boot, 350); setTimeout(boot, 1400); setTimeout(boot, 3000); }, {once:true});
+  else { setTimeout(boot, 350); setTimeout(boot, 1400); setTimeout(boot, 3000); }
+  window.addEventListener('focus', function(){ setTimeout(boot, 250); });
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden) setTimeout(boot, 250); });
+})();
+</script>
