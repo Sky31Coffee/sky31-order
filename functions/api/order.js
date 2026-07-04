@@ -560,7 +560,7 @@ function sky31OrderTierDiscountV213(member, cart, afterReward) {
     if (d > 0) { discount += d; details.push("限定豆子加價全數豁免"); }
   } else if (tier.key === "blackgold") {
     const d = Math.min(15, Math.max(0, Number(afterReward || 0)));
-    if (d > 0) { discount += d; details.push("黑金會員 MOP 15 優惠"); }
+    if (d > 0) { discount += d; details.push("黑金會員 MOP 15 訂單優惠"); }
   }
 
   discount = Math.min(Math.max(0, Number(afterReward || 0)), Math.round(discount * 100) / 100);
@@ -619,7 +619,7 @@ function sky31TierDiscountPlanV240(member, cart, subtotal) {
     const d = Math.min(15, Math.max(0, Number(subtotal || 0)));
     if (d > 0) {
       discount += d;
-      details.push("黑金會員 MOP 15 優惠");
+      details.push("黑金會員 MOP 15 訂單優惠");
     }
   }
 
