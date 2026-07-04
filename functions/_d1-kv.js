@@ -1,5 +1,5 @@
-// Sky31 D1 KV-compatible store
-// Binding priority: SKY31_DB -> DB -> ORDERS_DB. If no D1 binding exists, the original KV binding env.ORDERS is used.
+// Sky31 D1-only KV-compatible store
+// V294: D1 is mandatory. The app will NOT fall back to the old Cloudflare KV ORDERS binding.
 
 let schemaPromise = null;
 
@@ -8,7 +8,11 @@ export function withD1Store(env) {
 
   const db = env.SKY31_DB || env.DB || env.ORDERS_DB;
   if (!db || typeof db.prepare !== "function") {
-    return env;
+    return {
+      ...env,
+      __SKY31_D1_WRAPPED: true,
+      ORDERS: createMissingD1Store()
+    };
   }
 
   return {
@@ -22,7 +26,18 @@ export function sky31D1Status(env) {
   const db = env && (env.SKY31_DB || env.DB || env.ORDERS_DB);
   return {
     enabled: !!(db && typeof db.prepare === "function"),
-    binding: env && env.SKY31_DB ? "SKY31_DB" : (env && env.DB ? "DB" : (env && env.ORDERS_DB ? "ORDERS_DB" : ""))
+    binding: env && env.SKY31_DB ? "SKY31_DB" : (env && env.DB ? "DB" : (env && env.ORDERS_DB ? "ORDERS_DB" : "")),
+    mode: "D1_ONLY_NO_KV_FALLBACK"
+  };
+}
+
+function createMissingD1Store() {
+  const error = () => new Error("Sky31 D1 binding not found. Please bind SKY31_DB. KV fallback is disabled in this version.");
+  return {
+    async get() { throw error(); },
+    async put() { throw error(); },
+    async delete() { throw error(); },
+    async list() { throw error(); }
   };
 }
 

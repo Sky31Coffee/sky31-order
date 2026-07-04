@@ -22,9 +22,13 @@ export async function onRequestPost(context) {
     const cart = normalizeCart(rawCart);
 
     
-    const sky31MemberForRewardV192 = await sky31LoadMemberForRewardV192(context.env || env, phone || body.phone || body.customerPhone || (body.member && body.member.phone));
+    // V293: reward/coupon calculation must use the same wrapped D1 store as /api/member.
+    // Passing raw context.env here could read the old KV binding, causing the website to show 0 vouchers
+    // while /api/order still deducted legacy KV vouchers.
+    const sky31MemberForRewardV192 = await sky31LoadMemberForRewardV192(env, phone || body.phone || body.customerPhone || (body.member && body.member.phone));
     const sky31RewardInfoV192 = sky31RewardsFromMemberV192(sky31MemberForRewardV192 || {});
     const birthdayVoucherCountV217 = sky31BirthdayVoucherCountOrderV217(activeMember || sky31MemberForRewardV192 || {});
+    const clientRewardUseRequestedV293 = sky31ClientRewardRequestV293(body);
 if (!cart.length) {
       return json({ ok: false, error: "請先選擇飲品" }, 400);
     }
@@ -33,10 +37,16 @@ if (!cart.length) {
     const createdAt = new Date();
     const pickup = body.pickup || getPickupFromCart(cart) || "Now 即取";
     const pickupTime = resolvePickupTime(pickup, createdAt);
+    const serverRewardAvailableV293 = Math.max(0, Number(sky31RewardInfoV192.availableRewards || 0) + Number(birthdayVoucherCountV217 || 0));
+    // V293: if the checkout page explicitly says it is using 0 voucher, never let backend silently apply more.
+    // This keeps the customer-visible summary and final server total in sync.
+    const effectiveRewardAvailableV293 = clientRewardUseRequestedV293 == null
+      ? serverRewardAvailableV293
+      : Math.min(serverRewardAvailableV293, clientRewardUseRequestedV293);
     const sky31DiscountCalcV240 = sky31CalculateOrderDiscountsV240(
       activeMember,
       cart,
-      Number(sky31RewardInfoV192.availableRewards || 0) + birthdayVoucherCountV217
+      effectiveRewardAvailableV293
     );
     const subtotalBeforeRewardV199 = sky31DiscountCalcV240.subtotal;
     const tierDiscountCalcV213 = sky31DiscountCalcV240.tierCalc;
@@ -81,6 +91,9 @@ if (!cart.length) {
       tierDiscount: tierDiscountV213,
       tierDiscountDetails: tierDiscountCalcV213.details,
       discountCalculationOrder: "tier_first_reward_after",
+      rewardSource: "d1_v293",
+      rewardServerAvailable: serverRewardAvailableV293,
+      rewardClientRequested: clientRewardUseRequestedV293,
       totalBeforeTierDiscount: subtotalBeforeRewardV199,
       totalAfterTierDiscount: totalAfterTierV213,
       totalAmount: totalAfterTierAndRewardV240,
@@ -292,6 +305,19 @@ function calcBaseUnitPrice(item) {
 
 function calcUnitPrice(item) {
   return calcBaseUnitPrice(item) + limitedBeanSurchargeOrder(item);
+}
+
+function sky31ClientRewardRequestV293(body) {
+  if (!body || typeof body !== "object") return null;
+  const keys = ["rewardUseRequested", "rewardUse", "useRewardsRequested"];
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(body, key)) {
+      const n = Number(body[key]);
+      if (!Number.isFinite(n)) return 0;
+      return Math.max(0, Math.floor(n));
+    }
+  }
+  return null;
 }
 
 
