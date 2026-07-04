@@ -19754,10 +19754,9 @@ window.addEventListener("load", function() {
 
 
 <script>
-/* V296: Checkout price sync hotfix
+/* V298: Checkout price sync + cold-surcharge-safe voucher calculation.
    Source of truth for checkout preview matches backend D1 order.js price table.
-   Fixes double limited-bean surcharge on frontend summary: Americano iced 35 + limited bean 5 = 40,
-   then tier bean-surcharge waiver is applied before free-drink voucher. */
+   Fixes double limited-bean surcharge and keeps iced up-charge charged even when a food/drink voucher is used. */
 (function(){
   const PRICE_TABLE_V296 = {
     americano: { hot:28, iced:35 },
@@ -19793,14 +19792,23 @@ window.addEventListener("load", function() {
     const key = keyOf(item.name || item.title, item.cn || item.zh);
     const table = PRICE_TABLE_V296[key];
     if(!table){
-      const explicitBase = Number(item.basePrice || 0);
+      const explicitBase = Number(item.basePrice || item.hotBasePrice || item.drinkBasePrice || 0);
       if(explicitBase) return explicitBase;
       const explicit = Number(item.unitPrice || item.price || item.finalPrice || 0);
       const sur = isLimited(item.bean) ? Number(item.beanSurcharge || item.limitedSurcharge || LIMITED_SURCHARGE_V296) : 0;
-      return Math.max(0, explicit - sur);
+      const cold = Math.max(0, Number(item.coldSurcharge || item.icedSurcharge || 0));
+      return Math.max(0, explicit - sur - cold);
     }
     if(table.fixed) return table.fixed;
-    return isIced(item.temp || item.temperature) ? table.iced : table.hot;
+    // V298: basePrice means hot/base drink price. Iced up-charge is calculated separately.
+    return Number(table.hot || 0);
+  }
+  function coldSurcharge(item){
+    item = item || {};
+    const key = keyOf(item.name || item.title, item.cn || item.zh);
+    const table = PRICE_TABLE_V296[key];
+    if(!table || table.fixed) return Math.max(0, Number(item.coldSurcharge || item.icedSurcharge || 0));
+    return isIced(item.temp || item.temperature) ? Math.max(0, Number(table.iced || 0) - Number(table.hot || 0)) : 0;
   }
   function surcharge(item){
     item = item || {};
@@ -19812,11 +19820,16 @@ window.addEventListener("load", function() {
     const x = Object.assign({}, item || {});
     const qty = Math.max(1, Number(x.qty || x.quantity || 1));
     const base = basePrice(x);
+    const cold = coldSurcharge(x);
     const sur = surcharge(x);
-    const unit = round2(base + sur);
+    const unit = round2(base + cold + sur);
     x.qty = qty;
     x.quantity = qty;
     x.basePrice = base;
+    x.hotBasePrice = base;
+    x.drinkBasePrice = base;
+    x.coldSurcharge = cold;
+    x.icedSurcharge = cold;
     x.beanSurcharge = sur;
     x.limitedSurcharge = sur;
     x.unitPrice = unit;
@@ -19886,7 +19899,9 @@ window.addEventListener("load", function() {
       const qty = Math.max(1, Number(item.qty || 1));
       const unit = Number(item.unitPrice || 0);
       const sur = Math.min(unit, Number(item.beanSurcharge || 0));
-      for(let i=0;i<qty;i++) units.push({itemIndex:itemIndex,title:item.name || item.title || item.cn || '飲品',unit:unit,surcharge:sur,tierWaiver:0,rewardUnit:unit});
+      const cold = Math.min(unit, Number(item.coldSurcharge || item.icedSurcharge || 0));
+      const baseDrink = Math.max(0, Math.min(unit, Number(item.hotBasePrice || item.drinkBasePrice || item.basePrice || 0)));
+      for(let i=0;i<qty;i++) units.push({itemIndex:itemIndex,title:item.name || item.title || item.cn || '飲品',unit:unit,surcharge:sur,coldSurcharge:cold,baseDrinkPrice:baseDrink,tierWaiver:0,rewardUnit:unit});
     });
     const subtotal = round2(items.reduce(function(s,x){ return s + Number(x.subtotal || 0); }, 0));
     const tier = displayTier(member);
@@ -19898,7 +19913,8 @@ window.addEventListener("load", function() {
       units.forEach(function(u){
         if(used >= max || u.surcharge <= 0) return;
         u.tierWaiver = Math.min(u.surcharge, LIMITED_SURCHARGE_V296);
-        u.rewardUnit = Math.max(0, u.unit - u.tierWaiver);
+        // V299: 餐品券可免整杯價格；先計清楚凍飲/限定豆總價，再扣會員豁免後的整杯價。
+        u.rewardUnit = Math.max(0, Number(u.unit || 0) - Number(u.tierWaiver || 0));
         tierDiscount += u.tierWaiver;
         used++;
       });
