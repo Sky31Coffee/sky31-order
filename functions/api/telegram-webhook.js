@@ -1,4 +1,5 @@
 import { withD1Store } from "../_d1-kv.js";
+import { sendOrderReadyPushV301 } from "../_push.js";
 export async function onRequest(context) {
   const method = (context.request && context.request.method) || "GET";
 
@@ -159,6 +160,9 @@ async function handleTelegramPost(context) {
     order.pickedUpAt = null;
     clearCancelBackup(order);
     await saveAndRefresh(env, cq, order);
+    // V301 Web Push: when Telegram marks an order as completed, notify the customer's phone if they enabled pickup notifications.
+    const pushJobV301 = sendOrderReadyPushV301(env, order).catch(function(){});
+    if (env && typeof env.__SKY31_WAIT_UNTIL === "function") env.__SKY31_WAIT_UNTIL(pushJobV301);
     return stop(env, cq, "已完成 #" + order.orderNo);
   }
 
