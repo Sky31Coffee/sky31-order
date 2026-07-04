@@ -9,7 +9,7 @@ export async function onRequest(context) {
     return json({
       ok: true,
       endpoint: "telegram-webhook",
-      version: "V308-LimitedBeanConfirmSafe",
+      version: "V310-TelegramQuietReplace",
       method,
       message: "Webhook endpoint reachable. Telegram sends POST updates here."
     });
@@ -6009,3 +6009,336 @@ handleLimitedMenuAction = async function(env, cq, data) {
 
   return _handleLimitedMenuActionBeforeV308(env, cq, data);
 };
+
+/* V310: Telegram quiet replace mode — modification, not stacked extra workflow.
+   Limited Bean list/add/edit now reuses one tracked Telegram card per chat.
+   If Telegram editMessageText fails, the bot sends one replacement card and deletes
+   the previous bot card where permitted, so bot prompts do not keep accumulating. */
+const LIMITED_PANEL_KEY_V310_PREFIX = "sky31:telegram:limited_panel:";
+
+function limitedPanelKeyV310(chatId) {
+  return LIMITED_PANEL_KEY_V310_PREFIX + String(chatId);
+}
+
+async function getLimitedPanelMessageIdV310(env, chatId) {
+  try {
+    const raw = await env.ORDERS.get(limitedPanelKeyV310(chatId));
+    const n = Number(raw || 0);
+    return n > 0 ? n : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function saveLimitedPanelMessageIdV310(env, chatId, messageId) {
+  try {
+    if (!messageId) return;
+    await env.ORDERS.put(limitedPanelKeyV310(chatId), String(messageId), { expirationTtl: 60 * 60 * 24 * 30 });
+  } catch (_) {}
+}
+
+async function sendTelegramMessageV310(env, chatId, text, replyMarkup) {
+  try {
+    const body = { chat_id: chatId, text };
+    if (replyMarkup) body.reply_markup = replyMarkup;
+    const res = await fetch("https://api.telegram.org/bot" + env.TELEGRAM_BOT_TOKEN + "/sendMessage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    try { return await res.json(); } catch (_) { return null; }
+  } catch (_) {
+    return null;
+  }
+}
+
+async function deleteTelegramMessageV310(env, chatId, messageId) {
+  try {
+    if (!env.TELEGRAM_BOT_TOKEN || !chatId || !messageId) return false;
+    const res = await fetch("https://api.telegram.org/bot" + env.TELEGRAM_BOT_TOKEN + "/deleteMessage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, message_id: messageId })
+    });
+    try {
+      const data = await res.json();
+      return !!(data && data.ok);
+    } catch (_) {
+      return false;
+    }
+  } catch (_) {
+    return false;
+  }
+}
+
+async function editOrReplaceTelegramCardV310(env, chatId, messageId, text, markup) {
+  let targetId = messageId ? Number(messageId) : null;
+  if (targetId) {
+    const edited = await editTelegramMessage(env, chatId, targetId, text, markup);
+    if (edited && edited.ok !== false) return targetId;
+
+    // Telegram returns ok:false when text is identical. In that case keep using the same card.
+    const desc = String((edited && edited.description) || "").toLowerCase();
+    if (desc.includes("message is not modified")) return targetId;
+  }
+
+  const sent = await sendTelegramMessageV310(env, chatId, text, markup);
+  const newId = sent && sent.ok !== false && sent.result && sent.result.message_id ? Number(sent.result.message_id) : targetId;
+  if (newId && targetId && newId !== targetId) await deleteTelegramMessageV310(env, chatId, targetId);
+  return newId || targetId;
+}
+
+async function showLimitedPanelV310(env, chatId, text, markup, preferredMessageId) {
+  const storedMessageId = await getLimitedPanelMessageIdV310(env, chatId);
+  const messageId = preferredMessageId || storedMessageId || null;
+  const finalId = await editOrReplaceTelegramCardV310(env, chatId, messageId, text, markup);
+  if (finalId) await saveLimitedPanelMessageIdV310(env, chatId, finalId);
+  return finalId;
+}
+
+async function saveLimitedDraftMessageIdV310(env, chatId, draft, messageId) {
+  if (!draft || !messageId) return;
+  if (String(draft.messageId || "") !== String(messageId)) {
+    draft.messageId = Number(messageId);
+    await saveLimitedDraftV183(env, chatId, draft);
+  }
+  await saveLimitedPanelMessageIdV310(env, chatId, messageId);
+}
+
+function buildLimitedStepTextV310(draft) {
+  const stepNo = Number(draft.step || 0);
+  const step = LIMITED_BEAN_STEPS_V183[stepNo];
+  const modeText = draft.mode === "edit" ? "編輯限定豆子" : "新增限定豆子";
+  const lines = [];
+  lines.push("✨ " + modeText);
+  lines.push("");
+  lines.push("步驟 " + (stepNo + 1) + " / " + LIMITED_BEAN_STEPS_V183.length);
+  lines.push(step.title);
+  lines.push("");
+  lines.push(step.hint);
+  if (draft.mode === "edit") lines.push("按「略過」會保留目前這一項內容；直接輸入新內容會取代舊內容。");
+  lines.push("");
+  lines.push("目前資料：");
+  lines.push(buildLimitedDraftSummaryV183(draft, false));
+  lines.push("");
+  lines.push("此流程會盡量保持同一張 Telegram 卡片更新，避免刷屏。");
+  return lines.join("\n");
+}
+
+buildLimitedStepTextV183 = buildLimitedStepTextV310;
+
+startLimitedWizardV183 = async function(env, chatId, mode, item, messageId) {
+  const panelId = messageId || await getLimitedPanelMessageIdV310(env, chatId);
+  const draft = {
+    mode,
+    targetId: item ? cleanLimitedId(item.id) : "",
+    step: 0,
+    messageId: panelId || null,
+    data: item ? {
+      name: item.name || item.bean || "",
+      cn: item.cn || "",
+      flavor: item.flavor || "",
+      desc: item.desc || "",
+      note: item.note || ""
+    } : {},
+    createdAt: new Date().toISOString()
+  };
+  await saveLimitedDraftV183(env, chatId, draft);
+  await sendLimitedWizardPromptV183(env, chatId, draft);
+  return json({ ok: true });
+};
+
+sendLimitedWizardPromptV183 = async function(env, chatId, draft) {
+  if (Number(draft.step || 0) >= LIMITED_BEAN_STEPS_V183.length) {
+    await sendLimitedWizardConfirmV183(env, chatId, draft);
+    return;
+  }
+  const mid = await showLimitedPanelV310(env, chatId, buildLimitedStepTextV183(draft), buildLimitedStepMarkupV183(draft), draft.messageId);
+  await saveLimitedDraftMessageIdV310(env, chatId, draft, mid);
+};
+
+sendLimitedWizardConfirmV183 = async function(env, chatId, draft) {
+  const mid = await showLimitedPanelV310(env, chatId, buildLimitedConfirmTextV183(draft), {
+    inline_keyboard: [
+      [{ text: "✅ 確認上傳", callback_data: "limited_wizard_confirm:x" }],
+      [{ text: "⬅️ 上一步", callback_data: "limited_wizard_back:x" }],
+      [{ text: "取消", callback_data: "limited_wizard_cancel:x" }]
+    ]
+  }, draft.messageId);
+  await saveLimitedDraftMessageIdV310(env, chatId, draft, mid);
+};
+
+handleLimitedWizardTextV183 = async function(env, message, text, draft) {
+  const chatId = message.chat && message.chat.id ? message.chat.id : env.TELEGRAM_CHAT_ID;
+  const value = String(text || "").trim();
+
+  // In private chats Telegram may or may not permit deleting the user's text. Ignore if refused.
+  await deleteTelegramMessageV310(env, chatId, message.message_id);
+
+  if (value === "取消" || value.toLowerCase() === "cancel") {
+    await clearLimitedDraftV183(env, chatId);
+    await showLimitedPanelV310(env, chatId, "已取消限定豆子編輯。", buildCommandMenuMarkupV183(), draft.messageId);
+    return json({ ok: true });
+  }
+
+  const step = LIMITED_BEAN_STEPS_V183[Number(draft.step || 0)];
+  if (!step) {
+    await sendLimitedWizardConfirmV183(env, chatId, draft);
+    return json({ ok: true });
+  }
+
+  if (step.required && !value) {
+    const mid = await showLimitedPanelV310(env, chatId, "這一欄必填。\n\n" + buildLimitedStepTextV183(draft), buildLimitedStepMarkupV183(draft), draft.messageId);
+    await saveLimitedDraftMessageIdV310(env, chatId, draft, mid);
+    return json({ ok: true });
+  }
+
+  draft.data = draft.data || {};
+  draft.data[step.key] = value;
+  draft.step = Number(draft.step || 0) + 1;
+  await saveLimitedDraftV183(env, chatId, draft);
+  await sendLimitedWizardPromptV183(env, chatId, draft);
+  return json({ ok: true });
+};
+
+const _handleLimitedMenuTextCommandBeforeV310 = handleLimitedMenuTextCommand;
+handleLimitedMenuTextCommand = async function(env, message, text) {
+  const chatId = message.chat && message.chat.id ? message.chat.id : env.TELEGRAM_CHAT_ID;
+
+  if (!isAuthorizedTelegramChat(env, chatId)) {
+    await sendTelegramMessage(env, chatId, "沒有權限修改 Sky31 限定豆子。", null);
+    return json({ ok: true });
+  }
+
+  const t = String(text || "").trim();
+  const lower = t.toLowerCase();
+
+  if (lower === "/limited" || lower === "/limited_beans" || t === "限定" || t === "限定列表" || t === "限定豆子" || t === "限定豆子列表") {
+    await deleteTelegramMessageV310(env, chatId, message.message_id);
+    let config = await normalizeLimitedCurrentV184(env, await getLimitedMenuConfig(env));
+    await showLimitedPanelV310(env, chatId, buildLimitedListText(config), buildLimitedListMarkup(config), null);
+    return json({ ok: true });
+  }
+
+  if (lower === "/limited_help" || lower === "/limited_bean_help" || t === "限定說明" || t === "限定说明" || t === "限定豆子說明" || t === "限定豆子说明") {
+    await deleteTelegramMessageV310(env, chatId, message.message_id);
+    await showLimitedPanelV310(env, chatId, buildLimitedHelpText(), buildLimitedHelpMarkupV182(), null);
+    return json({ ok: true });
+  }
+
+  if (/^(新增豆子|新增限定豆子|新增限定|添加豆子|添加限定豆子|添加限定)$/i.test(t)) {
+    await deleteTelegramMessageV310(env, chatId, message.message_id);
+    return startLimitedWizardV183(env, chatId, "add", null, null);
+  }
+
+  const editMatch = t.match(/^(編輯豆子|编辑豆子|編輯限定豆子|编辑限定豆子|編輯限定|编辑限定)\s+(.+)$/i);
+  if (editMatch) {
+    await deleteTelegramMessageV310(env, chatId, message.message_id);
+    let config = await normalizeLimitedCurrentV184(env, await getLimitedMenuConfig(env));
+    const item = findLimitedItemV183(config, editMatch[2] || "");
+    if (!item) {
+      await showLimitedPanelV310(env, chatId, "找不到限定豆子：" + (editMatch[2] || "") + "\n請先在限定豆子列表點選要編輯的豆子。", buildLimitedListMarkup(config), null);
+      return json({ ok: true });
+    }
+    return startLimitedWizardV183(env, chatId, "edit", item, null);
+  }
+
+  if (/^(編輯豆子|编辑豆子|編輯限定豆子|编辑限定豆子|編輯限定|编辑限定)$/i.test(t)) {
+    await deleteTelegramMessageV310(env, chatId, message.message_id);
+    let config = await normalizeLimitedCurrentV184(env, await getLimitedMenuConfig(env));
+    await showLimitedPanelV310(env, chatId, "請選擇要編輯的限定豆子：\n\n" + buildLimitedListText(config), buildLimitedListMarkup(config), null);
+    return json({ ok: true });
+  }
+
+  // Other legacy text commands are kept for compatibility, but list/add/edit now use quiet cards.
+  return _handleLimitedMenuTextCommandBeforeV310(env, message, text);
+};
+
+const _handleLimitedMenuActionBeforeV310 = handleLimitedMenuAction;
+handleLimitedMenuAction = async function(env, cq, data) {
+  const chatId = cq.message && cq.message.chat ? cq.message.chat.id : env.TELEGRAM_CHAT_ID;
+  const messageId = cq.message ? cq.message.message_id : null;
+  if (!isAuthorizedTelegramChat(env, chatId)) return stop(env, cq, "沒有權限");
+
+  const parts = String(data || "").split(":");
+  const action = parts[0];
+  const id = cleanLimitedId(parts.slice(1).join(":"));
+
+  if (action === "limited_list") {
+    let config = await normalizeLimitedCurrentV184(env, await getLimitedMenuConfig(env));
+    await showLimitedPanelV310(env, chatId, buildLimitedListText(config), buildLimitedListMarkup(config), messageId);
+    return stop(env, cq, "已刷新限定豆子列表");
+  }
+
+  if (action === "limited_help") {
+    await showLimitedPanelV310(env, chatId, buildLimitedHelpText(), buildLimitedHelpMarkupV182(), messageId);
+    return stop(env, cq, "已開啟說明");
+  }
+
+  if (action === "limited_add_template" || action === "limited_wizard_add") {
+    await startLimitedWizardV183(env, chatId, "add", null, messageId);
+    return stop(env, cq, "開始新增限定豆子");
+  }
+
+  if (action === "limited_edit_template" || action === "limited_wizard_edit") {
+    let config = await normalizeLimitedCurrentV184(env, await getLimitedMenuConfig(env));
+    const item = findLimitedItemV183(config, id);
+    if (!item || item.deleted === true) return stop(env, cq, "找不到可編輯豆子");
+    await startLimitedWizardV183(env, chatId, "edit", item, messageId);
+    return stop(env, cq, "開始編輯限定豆子");
+  }
+
+  if (action === "limited_wizard_back") {
+    const draft = await getLimitedDraftV183(env, chatId);
+    if (!draft) return stop(env, cq, "沒有正在編輯的豆子");
+    draft.messageId = draft.messageId || messageId || await getLimitedPanelMessageIdV310(env, chatId);
+    draft.step = Math.max(0, Number(draft.step || 0) - 1);
+    await saveLimitedDraftV183(env, chatId, draft);
+    await sendLimitedWizardPromptV183(env, chatId, draft);
+    return stop(env, cq, "已返回上一步");
+  }
+
+  if (action === "limited_wizard_skip") {
+    const draft = await getLimitedDraftV183(env, chatId);
+    if (!draft) return stop(env, cq, "沒有正在編輯的豆子");
+    draft.messageId = draft.messageId || messageId || await getLimitedPanelMessageIdV310(env, chatId);
+    const step = LIMITED_BEAN_STEPS_V183[Number(draft.step || 0)];
+    if (!step || (draft.mode !== "edit" && step.required)) return stop(env, cq, "此欄必填");
+    draft.data = draft.data || {};
+    if (!Object.prototype.hasOwnProperty.call(draft.data, step.key)) draft.data[step.key] = "";
+    draft.step = Number(draft.step || 0) + 1;
+    await saveLimitedDraftV183(env, chatId, draft);
+    await sendLimitedWizardPromptV183(env, chatId, draft);
+    return stop(env, cq, "已略過");
+  }
+
+  if (action === "limited_wizard_cancel") {
+    const draft = await getLimitedDraftV183(env, chatId);
+    const targetMessageId = (draft && draft.messageId) || messageId || await getLimitedPanelMessageIdV310(env, chatId);
+    await clearLimitedDraftV183(env, chatId);
+    await showLimitedPanelV310(env, chatId, "已取消限定豆子編輯。", buildCommandMenuMarkupV183(), targetMessageId);
+    return stop(env, cq, "已取消");
+  }
+
+  if (action === "limited_wizard_confirm") {
+    const draft = await getLimitedDraftV183(env, chatId);
+    if (!draft) return stop(env, cq, "沒有正在編輯的豆子");
+    draft.messageId = draft.messageId || messageId || await getLimitedPanelMessageIdV310(env, chatId);
+    const saved = await saveLimitedDraftToMenuV183(env, chatId, draft);
+    await clearLimitedDraftV183(env, chatId);
+    const config = await normalizeLimitedCurrentV184(env, await getLimitedMenuConfig(env));
+    const currentIds = currentLimitedBeansV191(config).map(x => cleanLimitedId(x.id));
+    const refreshed = findLimitedItemV183(config, cleanLimitedId(saved.id)) || saved;
+    await showLimitedPanelV310(
+      env,
+      chatId,
+      "✅ 已上傳限定豆子\n\n" + limitedBeanDetailTextV187(refreshed, currentIds.includes(cleanLimitedId(refreshed.id))) + "\n\n網站資料已更新。",
+      limitedBeanDetailMarkupV187(refreshed, currentIds.includes(cleanLimitedId(refreshed.id))),
+      draft.messageId
+    );
+    return stop(env, cq, "已上傳");
+  }
+
+  return _handleLimitedMenuActionBeforeV310(env, cq, data);
+};
+
