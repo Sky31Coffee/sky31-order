@@ -262,7 +262,7 @@ async function nextOrderNo(env) {
 
 
 const SKY31_PRICE_TABLE = {
-  americano: { hot: 28, iced: 35 },
+  americano: { hot: 35, iced: 40 },
   latte: { hot: 40, iced: 45 },
   cappuccino: { hot: 40, iced: 45 },
   mocha: { hot: 38, iced: 43 },
