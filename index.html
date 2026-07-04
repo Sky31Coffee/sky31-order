@@ -19751,5 +19751,222 @@ window.addEventListener("load", function() {
 })();
 </script>
 
+
+
+<script>
+/* V296: Checkout price sync hotfix
+   Source of truth for checkout preview matches backend D1 order.js price table.
+   Fixes double limited-bean surcharge on frontend summary: Americano iced 35 + limited bean 5 = 40,
+   then tier bean-surcharge waiver is applied before free-drink voucher. */
+(function(){
+  const PRICE_TABLE_V296 = {
+    americano: { hot:28, iced:35 },
+    latte: { hot:40, iced:45 },
+    cappuccino: { hot:40, iced:45 },
+    mocha: { hot:38, iced:43 },
+    chocolate: { hot:30, iced:35 },
+    dirty: { fixed:38 }
+  };
+  const LIMITED_SURCHARGE_V296 = 5;
+  function round2(n){ return Math.round(Number(n || 0) * 100) / 100; }
+  function norm(s){ return String(s || '').toLowerCase().replace(/\s+/g,''); }
+  function keyOf(name, cn){
+    const n = norm(name) + ' ' + norm(cn);
+    if(n.indexOf('dirty') >= 0 || n.indexOf('髒') >= 0 || n.indexOf('脏') >= 0) return 'dirty';
+    if(n.indexOf('americano') >= 0 || n.indexOf('美式') >= 0) return 'americano';
+    if(n.indexOf('latte') >= 0 || n.indexOf('拿鐵') >= 0 || n.indexOf('拿铁') >= 0) return 'latte';
+    if(n.indexOf('cappuccino') >= 0 || n.indexOf('卡布') >= 0) return 'cappuccino';
+    if(n.indexOf('mocha') >= 0 || n.indexOf('摩卡') >= 0) return 'mocha';
+    if(n.indexOf('chocolate') >= 0 || n.indexOf('可可') >= 0) return 'chocolate';
+    return '';
+  }
+  function isIced(temp){
+    temp = String(temp || '');
+    return temp.indexOf('Iced') >= 0 || temp.indexOf('凍') >= 0 || temp.indexOf('冻') >= 0;
+  }
+  function isLimited(bean){
+    const s = String(bean || '');
+    return s.indexOf('Limited｜') === 0 || s.indexOf('Limited|') === 0 || s.indexOf('限定豆子') >= 0;
+  }
+  function basePrice(item){
+    item = item || {};
+    const key = keyOf(item.name || item.title, item.cn || item.zh);
+    const table = PRICE_TABLE_V296[key];
+    if(!table){
+      const explicitBase = Number(item.basePrice || 0);
+      if(explicitBase) return explicitBase;
+      const explicit = Number(item.unitPrice || item.price || item.finalPrice || 0);
+      const sur = isLimited(item.bean) ? Number(item.beanSurcharge || item.limitedSurcharge || LIMITED_SURCHARGE_V296) : 0;
+      return Math.max(0, explicit - sur);
+    }
+    if(table.fixed) return table.fixed;
+    return isIced(item.temp || item.temperature) ? table.iced : table.hot;
+  }
+  function surcharge(item){
+    item = item || {};
+    if(!isLimited(item.bean)) return 0;
+    const s = Number(item.beanSurcharge || item.limitedSurcharge || LIMITED_SURCHARGE_V296);
+    return Number.isFinite(s) && s > 0 ? s : LIMITED_SURCHARGE_V296;
+  }
+  function pricedItem(item){
+    const x = Object.assign({}, item || {});
+    const qty = Math.max(1, Number(x.qty || x.quantity || 1));
+    const base = basePrice(x);
+    const sur = surcharge(x);
+    const unit = round2(base + sur);
+    x.qty = qty;
+    x.quantity = qty;
+    x.basePrice = base;
+    x.beanSurcharge = sur;
+    x.limitedSurcharge = sur;
+    x.unitPrice = unit;
+    x.price = unit;
+    x.subtotal = round2(unit * qty);
+    x.currency = 'MOP';
+    return x;
+  }
+  function currentCart(){
+    try{
+      const c = Array.isArray(window.cart) ? window.cart : (typeof cart !== 'undefined' && Array.isArray(cart) ? cart : []);
+      return c;
+    }catch(e){ return []; }
+  }
+  function pricedCart(){ return currentCart().map(pricedItem); }
+  function totalQty(){ return pricedCart().reduce(function(s,x){ return s + Math.max(1, Number(x.qty || 1)); }, 0); }
+  function cartSubtotal(){ return round2(pricedCart().reduce(function(s,x){ return s + Number(x.subtotal || 0); }, 0)); }
+  function tierByKey(key){
+    key = String(key || '').toLowerCase();
+    if(key === 'vip') key = 'blackgold';
+    const map = {
+      regular:{key:'regular',name:'普通會員',icon:'🌱',cups:0},
+      silver:{key:'silver',name:'銀卡會員',icon:'🥈',cups:30},
+      gold:{key:'gold',name:'金卡會員',icon:'🥇',cups:60},
+      diamond:{key:'diamond',name:'鑽石會員',icon:'💎',cups:100},
+      blackgold:{key:'blackgold',name:'黑金會員',icon:'👑',cups:180}
+    };
+    return map[key] || null;
+  }
+  function tierByCups(cups){
+    cups = Number(cups || 0);
+    if(cups >= 180) return tierByKey('blackgold');
+    if(cups >= 100) return tierByKey('diamond');
+    if(cups >= 60) return tierByKey('gold');
+    if(cups >= 30) return tierByKey('silver');
+    return tierByKey('regular');
+  }
+  function displayTier(member){
+    member = member || {};
+    const cups = Number(member.totalCups || member.cups || member.totalItems || 0);
+    const manual = tierByKey(member.manualTierKey || member.memberTierOverrideKey || member.memberTierManualKey || '');
+    if(manual){
+      const baseCups = Number(member.manualTierBaseCups || manual.cups || 0);
+      const hasStart = member.manualTierStartCups != null || member.manualTierSetAtCups != null || member.manualTierOriginalCups != null;
+      const start = hasStart ? Number(member.manualTierStartCups ?? member.manualTierSetAtCups ?? member.manualTierOriginalCups ?? 0) : 0;
+      return tierByCups(hasStart ? baseCups + Math.max(0, cups - start) : Math.max(cups, baseCups));
+    }
+    return tierByKey(member.memberTierKey || '') || tierByCups(cups);
+  }
+  function availableRewards(member){
+    member = member || {};
+    if(member.rewards && member.rewards.availableRewards != null) return Math.max(0, Math.floor(Number(member.rewards.availableRewards || 0)));
+    const cups = Number(member.totalCups || member.cups || member.totalItems || 0);
+    const earned = Math.floor(cups / 10);
+    const redeemed = Number(member.rewardRedeemed || member.rewardsRedeemed || (member.rewards && member.rewards.redeemedRewards) || 0);
+    const reserved = Number(member.rewardReserved || member.rewardsReserved || (member.rewards && member.rewards.reservedRewards) || 0);
+    const gifted = Number(member.giftVoucherBalance || member.giftVouchers || member.manualGiftVouchers || (member.rewards && member.rewards.giftedRewards) || 0);
+    const giftRedeemed = Number(member.giftVoucherRedeemed || member.giftVoucherUsed || (member.rewards && (member.rewards.giftVoucherRedeemed || member.rewards.giftVoucherUsed)) || 0);
+    const giftReserved = Number(member.giftVoucherReserved || member.giftVoucherReservedRewards || (member.rewards && member.rewards.giftVoucherReserved) || 0);
+    return Math.max(0, Math.floor(earned + Math.max(0, gifted - giftRedeemed - giftReserved) - redeemed - reserved));
+  }
+  function calculate(member){
+    member = member || {};
+    const items = pricedCart();
+    const units = [];
+    items.forEach(function(item, itemIndex){
+      const qty = Math.max(1, Number(item.qty || 1));
+      const unit = Number(item.unitPrice || 0);
+      const sur = Math.min(unit, Number(item.beanSurcharge || 0));
+      for(let i=0;i<qty;i++) units.push({itemIndex:itemIndex,title:item.name || item.title || item.cn || '飲品',unit:unit,surcharge:sur,tierWaiver:0,rewardUnit:unit});
+    });
+    const subtotal = round2(items.reduce(function(s,x){ return s + Number(x.subtotal || 0); }, 0));
+    const tier = displayTier(member);
+    const details = [];
+    let tierDiscount = 0;
+    if(tier.key === 'silver' || tier.key === 'gold' || tier.key === 'diamond'){
+      const max = tier.key === 'silver' ? 1 : (tier.key === 'gold' ? 2 : Infinity);
+      let used = 0;
+      units.forEach(function(u){
+        if(used >= max || u.surcharge <= 0) return;
+        u.tierWaiver = Math.min(u.surcharge, LIMITED_SURCHARGE_V296);
+        u.rewardUnit = Math.max(0, u.unit - u.tierWaiver);
+        tierDiscount += u.tierWaiver;
+        used++;
+      });
+      if(tierDiscount > 0) details.push(tier.key === 'diamond' ? '限定豆子加價全數豁免' : '限定豆子加價豁免 ×' + used);
+    }else if(tier.key === 'blackgold'){
+      tierDiscount = Math.min(15, subtotal);
+      if(tierDiscount > 0) details.push('黑金會員 MOP 15 優惠');
+    }
+    tierDiscount = Math.min(subtotal, round2(tierDiscount));
+    const afterTier = Math.max(0, round2(subtotal - tierDiscount));
+    const avail = availableRewards(member);
+    const rewardUnits = units.slice().sort(function(a,b){ return Number(b.rewardUnit || 0) - Number(a.rewardUnit || 0); });
+    const useRewards = Math.min(avail, rewardUnits.length);
+    const freeItems = rewardUnits.slice(0, useRewards);
+    const rewardDiscount = Math.min(afterTier, round2(freeItems.reduce(function(s,u){ return s + Number(u.rewardUnit || 0); }, 0)));
+    const cups = Number(member.totalCups || member.cups || member.totalItems || 0);
+    return {
+      subtotal:subtotal,
+      subtotalBeforeReward:subtotal,
+      tier:tier,
+      tierDiscount:tierDiscount,
+      tierDetails:details,
+      tierDiscountDetails:details,
+      afterTier:afterTier,
+      cups:cups,
+      earned:Math.floor(cups / 10),
+      redeemed:Number(member.rewardRedeemed || member.rewardsRedeemed || (member.rewards && member.rewards.redeemedRewards) || 0),
+      available:avail,
+      useRewards:useRewards,
+      rewardDiscount:rewardDiscount,
+      freeItems:freeItems,
+      finalTotal:Math.max(0, round2(afterTier - rewardDiscount))
+    };
+  }
+  window.sky31PriceForItem = function(item){ return pricedItem(item).unitPrice; };
+  window.sky31EnrichedItem = pricedItem;
+  window.sky31EnrichedCart = pricedCart;
+  window.sky31CartTotal = cartSubtotal;
+  window.SKY31_CALCULATE_CHECKOUT_V240 = calculate;
+  window.SKY31_PRICE_SYNC_V296 = true;
+
+  const oldAdd = window.addToCart || (typeof addToCart === 'function' ? addToCart : null);
+  window.addToCart = addToCart = function(){
+    if(typeof oldAdd === 'function'){
+      const ret = oldAdd.apply(this, arguments);
+      try{
+        const c = currentCart();
+        if(c.length){
+          const fixed = pricedItem(c[c.length - 1]);
+          Object.assign(c[c.length - 1], fixed);
+        }
+        if(typeof updateAll === 'function') updateAll();
+      }catch(e){}
+      return ret;
+    }
+  };
+
+  function rerender(){
+    try{
+      const member = (typeof readMember244 === 'function' && readMember244()) || (typeof readMember240 === 'function' && readMember240()) || (typeof readMember === 'function' && readMember()) || {};
+      if(typeof window.SKY31_RENDER_SUMMARY_V244 === 'function') window.SKY31_RENDER_SUMMARY_V244(member);
+      else if(typeof window.SKY31_RENDER_SUMMARY_V240 === 'function') window.SKY31_RENDER_SUMMARY_V240(member);
+    }catch(e){}
+  }
+  document.addEventListener('click', function(){ setTimeout(rerender, 80); }, true);
+  document.addEventListener('DOMContentLoaded', function(){ setTimeout(rerender, 300); }, {once:true});
+})();
+</script>
+
 </body>
 </html>
