@@ -19696,5 +19696,60 @@ window.addEventListener("load", function() {
 }
 </style>
 
+
+<script>
+/* V295: D1 reward refresh before checkout submit.
+   Before /api/order is sent, refresh /api/member once and recalculate the 10-cup voucher count.
+   This keeps checkout, Telegram and D1 using the same latest coupon balance. */
+(function(){
+  if(window.__SKY31_V295_D1_REWARD_REFRESH__) return;
+  window.__SKY31_V295_D1_REWARD_REFRESH__ = true;
+  var MEMBER_KEY = "sky31_member_v1";
+  function readMember(){
+    try{ var raw = localStorage.getItem(MEMBER_KEY); return raw ? JSON.parse(raw) : null; }catch(e){ return null; }
+  }
+  function saveMember(member){
+    try{ if(member && member.phone) localStorage.setItem(MEMBER_KEY, JSON.stringify(member)); }catch(e){}
+  }
+  function normalizePhone(v){ return String(v || "").replace(/\D/g, ""); }
+  async function refreshMemberBeforeOrder(body, baseFetch){
+    var phone = normalizePhone((body && (body.phone || body.memberPhone || body.submittedPhone)) || (readMember() && readMember().phone));
+    if(!phone) return readMember();
+    try{
+      var res = await baseFetch("/api/member?phone=" + encodeURIComponent(phone) + "&_v=295&_t=" + Date.now(), { cache:"no-store" });
+      var data = await res.json().catch(function(){ return {}; });
+      var member = data && (data.member || data.data || data.profile);
+      if(data && data.ok && member && member.phone){
+        saveMember(member);
+        try{ if(typeof window.SKY31_RENDER_SUMMARY_V240 === "function") window.SKY31_RENDER_SUMMARY_V240(member); }catch(e){}
+        return member;
+      }
+    }catch(e){}
+    return readMember();
+  }
+  var previousFetch = window.fetch;
+  if(typeof previousFetch !== "function") return;
+  window.fetch = async function(input, init){
+    try{
+      var url = typeof input === "string" ? input : ((input && input.url) || "");
+      var method = String((init && init.method) || "GET").toUpperCase();
+      if(url.indexOf("/api/order") >= 0 && method !== "GET" && init && init.body && typeof init.body === "string"){
+        var body = JSON.parse(init.body);
+        var member = await refreshMemberBeforeOrder(body, previousFetch);
+        var calc = null;
+        try{ if(typeof window.SKY31_CALCULATE_CHECKOUT_V240 === "function") calc = window.SKY31_CALCULATE_CHECKOUT_V240(member || readMember() || {}); }catch(e){}
+        if(calc && typeof calc === "object"){
+          body.rewardUseRequested = Math.max(0, Math.floor(Number(calc.useRewards || 0)));
+          body.rewardDiscountPreview = Number(calc.rewardDiscount || 0);
+          body.rewardFreeItemsPreview = Array.isArray(calc.freeItems) ? calc.freeItems : [];
+        }
+        init = Object.assign({}, init, { body: JSON.stringify(body) });
+      }
+    }catch(e){}
+    return previousFetch.apply(this, arguments.length ? [input, init] : arguments);
+  };
+})();
+</script>
+
 </body>
 </html>
