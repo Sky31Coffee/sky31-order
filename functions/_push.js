@@ -1,5 +1,5 @@
 // Sky31 Web Push helpers
-// V301: lightweight pickup-ready notifications. Uses D1-only env.ORDERS store.
+// V303: order status notifications with encrypted payload messages. Uses D1-only env.ORDERS store.
 
 const DEFAULT_VAPID_PUBLIC_KEY = "BH6_njul0KgPix_FVFwoLh1Si87hWlINKA4FuFBM-uXJO68zj_ln7A2nsfi8wTwzQhjDAmQSygeH12cnk8iZsbc";
 const DEFAULT_VAPID_PRIVATE_KEY = "kKSXGlZlIDiUbc2cryMiU6Nu0wmhvXU5Ssthm3MOYDI";
@@ -52,6 +52,22 @@ export async function savePushSubscriptionV301(env, phone, subscription, meta = 
 }
 
 export async function sendOrderReadyPushV301(env, order) {
+  const no = String((order && order.orderNo) || "").trim();
+  const msg = no
+    ? "你的訂單 #" + no + " 已完成，可以取餐了 ☕"
+    : "你的訂單已完成，可以取餐了 ☕";
+  return sendOrderStatusPushV303(env, order, msg, "ready");
+}
+
+export async function sendOrderConfirmedPushV303(env, order) {
+  const no = String((order && order.orderNo) || "").trim();
+  const msg = no
+    ? "店家已接收並確認你的訂單 #" + no + "，會按取餐時間準備 ☕"
+    : "店家已接收並確認你的訂單，會按取餐時間準備 ☕";
+  return sendOrderStatusPushV303(env, order, msg, "confirmed");
+}
+
+export async function sendOrderStatusPushV303(env, order, message, kind = "status") {
   const phone = normalizePhone(order && (order.phone || order.memberPhone || order.customerPhone));
   if (!phone || !env || !env.ORDERS) return { ok: false, sent: 0, reason: "missing phone/store" };
   const subs = await listPushSubscriptionsForPhone(env, phone);
@@ -60,9 +76,10 @@ export async function sendOrderReadyPushV301(env, order) {
   let sent = 0;
   let failed = 0;
   const staleKeys = [];
+  const payload = String(message || "你的 Sky31 訂單狀態已更新。");
   await Promise.all(subs.map(async rec => {
     try {
-      const res = await sendRawPushNoPayload(env, rec.subscription || rec);
+      const res = await sendRawPush(env, rec.subscription || rec, payload);
       if (res && (res.status === 404 || res.status === 410)) {
         failed += 1;
         staleKeys.push(rec.__key);
@@ -76,7 +93,7 @@ export async function sendOrderReadyPushV301(env, order) {
     }
   }));
   await Promise.all(staleKeys.filter(Boolean).map(k => env.ORDERS.delete(k).catch(() => {})));
-  return { ok: true, sent, failed, staleRemoved: staleKeys.length };
+  return { ok: true, phone, kind, sent, failed, staleRemoved: staleKeys.length };
 }
 
 export async function sendTestPushToPhoneV301(env, phone) {
@@ -86,7 +103,7 @@ export async function sendTestPushToPhoneV301(env, phone) {
   let failed = 0;
   for (const rec of subs) {
     try {
-      const res = await sendRawPushNoPayload(env, rec.subscription || rec);
+      const res = await sendRawPush(env, rec.subscription || rec, "Sky31 測試通知：如果你收到這條訊息，代表取餐通知已成功開啟 ☕");
       if (res && res.ok) sent += 1; else failed += 1;
     } catch (_) { failed += 1; }
   }
@@ -119,12 +136,32 @@ async function listPushSubscriptionsForPhone(env, phone) {
   return out;
 }
 
-async function sendRawPushNoPayload(env, subscription) {
+async function sendRawPush(env, subscription, payloadText) {
   if (!subscription || !subscription.endpoint) throw new Error("missing endpoint");
   const endpoint = String(subscription.endpoint);
   const aud = new URL(endpoint).origin;
   const jwt = await createVapidJWT(env, aud);
   const publicKey = getVapidPublicKey(env);
+
+  // If the browser subscription includes encryption keys, send a real payload so
+  // the service worker can show different messages for confirmed vs ready.
+  const keys = subscription.keys || {};
+  if (keys.p256dh && keys.auth && payloadText) {
+    const encrypted = await encryptWebPushPayload(subscription, String(payloadText));
+    return fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "TTL": "300",
+        "Urgency": "high",
+        "Authorization": "vapid t=" + jwt + ", k=" + publicKey,
+        "Content-Encoding": "aes128gcm",
+        "Content-Type": "application/octet-stream"
+      },
+      body: encrypted
+    });
+  }
+
+  // Fallback for unusual subscriptions. The SW will show its default pickup message.
   return fetch(endpoint, {
     method: "POST",
     headers: {
@@ -134,6 +171,65 @@ async function sendRawPushNoPayload(env, subscription) {
       "Content-Length": "0"
     }
   });
+}
+
+async function encryptWebPushPayload(subscription, payloadText) {
+  const uaPublic = base64UrlDecode(subscription.keys.p256dh);
+  const authSecret = base64UrlDecode(subscription.keys.auth);
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const asKeyPair = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveBits"]);
+  const asPublic = new Uint8Array(await crypto.subtle.exportKey("raw", asKeyPair.publicKey));
+  const uaPublicKey = await crypto.subtle.importKey("raw", uaPublic, { name: "ECDH", namedCurve: "P-256" }, false, []);
+  const ecdhSecret = new Uint8Array(await crypto.subtle.deriveBits({ name: "ECDH", public: uaPublicKey }, asKeyPair.privateKey, 256));
+
+  const ikmPre = await hmacSha256(authSecret, ecdhSecret);
+  const keyInfo = concatBytes(textBytes("WebPush: info"), new Uint8Array([0]), uaPublic, asPublic);
+  const ikm = await hkdfExpand(ikmPre, keyInfo, 32);
+  const prk = await hmacSha256(salt, ikm);
+  const cek = await hkdfExpand(prk, concatBytes(textBytes("Content-Encoding: aes128gcm"), new Uint8Array([0])), 16);
+  const nonce = await hkdfExpand(prk, concatBytes(textBytes("Content-Encoding: nonce"), new Uint8Array([0])), 12);
+
+  const payload = textBytes(payloadText);
+  const record = concatBytes(payload, new Uint8Array([2]));
+  const aesKey = await crypto.subtle.importKey("raw", cek, { name: "AES-GCM" }, false, ["encrypt"]);
+  const ciphertext = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv: nonce, tagLength: 128 }, aesKey, record));
+
+  const rs = 4096;
+  const header = new Uint8Array(16 + 4 + 1 + asPublic.length);
+  header.set(salt, 0);
+  header[16] = (rs >>> 24) & 255;
+  header[17] = (rs >>> 16) & 255;
+  header[18] = (rs >>> 8) & 255;
+  header[19] = rs & 255;
+  header[20] = asPublic.length;
+  header.set(asPublic, 21);
+  return concatBytes(header, ciphertext);
+}
+
+async function hmacSha256(keyBytes, dataBytes) {
+  const key = await crypto.subtle.importKey("raw", keyBytes, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return new Uint8Array(await crypto.subtle.sign("HMAC", key, dataBytes));
+}
+
+async function hkdfExpand(prk, info, length) {
+  const block = await hmacSha256(prk, concatBytes(info, new Uint8Array([1])));
+  return block.slice(0, length);
+}
+
+function textBytes(s) {
+  return new TextEncoder().encode(String(s || ""));
+}
+
+function concatBytes(...parts) {
+  const total = parts.reduce((n, p) => n + (p ? p.length : 0), 0);
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const p of parts) {
+    if (!p) continue;
+    out.set(p, offset);
+    offset += p.length;
+  }
+  return out;
 }
 
 async function createVapidJWT(env, audience) {

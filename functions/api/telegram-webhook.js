@@ -1,5 +1,5 @@
 import { withD1Store } from "../_d1-kv.js";
-import { sendOrderReadyPushV301 } from "../_push.js";
+import { sendOrderReadyPushV301, sendOrderConfirmedPushV303 } from "../_push.js";
 export async function onRequest(context) {
   const method = (context.request && context.request.method) || "GET";
 
@@ -9,7 +9,7 @@ export async function onRequest(context) {
     return json({
       ok: true,
       endpoint: "telegram-webhook",
-      version: "V234",
+      version: "V303",
       method,
       message: "Webhook endpoint reachable. Telegram sends POST updates here."
     });
@@ -112,6 +112,9 @@ async function handleTelegramPost(context) {
     order.pickedUpAt = null;
     clearCancelBackup(order);
     await saveAndRefresh(env, cq, order);
+    // V303 Web Push: when Telegram confirms an order, notify the customer that the shop accepted it.
+    const pushJobV303 = sendOrderConfirmedPushV303(env, order).catch(function(){});
+    if (env && typeof env.__SKY31_WAIT_UNTIL === "function") env.__SKY31_WAIT_UNTIL(pushJobV303);
     return stop(env, cq, "已確認訂單 #" + order.orderNo);
   }
 
