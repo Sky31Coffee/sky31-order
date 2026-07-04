@@ -1,4 +1,4 @@
-const SKY31_SW_VERSION = 'v303-push';
+const SKY31_SW_VERSION = 'v304-push-clean-text';
 
 self.addEventListener('install', event => {
   self.skipWaiting();
@@ -10,7 +10,7 @@ self.addEventListener('activate', event => {
 
 self.addEventListener('push', event => {
   const title = 'Sky31 Coffee';
-  let body = '你的訂單已完成，可以取餐了 ☕';
+  let body = '可以取餐啦。你的訂單已完成，請到店取餐。';
   try {
     if (event.data) {
       const text = event.data.text();
