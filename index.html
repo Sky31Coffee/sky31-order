@@ -9024,6 +9024,9 @@ line-height:1.6;
 <link rel="icon" type="image/png" sizes="512x512" href="/favicon.png?v=63">
 <link rel="shortcut icon" href="/favicon.png?v=63">
 <meta name="apple-mobile-web-app-title" content="Sky31">
+<link rel="manifest" href="/manifest.json?v=301">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 
 
 <style>
@@ -9082,6 +9085,36 @@ html, body{ touch-action: manipulation; }
   transition:none !important;
 }
 </style>
+
+<style id="sky31-v301-push-style">
+/* V301 Web Push pickup notification */
+.sky31-push-checkout-v301{
+  margin:14px 0 10px;
+  padding:14px 16px;
+  border-radius:24px;
+  border:1px solid rgba(105,135,95,.22);
+  background:linear-gradient(180deg, rgba(245,255,244,.92), rgba(255,252,238,.88));
+  box-shadow:0 12px 30px rgba(40,65,35,.08), inset 0 1px 0 rgba(255,255,255,.72);
+  color:#273146;
+}
+.sky31-push-title-v301{font-weight:900;font-size:16px;letter-spacing:.02em;margin-bottom:4px;}
+.sky31-push-text-v301{font-size:13px;line-height:1.45;color:rgba(39,49,70,.66);margin-bottom:10px;}
+.sky31-push-btn-v301{
+  width:100%;
+  border:0;
+  border-radius:18px;
+  padding:13px 14px;
+  font-weight:900;
+  font-size:15px;
+  color:#fff;
+  background:linear-gradient(135deg, #192233, #2d405a);
+  box-shadow:0 10px 22px rgba(20,30,50,.18);
+}
+.sky31-push-btn-v301:disabled{opacity:.62;filter:grayscale(.15);}
+.sky31-push-tip-v301{margin-top:8px;font-size:12px;line-height:1.4;color:rgba(39,49,70,.56);}
+@media (max-width:480px){.sky31-push-checkout-v301{border-radius:20px;margin:12px 0 8px;padding:13px 14px}.sky31-push-btn-v301{font-size:14px}}
+</style>
+
 </head>
 <body>
 <div id="sky31MobileBg" aria-hidden="true"></div>
@@ -20335,5 +20368,230 @@ window.addEventListener("load", function() {
 })();
 </script>
 
+
+<script id="sky31-v301-push-script">
+/* V301: Web Push pickup-ready notification. Does not depend on member auto-login after subscription. */
+(function(){
+  if(window.__SKY31_PUSH_V301__) return;
+  window.__SKY31_PUSH_V301__ = true;
+
+  function $(id){ return document.getElementById(id); }
+  function normPhone(v){ return String(v || "").replace(/\D/g, ""); }
+  function readMember(){
+    try{
+      var raw = localStorage.getItem("sky31_member_v1") || localStorage.getItem("sky31_member") || "";
+      return raw ? JSON.parse(raw) : null;
+    }catch(e){ return null; }
+  }
+  function currentPhone(){
+    var p = normPhone(($("phone") && $("phone").value) || "");
+    if(p) return p;
+    var m = readMember();
+    return normPhone(m && (m.phone || m.mobile || m.tel));
+  }
+  function currentName(){
+    var n = (($("name") && $("name").value) || "").trim();
+    if(n) return n;
+    var m = readMember();
+    return String((m && (m.name || m.customerName)) || "").trim();
+  }
+  function isSupported(){
+    return !!("serviceWorker" in navigator && "PushManager" in window && "Notification" in window && window.isSecureContext);
+  }
+  function b64ToU8(base64String){
+    var padding = "=".repeat((4 - base64String.length % 4) % 4);
+    var base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+    var raw = atob(base64);
+    var out = new Uint8Array(raw.length);
+    for(var i=0;i<raw.length;i++) out[i] = raw.charCodeAt(i);
+    return out;
+  }
+  async function registerSW(){
+    var reg = await navigator.serviceWorker.register("/sw.js?v=301", {scope:"/"});
+    try{ await navigator.serviceWorker.ready; }catch(e){}
+    return reg;
+  }
+  async function enablePush(btn){
+    if(!isSupported()) throw new Error("此瀏覽器暫不支援後台通知。iPhone 需要先用 Safari 加入主畫面，再從主畫面打開。 ");
+    var phone = currentPhone();
+    if(!phone) throw new Error("請先登入會員 / 填寫電話，再開啟取餐通知。");
+    var perm = Notification.permission;
+    if(perm !== "granted"){
+      perm = await Notification.requestPermission();
+    }
+    if(perm !== "granted") throw new Error("你未允許通知，暫時不能發送取餐提醒。");
+    var reg = await registerSW();
+    var keyRes = await fetch("/api/push-key", {cache:"no-store"});
+    var keyData = await keyRes.json().catch(function(){ return {}; });
+    if(!keyRes.ok || !keyData.ok || !keyData.webPush || !keyData.webPush.publicKey) throw new Error("取得通知金鑰失敗。");
+    var sub = await reg.pushManager.getSubscription();
+    if(!sub){
+      sub = await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:b64ToU8(keyData.webPush.publicKey)});
+    }
+    var saveRes = await fetch("/api/push-subscribe", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({phone:phone, name:currentName(), subscription:sub, platform:navigator.platform || ""})
+    });
+    var saveData = await saveRes.json().catch(function(){ return {}; });
+    if(!saveRes.ok || !saveData.ok) throw new Error(saveData.error || "儲存通知設定失敗。");
+    try{ localStorage.setItem("sky31_push_enabled_phone", phone); }catch(e){}
+    return saveData;
+  }
+  function setBtnState(btn){
+    if(!btn) return;
+    var phone = currentPhone();
+    var saved = "";
+    try{ saved = localStorage.getItem("sky31_push_enabled_phone") || ""; }catch(e){}
+    if(!isSupported()){
+      btn.textContent = "🔕 此瀏覽器暫不支援通知";
+      btn.disabled = false;
+      return;
+    }
+    if(Notification.permission === "granted" && phone && saved === phone){
+      btn.textContent = "✅ 已開啟取餐通知";
+    }else{
+      btn.textContent = "🔔 開啟取餐通知";
+    }
+  }
+  function ensurePushBox(){
+    var sheet = document.querySelector("#cartModal .cart-sheet");
+    if(!sheet) return;
+    if($("sky31PushBoxV301")){
+      setBtnState($("sky31PushBtnV301"));
+      return;
+    }
+    var anchor = document.querySelector("#cartModal .cart-note") || $("summary") || document.querySelector("#cartModal button.primary");
+    if(!anchor) return;
+    var box = document.createElement("div");
+    box.id = "sky31PushBoxV301";
+    box.className = "sky31-push-checkout-v301";
+    box.innerHTML = '<div class="sky31-push-title-v301">🔔 取餐完成通知</div>' +
+      '<div class="sky31-push-text-v301">開啟後，店員在 Telegram 按「完成訂單」時，手機會收到可以取餐的通知。</div>' +
+      '<button type="button" id="sky31PushBtnV301" class="sky31-push-btn-v301">🔔 開啟取餐通知</button>' +
+      '<div class="sky31-push-tip-v301">iPhone 如未彈出通知權限，請先用 Safari「加入主畫面」，再從主畫面打開 Sky31。</div>';
+    anchor.parentNode.insertBefore(box, anchor.nextSibling);
+    var btn = $("sky31PushBtnV301");
+    setBtnState(btn);
+    btn.addEventListener("click", async function(){
+      btn.disabled = true;
+      var old = btn.textContent;
+      btn.textContent = "正在開啟...";
+      try{
+        await enablePush(btn);
+        btn.textContent = "✅ 已開啟取餐通知";
+        alert("已開啟取餐通知。之後訂單完成時，手機會收到提醒。");
+      }catch(e){
+        btn.textContent = old || "🔔 開啟取餐通知";
+        alert((e && e.message) || "開啟通知失敗");
+      }finally{
+        btn.disabled = false;
+        setTimeout(function(){ setBtnState(btn); }, 300);
+      }
+    });
+  }
+
+  // Register SW early; actual notification permission is only requested when user taps the button.
+  if(isSupported()){
+    setTimeout(function(){ registerSW().catch(function(){}); }, 1000);
+  }
+
+  var oldOpen = window.openCartModal;
+  if(typeof oldOpen === "function"){
+    window.openCartModal = function(){
+      var r = oldOpen.apply(this, arguments);
+      setTimeout(ensurePushBox, 60);
+      setTimeout(ensurePushBox, 300);
+      return r;
+    };
+  }
+  document.addEventListener("DOMContentLoaded", function(){ setTimeout(ensurePushBox, 800); });
+  document.addEventListener("click", function(e){
+    if(e.target && e.target.closest && e.target.closest("[onclick*='openCartModal'], #sky31PersistentCart, #floatCart")){
+      setTimeout(ensurePushBox, 120);
+      setTimeout(ensurePushBox, 400);
+    }
+  }, true);
+
+  window.sky31PushV301 = { enable: enablePush, ensureButton: ensurePushBox, supported: isSupported };
+})();
+</script>
+
+
 </body>
 </html>
+
+<script id="sky31-v302-auto-push-after-order">
+/* V302: Auto ask/save pickup notification during checkout submit.
+   Browser rules still require the customer to allow notification permission; this only removes the extra manual button step.
+   The subscription is saved to D1 before/while the order is being submitted, so future Telegram 「完成訂單」 can push pickup-ready notification even after auto logout. */
+(function(){
+  if(window.__SKY31_V302_AUTO_PUSH_AFTER_ORDER__) return;
+  window.__SKY31_V302_AUTO_PUSH_AFTER_ORDER__ = true;
+
+  function normPhone(v){ return String(v || "").replace(/\D/g, ""); }
+  function readMember(){
+    try{
+      var raw = localStorage.getItem("sky31_member_v1") || localStorage.getItem("sky31_member") || "";
+      return raw ? JSON.parse(raw) : null;
+    }catch(e){ return null; }
+  }
+  function orderPhoneFromBody(body){
+    return normPhone((body && (body.phone || body.memberPhone || body.submittedPhone || body.customerPhone)) || "");
+  }
+  function savedPushPhone(){
+    try{ return normPhone(localStorage.getItem("sky31_push_enabled_phone") || ""); }catch(e){ return ""; }
+  }
+  function localPhone(){
+    try{
+      var pEl = document.getElementById("phone");
+      var p = normPhone(pEl && pEl.value);
+      if(p) return p;
+    }catch(e){}
+    var m = readMember();
+    return normPhone(m && (m.phone || m.mobile || m.tel));
+  }
+  function canTryPush(){
+    return !!(window.sky31PushV301 && typeof window.sky31PushV301.enable === "function" && (!window.sky31PushV301.supported || window.sky31PushV301.supported()));
+  }
+  function markAutoAsked(phone){
+    try{ sessionStorage.setItem("sky31_push_auto_asked_" + phone, String(Date.now())); }catch(e){}
+  }
+  function wasAutoAsked(phone){
+    try{ return !!sessionStorage.getItem("sky31_push_auto_asked_" + phone); }catch(e){ return false; }
+  }
+  function maybeAutoEnablePickupPush(body){
+    try{
+      var phone = orderPhoneFromBody(body) || localPhone();
+      if(!phone) return null;
+      if(savedPushPhone() === phone) return null;
+      if(wasAutoAsked(phone)) return null;
+      if(typeof Notification !== "undefined" && Notification.permission === "denied") return null;
+      if(!canTryPush()) return null;
+      markAutoAsked(phone);
+      return window.sky31PushV301.enable(null).then(function(res){
+        try{ localStorage.setItem("sky31_push_enabled_phone", phone); }catch(e){}
+        return res;
+      }).catch(function(err){
+        try{ console.warn("Sky31 auto pickup notification not enabled", err); }catch(e){}
+        return null;
+      });
+    }catch(e){ return null; }
+  }
+
+  var prevFetch = window.fetch;
+  if(typeof prevFetch !== "function") return;
+  window.fetch = function(input, init){
+    try{
+      var url = typeof input === "string" ? input : ((input && input.url) || "");
+      var method = String((init && init.method) || "GET").toUpperCase();
+      if(url.indexOf("/api/order") >= 0 && method !== "GET" && init && init.body && typeof init.body === "string"){
+        var body = JSON.parse(init.body);
+        // Start immediately while still close to the checkout tap gesture.
+        maybeAutoEnablePickupPush(body);
+      }
+    }catch(e){}
+    return prevFetch.apply(this, arguments);
+  };
+})();
+</script>
