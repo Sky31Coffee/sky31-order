@@ -303,8 +303,35 @@ function calcBaseUnitPrice(item) {
   return iced ? table.iced : table.hot;
 }
 
+// V299: cold-drink / limited-bean surcharges are counted into the cup total first.
+// A 10-cup / birthday / gift voucher may redeem the whole cup price after any member-tier
+// waiver on that cup, so the price detail stays clear: subtotal first, then discounts.
+function calcHotDrinkBasePrice(item) {
+  const key = priceKeyByName(item.name || item.title, item.cn || item.zh);
+  const table = SKY31_PRICE_TABLE[key];
+  if (!table) {
+    const explicitBase = Number(item.basePrice || item.hotBasePrice || item.drinkBasePrice || 0);
+    if (Number.isFinite(explicitBase) && explicitBase > 0) return explicitBase;
+    const unit = Number(item.unitPrice || item.price || 0);
+    const bean = limitedBeanSurchargeOrder(item);
+    const cold = Math.max(0, Number(item.coldSurcharge || item.icedSurcharge || 0));
+    return Math.max(0, unit - bean - cold);
+  }
+  if (table.fixed) return table.fixed;
+  return Number(table.hot || 0);
+}
+
+function coldDrinkSurchargeOrder(item) {
+  const key = priceKeyByName(item.name || item.title, item.cn || item.zh);
+  const table = SKY31_PRICE_TABLE[key];
+  if (!table || table.fixed) return Math.max(0, Number(item.coldSurcharge || item.icedSurcharge || 0));
+  const temp = String(item.temp || item.temperature || "");
+  const iced = temp.includes("Iced") || temp.includes("凍") || temp.includes("冻");
+  return iced ? Math.max(0, Number(table.iced || 0) - Number(table.hot || 0)) : 0;
+}
+
 function calcUnitPrice(item) {
-  return calcBaseUnitPrice(item) + limitedBeanSurchargeOrder(item);
+  return calcHotDrinkBasePrice(item) + coldDrinkSurchargeOrder(item) + limitedBeanSurchargeOrder(item);
 }
 
 function sky31ClientRewardRequestV293(body) {
@@ -549,6 +576,8 @@ function sky31ExpandedOrderUnitsV240(cart) {
     const qty = Math.max(1, Number(item.qty || item.quantity || 1));
     const unit = Number(calcUnitPrice(item) || item.unitPrice || item.price || 0);
     const surcharge = Math.max(0, Number(item.beanSurcharge || item.limitedSurcharge || (isLimitedBeanOrder(item.bean) ? V182_LIMITED_BEAN_SURCHARGE : 0) || 0));
+    const coldSurcharge = Math.max(0, Number(item.coldSurcharge || item.icedSurcharge || coldDrinkSurchargeOrder(item) || 0));
+    const baseDrinkPrice = Math.max(0, Number(item.hotBasePrice || item.drinkBasePrice || calcHotDrinkBasePrice(item) || 0));
     for (let i = 0; i < qty; i++) {
       units.push({
         itemIndex,
@@ -556,8 +585,10 @@ function sky31ExpandedOrderUnitsV240(cart) {
         title: item.title || item.name || item.cn || "飲品",
         unit,
         surcharge: Math.min(unit, surcharge),
+        coldSurcharge: Math.min(unit, coldSurcharge),
+        baseDrinkPrice: Math.min(unit, baseDrinkPrice),
         tierWaiver: 0,
-        rewardUnit: unit
+        rewardUnit: Math.max(0, Number(unit || 0))
       });
     }
   });
@@ -577,7 +608,9 @@ function sky31TierDiscountPlanV240(member, cart, subtotal) {
       if (used >= maxCount) break;
       if (u.surcharge <= 0) continue;
       u.tierWaiver = Math.min(u.surcharge, V182_LIMITED_BEAN_SURCHARGE);
-      u.rewardUnit = Math.max(0, u.unit - u.tierWaiver);
+      // V299: voucher redeems the whole cup price. First count iced/limited surcharges into subtotal,
+      // then deduct the whole cup after any member tier waiver on that cup.
+      u.rewardUnit = Math.max(0, Number(u.unit || 0) - Number(u.tierWaiver || 0));
       discount += u.tierWaiver;
       used += 1;
     }
@@ -655,8 +688,14 @@ function normalizeCart(cart) {
       note: item.note || ""
     };
     const surcharge = limitedBeanSurchargeOrder(base);
+    const coldSurcharge = coldDrinkSurchargeOrder(base);
+    const hotBasePrice = calcHotDrinkBasePrice(base);
     const unit = calcUnitPrice(base);
-    base.basePrice = unit - surcharge;
+    base.basePrice = hotBasePrice;
+    base.hotBasePrice = hotBasePrice;
+    base.drinkBasePrice = hotBasePrice;
+    base.coldSurcharge = coldSurcharge;
+    base.icedSurcharge = coldSurcharge;
     base.beanSurcharge = surcharge;
     base.unitPrice = unit;
     base.price = unit;
@@ -711,6 +750,7 @@ function buildTelegramText(order) {
       if (item.temp) parts.push(item.temp.includes("Hot") || item.temp.includes("熱") ? "🔥 Hot" : item.temp);
       if (item.ice && item.ice !== "不適用") parts.push(item.ice);
       if (item.milk) parts.push(item.milk);
+      if (Number(item.coldSurcharge || item.icedSurcharge || 0) > 0) parts.push("凍飲 +MOP " + Number(item.coldSurcharge || item.icedSurcharge || 0));
       if (Number(item.beanSurcharge || 0) > 0) parts.push("限定豆子 +MOP " + Number(item.beanSurcharge || 0));
       lines.push("☕ " + title + " ×" + (item.qty || 1) + (parts.length ? " | " + parts.join(" | ") : "") + " | " + money(item.unitPrice || item.price || 0) + " × " + (item.qty || 1) + " = " + money(item.subtotal || 0));
       if (item.note && item.note !== "無備註") lines.push("備註：" + item.note);
@@ -727,7 +767,10 @@ function buildTelegramText(order) {
     const detail = Array.isArray(order.tierDiscountDetails) && order.tierDiscountDetails.length ? "（" + order.tierDiscountDetails.join("、") + "）" : "";
     lines.push(tierName + "優惠" + detail + "：-" + money(tierDiscount));
   }
-  if (rewardDiscount > 0) lines.push("餐品券扣減：-" + money(rewardDiscount));
+  if (rewardDiscount > 0) {
+    lines.push("餐品券扣減：-" + money(rewardDiscount));
+    lines.push("（餐品券按整杯價格扣減；凍飲/限定豆加價已先計入餐品小計）");
+  }
   lines.push("客人實付：" + money(paidAmount));
   if (order.orderNote) lines.push("整張訂單備註：" + order.orderNote);
   lines.push("");
