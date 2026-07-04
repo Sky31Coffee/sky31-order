@@ -16,7 +16,7 @@ export async function onRequestGet(context) {
     ok: true,
     d1: status,
     writeReadDelete: !!raw,
-    message: "D1 is connected and the Sky31 KV-compatible table is ready."
+    message: "D1 is connected and the Sky31 D1-only table is ready. KV fallback is disabled."
   });
 }
 

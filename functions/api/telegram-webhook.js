@@ -175,6 +175,7 @@ async function handleTelegramPost(context) {
   if (action === "pickup") {
     if (order.status !== "completed") return stop(env, cq, "請先完成訂單");
     order.status = "picked_up";
+    order._syncMemberRewardsNowV295 = true;
     if (!order.confirmedAt) order.confirmedAt = now;
     if (!order.makingAt) order.makingAt = now;
     if (!order.completedAt) order.completedAt = now;
@@ -188,6 +189,7 @@ async function handleTelegramPost(context) {
   if (action === "undo_pickup") {
     if (order.status !== "picked_up") return stop(env, cq, "目前不是已領取狀態");
     order.status = "completed";
+    order._syncMemberRewardsNowV295 = true;
     order.pickedUpAt = null;
     if (!order.completedAt) order.completedAt = now;
     await applyGiftVoucherActiveDeductV270(env, order, "undo_pickup");
@@ -197,6 +199,7 @@ async function handleTelegramPost(context) {
 
   if (action === "cancel") {
     if (order.status === "cancelled") return stop(env, cq, "此訂單已經取消");
+    order._syncMemberRewardsNowV295 = true;
     order.statusBeforeCancel = normalizeStatus(order.status || "pending");
     order.confirmedAtBeforeCancel = order.confirmedAt || null;
     order.makingAtBeforeCancel = order.makingAt || null;
@@ -210,6 +213,7 @@ async function handleTelegramPost(context) {
 
   if (action === "restore") {
     if (order.status !== "cancelled") return stop(env, cq, "目前不是已取消狀態");
+    order._syncMemberRewardsNowV295 = true;
     const s = normalizeStatus(order.statusBeforeCancel || "pending");
     order.status = s;
     order.cancelledAt = null;
@@ -775,7 +779,7 @@ function buildMemberListMarkup(members) {
   });
 
   if (members.length > 80) {
-    rows.push([{ text: "只顯示前 80 位，請到 KV 後台查看完整資料", callback_data: "member_list:all" }]);
+    rows.push([{ text: "只顯示前 80 位，請到 D1 後台查看完整資料", callback_data: "member_list:all" }]);
   }
 
   return { inline_keyboard: rows };
@@ -1585,6 +1589,11 @@ async function saveAndRefresh(env, cq, order) {
   order.updatedAt = now;
   order.statusUpdatedAt = now;
 
+  // V295-D1-Rewards-Safe: reward-generating status changes must refresh member stats immediately.
+  // This prevents "已領取 10 杯"後會員中心仍短暫顯示 0 張餐品券。
+  const syncMemberRewardsNowV295 = !!order._syncMemberRewardsNowV295;
+  delete order._syncMemberRewardsNowV295;
+
   // V292-D1-Telegram-Parallel: start D1 save and Telegram message edit at the same time.
   // The Telegram operator sees the message/buttons update faster, while the order status is still saved to D1.
   const saveJob = env.ORDERS.put("order:" + order.orderNo, JSON.stringify(order), { expirationTtl: 60 * 60 * 24 * 3650 });
@@ -1592,9 +1601,10 @@ async function saveAndRefresh(env, cq, order) {
   const results = await Promise.allSettled([saveJob, editJob]);
   if (results[0] && results[0].status === "rejected") throw results[0].reason;
 
-  // Keep lifetime member-stat recalculation in the background.
   const recalcJob = recalcMemberFromOrdersV199(env, order).catch(() => {});
-  if (env && typeof env.__SKY31_WAIT_UNTIL === "function") {
+  if (syncMemberRewardsNowV295) {
+    await recalcJob;
+  } else if (env && typeof env.__SKY31_WAIT_UNTIL === "function") {
     env.__SKY31_WAIT_UNTIL(recalcJob);
   } else {
     await recalcJob;
@@ -5042,7 +5052,7 @@ function buildMemberDuplicateMergeTextV223(result) {
   const lines = [];
   lines.push("🧹 合併重複會員");
   lines.push("");
-  lines.push("會員 KV 數量：" + Number(result.totalMemberKeys || 0));
+  lines.push("會員 D1 記錄數量：" + Number(result.totalMemberKeys || 0));
   lines.push("重複會員組數：" + Number(result.duplicateGroups || 0));
   if (result.groupsMerged) lines.push("已合併組數：" + Number(result.groupsMerged || 0));
   if (result.keysDeleted) lines.push("已刪除多餘 alias：" + Number(result.keysDeleted || 0));
@@ -5763,9 +5773,9 @@ handleMemberAction = async function(env, cq, data) {
         "刪除訂單：" + result.deletedOrderKeys,
         "刪除索引/備份/券鎖定：" + (result.deletedIndexKeys + result.deletedArchiveKeys),
         "刪除 purge 標記：" + (result.deletedTombstoneKeys || 0),
-        "合共刪除 KV：" + (result.deletedTotalKeys || 0),
+        "合共刪除 D1 記錄：" + (result.deletedTotalKeys || 0),
         "",
-        "此會員相關 KV 已徹底清除；日後同電話可重新註冊為全新會員。"
+        "此會員相關 D1 資料已徹底清除；日後同電話可重新註冊為全新會員。"
       ].join("\n");
       await editTelegramMessage(env, chatId, messageId, text, { inline_keyboard: [[{ text: "📋 返回用戶列表", callback_data: "member_list:all" }]] });
       return stop(env, cq, "已永久刪除會員");
