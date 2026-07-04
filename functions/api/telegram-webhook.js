@@ -9,7 +9,7 @@ export async function onRequest(context) {
     return json({
       ok: true,
       endpoint: "telegram-webhook",
-      version: "V307-LimitedBeanShelf",
+      version: "V308-LimitedBeanConfirmSafe",
       method,
       message: "Webhook endpoint reachable. Telegram sends POST updates here."
     });
@@ -5833,4 +5833,179 @@ handleMemberAction = async function(env, cq, data) {
     try { return stop(env, cq, "操作失敗：" + (e.message || "未知錯誤")); }
     catch (_) { return json({ ok: false, error: e.message || "member permanent delete failed" }, 500); }
   }
+};
+
+
+/* V308: Limited Bean actions are only inside detail page and require confirmation before committing.
+   List page only opens bean detail; no direct up/down/publish buttons there. */
+function limitedBeanActionConfirmTextV308(item, actionLabel) {
+  if (!item) return "找不到限定豆子。";
+  const id = cleanLimitedId(item.id);
+  const name = item.bean || item.name || id || "-";
+  const flavor = item.flavor || "-";
+  const lines = [
+    "請確認操作",
+    "",
+    "操作：" + actionLabel,
+    "豆子：" + name,
+    "編號：" + id,
+    "風味：" + flavor
+  ];
+  if (actionLabel.indexOf("下架") >= 0) {
+    lines.push("", "下架後網站不會顯示此豆子，客人亦不能在點餐時選用；資料會保留，可之後再上架。");
+  } else if (actionLabel.indexOf("上架") >= 0) {
+    lines.push("", "上架後網站會顯示此豆子，客人可於適用飲品中選用，選用限定豆子會按設定加價。");
+  } else if (actionLabel.indexOf("恢復") >= 0) {
+    lines.push("", "恢復後豆子資料會回到列表，並可重新上架到網站。此操作不會刪除任何資料。");
+  }
+  return lines.join("\n");
+}
+
+const _limitedBeanDetailMarkupBeforeV308 = limitedBeanDetailMarkupV187;
+limitedBeanDetailMarkupV187 = function(item, isCurrent) {
+  const id = cleanLimitedId(item && item.id);
+  const rows = [];
+  if (!item) {
+    rows.push([{ text: "返回豆子列表", callback_data: "limited_list:all" }]);
+    rows.push([{ text: "返回功能列表", callback_data: "limited_cmd_menu:x" }]);
+    return { inline_keyboard: rows };
+  }
+
+  if (item.deleted === true) {
+    rows.push([{ text: "↩️ 恢復豆子", callback_data: "limited_restore:" + id }]);
+    rows.push([{ text: "⚠️ 永久刪除", callback_data: "limited_permanent_delete:" + id }]);
+  } else {
+    const isPublished = item.active !== false && isCurrent;
+    rows.push([{ text: isPublished ? "下架（網站不顯示）" : "上架到網站", callback_data: (isPublished ? "limited_unpublish:" : "limited_publish:") + id }]);
+    rows.push([{ text: "✏️ 編輯豆子", callback_data: "limited_wizard_edit:" + id }]);
+    rows.push([{ text: "🗑️ 刪除豆子", callback_data: "limited_delete:" + id }]);
+  }
+
+  rows.push([{ text: "返回豆子列表", callback_data: "limited_list:all" }]);
+  rows.push([{ text: "返回功能列表", callback_data: "limited_cmd_menu:x" }]);
+  return { inline_keyboard: rows };
+};
+
+const _buildLimitedListMarkupBeforeV308 = buildLimitedListMarkup;
+buildLimitedListMarkup = function(config) {
+  const rows = [];
+  const items = (Array.isArray(config && config.limitedItems) ? config.limitedItems : [])
+    .filter(item => item && item.permanentDeleted !== true);
+  const currentIds = currentLimitedBeansV191({ ...(config || {}), limitedItems: items }).map(item => cleanLimitedId(item.id));
+
+  rows.push([{ text: "➕ 新增限定豆子", callback_data: "limited_wizard_add:x" }]);
+
+  items.slice(0, 12).forEach(item => {
+    const id = cleanLimitedId(item.id);
+    const isCurrent = currentIds.includes(id) && item.active !== false && item.deleted !== true;
+    const prefix = item.deleted === true ? "🗑️ " : (isCurrent ? "✅ " : (item.active === false ? "📦 " : "☕ "));
+    const status = item.deleted === true ? "｜已刪除" : (isCurrent ? "｜上架中" : (item.active === false ? "｜已下架" : "｜已保存"));
+    const label = (prefix + (item.name || item.bean || id) + status).slice(0, 60);
+    rows.push([{ text: label, callback_data: "limited_detail:" + id }]);
+  });
+
+  rows.push([{ text: "刷新列表", callback_data: "limited_list:all" }]);
+  rows.push([{ text: "返回功能列表", callback_data: "limited_cmd_menu:x" }]);
+  return { inline_keyboard: rows };
+};
+
+async function limitedBeanApplyShelfV308(env, id, publish) {
+  let config = await getLimitedMenuConfig(env);
+  config.limitedItems = Array.isArray(config.limitedItems) ? config.limitedItems : [];
+  const item = config.limitedItems.find(x => cleanLimitedId(x.id) === id);
+  if (!item || item.deleted === true) return { ok: false, config, item: null };
+
+  item.active = !!publish;
+  item.deleted = false;
+  item.updatedAt = new Date().toISOString();
+
+  let ids = currentLimitedBeanIdsV191(config).filter(x => x !== id);
+  if (publish) ids = [id, ...ids].slice(0, 2);
+  config.currentLimitedBeanIds = ids;
+  config.currentLimitedBeanId = ids[0] || "";
+  config.updatedAt = new Date().toISOString();
+  config.updatedBy = publish ? "telegram-publish-confirmed" : "telegram-unpublish-confirmed";
+  await saveLimitedMenuConfig(env, config);
+  config = await normalizeLimitedCurrentV184(env, await getLimitedMenuConfig(env));
+  return { ok: true, config, item: findLimitedItemV183(config, id) || item };
+}
+
+const _handleLimitedMenuActionBeforeV308 = handleLimitedMenuAction;
+handleLimitedMenuAction = async function(env, cq, data) {
+  const chatId = cq.message && cq.message.chat ? cq.message.chat.id : env.TELEGRAM_CHAT_ID;
+  const messageId = cq.message ? cq.message.message_id : null;
+  if (!isAuthorizedTelegramChat(env, chatId)) return stop(env, cq, "沒有權限");
+
+  const parts = String(data || "").split(":");
+  const action = parts[0];
+  const id = cleanLimitedId(parts.slice(1).join(":"));
+
+  if (action === "limited_publish" || action === "limited_unpublish") {
+    const publish = action === "limited_publish";
+    let config = await normalizeLimitedCurrentV184(env, await getLimitedMenuConfig(env));
+    const item = findLimitedItemV183(config, id);
+    if (!item || item.deleted === true) return stop(env, cq, "找不到可操作豆子");
+    await editOrSendV183(env, chatId, messageId, limitedBeanActionConfirmTextV308(item, publish ? "上架到網站" : "下架（網站不顯示）"), {
+      inline_keyboard: [
+        [{ text: publish ? "✅ 確認上架" : "✅ 確認下架", callback_data: (publish ? "limited_publish_yes:" : "limited_unpublish_yes:") + id }],
+        [{ text: "取消，返回豆子資料", callback_data: "limited_detail:" + id }],
+        [{ text: "返回豆子列表", callback_data: "limited_list:all" }]
+      ]
+    });
+    return stop(env, cq, publish ? "請確認上架" : "請確認下架");
+  }
+
+  if (action === "limited_publish_yes" || action === "limited_unpublish_yes") {
+    const publish = action === "limited_publish_yes";
+    const result = await limitedBeanApplyShelfV308(env, id, publish);
+    if (!result.ok) return stop(env, cq, "找不到可操作豆子");
+    const currentIds = currentLimitedBeansV191(result.config).map(x => cleanLimitedId(x.id));
+    await editOrSendV183(env, chatId, messageId, limitedBeanDetailTextV187(result.item, currentIds.includes(id)), limitedBeanDetailMarkupV187(result.item, currentIds.includes(id)));
+    return stop(env, cq, publish ? "已確認上架到網站" : "已確認下架，網站不再顯示");
+  }
+
+  if (action === "limited_restore") {
+    let config = await getLimitedMenuConfig(env);
+    const item = findLimitedItemV183(config, id);
+    if (!item || item.deleted !== true) return stop(env, cq, "找不到已刪除豆子");
+    await editOrSendV183(env, chatId, messageId, limitedBeanActionConfirmTextV308(item, "恢復豆子"), {
+      inline_keyboard: [
+        [{ text: "✅ 確認恢復", callback_data: "limited_restore_yes:" + id }],
+        [{ text: "取消，返回豆子資料", callback_data: "limited_detail:" + id }],
+        [{ text: "返回豆子列表", callback_data: "limited_list:all" }]
+      ]
+    });
+    return stop(env, cq, "請確認恢復");
+  }
+
+  if (action === "limited_restore_yes") {
+    let config = await getLimitedMenuConfig(env);
+    config.limitedItems = Array.isArray(config.limitedItems) ? config.limitedItems : [];
+    let restored = null;
+    config.limitedItems.forEach(item => {
+      if (cleanLimitedId(item.id) === id) {
+        item.deleted = false;
+        item.active = false;
+        item.updatedAt = new Date().toISOString();
+        restored = item;
+      }
+    });
+    config.updatedAt = new Date().toISOString();
+    config.updatedBy = "telegram-restore-confirmed";
+    await saveLimitedMenuConfig(env, config);
+    config = await normalizeLimitedCurrentV184(env, await getLimitedMenuConfig(env));
+    await editOrSendV183(env, chatId, messageId, buildLimitedListText(config), buildLimitedListMarkup(config));
+    return stop(env, cq, restored ? "已恢復豆子，暫未上架" : "找不到豆子");
+  }
+
+  if (action === "limited_toggle_display") {
+    // Backward compatibility for older Telegram messages: now also requires confirmation.
+    let config = await normalizeLimitedCurrentV184(env, await getLimitedMenuConfig(env));
+    const item = findLimitedItemV183(config, id);
+    if (!item || item.deleted === true) return stop(env, cq, "找不到可操作豆子");
+    const isCurrent = currentLimitedBeansV191(config).map(x => cleanLimitedId(x.id)).includes(id) && item.active !== false;
+    return handleLimitedMenuAction(env, cq, (isCurrent ? "limited_unpublish:" : "limited_publish:") + id);
+  }
+
+  return _handleLimitedMenuActionBeforeV308(env, cq, data);
 };
