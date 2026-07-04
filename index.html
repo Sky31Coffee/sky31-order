@@ -12196,21 +12196,21 @@ window.addEventListener("load", function() {
         cups:60,
         icon:"🥇",
         name:"金卡會員",
-        benefit:"會員優惠：每月 2 次限定豆子加價豁免；生日月可獲 1 張 MOP 10 餐品券。"
+        benefit:"會員優惠：每月 2 次限定豆子加價豁免；生日月可獲 1 張餐品券。"
       },
       {
         key:"diamond",
         cups:100,
         icon:"💎",
         name:"鑽石會員",
-        benefit:"會員優惠：生日月任選 1 杯免費飲品；限定豆子或小批次豆可優先預留。"
+        benefit:"會員優惠：限定豆子加價全數豁免；生日月可獲 1 張餐品券；限定豆子或小批次豆可優先預留。"
       },
       {
         key:"blackgold",
         cups:180,
         icon:"👑",
         name:"黑金會員",
-        benefit:"會員優惠：每月 1 次任選飲品 MOP 15 優惠；新品試飲與隱藏豆單優先體驗。"
+        benefit:"會員優惠：生日月可獲 1 張餐品券；每月 1 次 MOP 15 訂單優惠；新品試飲與隱藏豆單優先體驗。"
       }
     ];
   }
@@ -17315,7 +17315,7 @@ window.addEventListener("load", function() {
     }else if(tier.key === "diamond"){
       discount = limited; if(discount) details.push("限定豆子加價全數豁免");
     }else if(tier.key === "blackgold"){
-      discount = Math.min(15, Math.max(0, Number(afterReward || 0))); if(discount) details.push("黑金會員 MOP 15 優惠");
+      discount = Math.min(15, Math.max(0, Number(afterReward || 0))); if(discount) details.push("黑金會員 MOP 15 訂單優惠");
     }
     discount = Math.min(Math.max(0, Number(afterReward || 0)), Math.round(discount*100)/100);
     return {tier, discount, details};
@@ -18374,7 +18374,7 @@ window.addEventListener("load", function() {
       }
     }else if(tier.key === "blackgold"){
       tierDiscount = Math.min(15, subtotal);
-      if(tierDiscount > 0) details.push("黑金會員 MOP 15 優惠");
+      if(tierDiscount > 0) details.push("黑金會員 MOP 15 訂單優惠");
     }
 
     tierDiscount = Math.min(subtotal, Math.round(tierDiscount * 100) / 100);
@@ -19586,7 +19586,7 @@ window.addEventListener("load", function() {
       if(tierDiscount > 0) details.push(tier.key === 'diamond' ? '限定豆子加價全數豁免' : '限定豆子加價豁免 ×' + used);
     }else if(tier.key === 'blackgold'){
       tierDiscount = Math.min(15, subtotal);
-      if(tierDiscount > 0) details.push('黑金會員 MOP 15 優惠');
+      if(tierDiscount > 0) details.push('黑金會員 MOP 15 訂單優惠');
     }
     tierDiscount = Math.min(subtotal, round2(tierDiscount));
     const afterTier = Math.max(0, round2(subtotal - tierDiscount));
@@ -19862,7 +19862,7 @@ window.addEventListener("load", function() {
       if(tierDiscount > 0) details.push(tier.key === 'diamond' ? '限定豆子加價全數豁免' : '限定豆子加價豁免 ×' + used);
     }else if(tier.key === 'blackgold'){
       tierDiscount = Math.min(15, subtotal);
-      if(tierDiscount > 0) details.push('黑金會員 MOP 15 優惠');
+      if(tierDiscount > 0) details.push('黑金會員 MOP 15 訂單優惠');
     }
     tierDiscount = Math.min(subtotal, round(tierDiscount));
     const afterTier = Math.max(0, round(subtotal - tierDiscount));
