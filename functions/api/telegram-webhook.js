@@ -1981,9 +1981,7 @@ async function buildOrderDashboardViewV315(env, mode) {
   }
 
   if (buttonOrders.length) {
-    text += "
-
-可點選下方訂單，進入該訂單的原本操作界面。";
+    text += "\n\n可點選下方訂單，進入該訂單的原本操作界面。";
   }
   return { text, markup: buildOrderDashboardMarkupV313({ orders: buttonOrders, mode, limit: 25 }) };
 }
