@@ -29,8 +29,8 @@ async function handleTelegramPost(context) {
   if (typeof context.waitUntil === "function") {
     env.__SKY31_WAIT_UNTIL = context.waitUntil.bind(context);
   }
-  // V319: Keep Telegram quiet. Do not send automatic dashboard/cancel messages in background.
-  // Manual 24-hour checks are still available from 訂單管理.
+  // V320: Keep Telegram quiet. Manual 24-hour check edits only the current dashboard message.
+  // It does not send per-order messages or refresh continuously.
   const update = await request.json();
 
   if (!update.callback_query) {
@@ -1916,7 +1916,18 @@ async function handleOrderDashboardActionV313(env, cq, data) {
     return stop(env, cq, "已刷新最近訂單");
   }
   if (data === "orders_auto_cancel") {
-    const result = await autoCancelExpiredOrdersV313(env, { notify: false, source: "manual_button" });
+    const lockKey = "telegram:orders:auto_cancel_check_lock:" + String(chatId || "default");
+    const existingLock = await env.ORDERS.get(lockKey).catch(() => null);
+    if (existingLock) {
+      return stop(env, cq, "正在檢查，請稍候");
+    }
+    await env.ORDERS.put(lockKey, String(Date.now()), { expirationTtl: 15 }).catch(() => null);
+    let result;
+    try {
+      result = await autoCancelExpiredOrdersV313(env, { notify: false, source: "manual_button", updateOrderMessages: false });
+    } finally {
+      await env.ORDERS.delete(lockKey).catch(() => null);
+    }
     const text = buildAutoCancelResultTextV313(result);
     await editTelegramMessage(env, chatId, messageId, text, buildOrderDashboardMarkupV313());
     return stop(env, cq, result.cancelledCount ? "已自動取消 " + result.cancelledCount + " 張" : "沒有需要取消的訂單");
@@ -2150,11 +2161,16 @@ async function autoCancelExpiredOrdersV313(env, options = {}) {
 
       await env.ORDERS.put("order:" + order.orderNo, JSON.stringify(order), { expirationTtl: 60 * 60 * 24 * 3650 });
       try { await recalcMemberFromOrdersV199(env, order); } catch (_) {}
-      try {
-        if (order.telegramMessageId && env.TELEGRAM_CHAT_ID) {
-          await editTelegramMessage(env, env.TELEGRAM_CHAT_ID, order.telegramMessageId, buildTelegramText(order), buildReplyMarkup(order));
-        }
-      } catch (_) {}
+      // Keep the 24-hour check quiet: do not update each old order message one by one.
+      // The dashboard shows one summary after a manual check. Order status is still saved to D1,
+      // and opening the order from the dashboard will show the latest cancelled state.
+      if (options.updateOrderMessages === true) {
+        try {
+          if (order.telegramMessageId && env.TELEGRAM_CHAT_ID) {
+            await editTelegramMessage(env, env.TELEGRAM_CHAT_ID, order.telegramMessageId, buildTelegramText(order), buildReplyMarkup(order));
+          }
+        } catch (_) {}
+      }
       cancelled.push(order);
     }
     cursor = page && page.cursor;
@@ -2177,13 +2193,13 @@ function shouldAutoCancelOrderV313(order, cutoffMs) {
 
 function buildAutoCancelResultTextV313(result) {
   const lines = [];
-  lines.push("🕒 24小時未完成訂單檢查");
+  lines.push("🕒 24小時未完成訂單檢查結果");
   lines.push("");
   lines.push("已檢查訂單：" + Number(result.checked || 0));
   lines.push("自動取消：" + Number(result.cancelledCount || 0));
   if (Array.isArray(result.cancelled) && result.cancelled.length) {
     lines.push("");
-    lines.push("已取消訂單：");
+    lines.push("本次自動取消：");
     result.cancelled.slice(0, 20).forEach(order => {
       lines.push("#" + (order.orderNo || "-") + "｜" + (order.customerName || "-") + "｜" + (order.pickupTime || order.pickup || "-"));
     });
