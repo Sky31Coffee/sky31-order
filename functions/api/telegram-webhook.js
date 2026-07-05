@@ -9,7 +9,7 @@ export async function onRequest(context) {
     return json({
       ok: true,
       endpoint: "telegram-webhook",
-      version: "V321-OrderDashboardNoSpam-BuildPathFix",
+      version: "V322-OrderDashboard24hPendingOnly",
       method,
       message: "Webhook endpoint reachable. Telegram sends POST updates here."
     });
@@ -1955,8 +1955,7 @@ function buildOrderDashboardMarkupV313(options = {}) {
     [{ text: "☕ 今日需製作飲品", callback_data: "orders_today" }],
     [{ text: "📦 未完成訂單", callback_data: "orders_open" }],
     [{ text: "🗂 最近全部訂單", callback_data: "orders_all" }],
-    [{ text: "🕒 檢查24小時未完成", callback_data: "orders_auto_cancel" }],
-    [{ text: "🏠 訂單管理首頁", callback_data: "orders_home" }]
+    [{ text: "🕒 檢查24小時未完成", callback_data: "orders_auto_cancel" }]
   ];
 
   const orders = Array.isArray(options.orders) ? options.orders : [];
@@ -1966,6 +1965,9 @@ function buildOrderDashboardMarkupV313(options = {}) {
       rows.push([{ text: orderButtonTextV315(order), callback_data: "orders_view:" + String(order.orderNo || "") }]);
     });
   }
+
+  rows.push([{ text: "🏠 訂單管理首頁", callback_data: "orders_home" }]);
+  rows.push([{ text: "📋 回到功能列表", callback_data: "limited_cmd_menu:x" }]);
   return { inline_keyboard: rows };
 }
 
@@ -2186,8 +2188,11 @@ async function autoCancelExpiredOrdersV313(env, options = {}) {
 
 function shouldAutoCancelOrderV313(order, cutoffMs) {
   const s = normalizeStatus(order.status || "pending");
-  if (s === "cancelled" || s === "completed" || s === "picked_up") return false;
-  const createdMs = new Date(order.createdAt || order.updatedAt || order.statusUpdatedAt || 0).getTime();
+  // V322: Only auto-cancel untouched orders 24h after customer placed the order.
+  // Once staff has tapped confirm / start making / completed / picked up, the order is no longer auto-cancelled.
+  if (s !== "pending") return false;
+  if (order.confirmedAt || order.makingAt || order.completedAt || order.pickedUpAt || order.cancelledAt) return false;
+  const createdMs = new Date(order.createdAt || order.orderTime || order.created_at || 0).getTime();
   return Number.isFinite(createdMs) && createdMs > 0 && createdMs <= cutoffMs;
 }
 
