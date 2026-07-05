@@ -9,7 +9,7 @@ export async function onRequest(context) {
     return json({
       ok: true,
       endpoint: "telegram-webhook",
-      version: "V313-OrderAutoCancelDashboard",
+      version: "V314-OrderDashboardMenuButton",
       method,
       message: "Webhook endpoint reachable. Telegram sends POST updates here."
     });
@@ -3732,8 +3732,11 @@ buildCommandMenuTextV183 = function() {
     "👤 會員",
     "查詢會員列表與會員資料。",
     "",
-    "📦 訂單",
-    "訂單訊息內會提供完成訂單 / 已領取等按鈕。",
+    "📦 今日訂單 / 訂單管理",
+    "查看今日需製作飲品、未完成訂單，並可手動檢查 24 小時未完成訂單。",
+    "",
+    "🎁 餐品券調整",
+    "統一查看會員餐品券；10杯券由系統自動計算，店員只調整額外餐品券。",
     "",
     "目前網站規則：",
     "Landing page 和點餐頁面只會顯示一款目前上架的限定豆子；客人選擇限定豆子自動 +MOP 5。"
@@ -5462,6 +5465,7 @@ buildCommandMenuMarkupV183 = function() {
     inline_keyboard: [
       [{ text: "➕ 新增限定豆子", callback_data: "limited_wizard_add:x" }],
       [{ text: "✨ 限定豆子列表 / 編輯", callback_data: "limited_list:all" }],
+      [{ text: "📋 今日訂單 / 訂單管理", callback_data: "orders_home" }],
       [{ text: "👤 查詢會員", callback_data: "member_list:active:0" }],
       [{ text: "🎁 餐品券調整", callback_data: "gift_voucher_menu:x" }],
       [{ text: "🧹 合併重複會員", callback_data: "member_merge_duplicates:x" }],
