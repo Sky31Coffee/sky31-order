@@ -9,7 +9,7 @@ export async function onRequest(context) {
     return json({
       ok: true,
       endpoint: "telegram-webhook",
-      version: "V310-TelegramQuietReplace",
+      version: "V313-OrderAutoCancelDashboard",
       method,
       message: "Webhook endpoint reachable. Telegram sends POST updates here."
     });
@@ -29,6 +29,11 @@ async function handleTelegramPost(context) {
   if (typeof context.waitUntil === "function") {
     env.__SKY31_WAIT_UNTIL = context.waitUntil.bind(context);
   }
+  // V313: opportunistic 24-hour auto-cancel. Runs in background whenever Telegram is used.
+  try {
+    const autoCancelJobV313 = autoCancelExpiredOrdersV313(env, { notify: true, source: "telegram_background" }).catch(function(){});
+    if (typeof context.waitUntil === "function") context.waitUntil(autoCancelJobV313);
+  } catch (_) {}
   const update = await request.json();
 
   if (!update.callback_query) {
@@ -57,6 +62,10 @@ async function handleTelegramPost(context) {
 
   if (data.startsWith("limited_")) {
     return handleLimitedMenuAction(env, cq, data);
+  }
+
+  if (data.startsWith("orders_")) {
+    return handleOrderDashboardActionV313(env, cq, data);
   }
 
   if (
@@ -268,6 +277,10 @@ async function handleTelegramTextCommand(env, message) {
 
   if (isLimitedMenuCommand(text)) {
     return handleLimitedMenuTextCommand(env, message, text);
+  }
+
+  if (isOrderDashboardCommandV313(text)) {
+    return handleOrderDashboardTextCommandV313(env, message, text);
   }
 
   if (!isMemberQueryCommand(text)) {
@@ -1839,6 +1852,320 @@ function formatDateTime(d) {
   d = new Date(d);
   return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()) + " " + pad2(d.getHours()) + ":" + pad2(d.getMinutes());
 }
+
+
+// V313: Telegram order dashboard + 24-hour auto-cancel helpers.
+function isOrderDashboardCommandV313(text) {
+  const t = String(text || "").trim().toLowerCase();
+  return (
+    t === "/orders" ||
+    t === "/order" ||
+    t === "訂單管理" ||
+    t === "订单管理" ||
+    t === "訂單查詢" ||
+    t === "订单查询" ||
+    t === "今日訂單" ||
+    t === "今日订单" ||
+    t === "今日需製作" ||
+    t === "今日需制作" ||
+    t === "今日飲品" ||
+    t === "今日饮品" ||
+    t === "今日製作" ||
+    t === "今日制作"
+  );
+}
+
+async function handleOrderDashboardTextCommandV313(env, message, text) {
+  const chatId = message.chat && message.chat.id ? message.chat.id : env.TELEGRAM_CHAT_ID;
+  if (!isAuthorizedTelegramChat(env, chatId)) {
+    await sendTelegramMessage(env, chatId, "沒有權限查看 Sky31 訂單。", null);
+    return json({ ok: true });
+  }
+  const lower = String(text || "").trim().toLowerCase();
+  if (lower === "今日訂單" || lower === "今日订单" || lower === "今日需製作" || lower === "今日需制作" || lower === "今日飲品" || lower === "今日饮品" || lower === "今日製作" || lower === "今日制作") {
+    await sendTelegramMessage(env, chatId, await buildTodayProductionTextV313(env), buildOrderDashboardMarkupV313());
+  } else {
+    await sendTelegramMessage(env, chatId, buildOrderDashboardHomeTextV313(), buildOrderDashboardMarkupV313());
+  }
+  return json({ ok: true });
+}
+
+async function handleOrderDashboardActionV313(env, cq, data) {
+  const chatId = cq.message && cq.message.chat ? cq.message.chat.id : env.TELEGRAM_CHAT_ID;
+  const messageId = cq.message ? cq.message.message_id : null;
+  if (!isAuthorizedTelegramChat(env, chatId)) return stop(env, cq, "沒有權限");
+
+  if (data === "orders_today") {
+    await editTelegramMessage(env, chatId, messageId, await buildTodayProductionTextV313(env), buildOrderDashboardMarkupV313());
+    return stop(env, cq, "已刷新今日需製作");
+  }
+  if (data === "orders_open") {
+    await editTelegramMessage(env, chatId, messageId, await buildOpenOrdersTextV313(env), buildOrderDashboardMarkupV313());
+    return stop(env, cq, "已刷新未完成訂單");
+  }
+  if (data === "orders_auto_cancel") {
+    const result = await autoCancelExpiredOrdersV313(env, { notify: false, source: "manual_button" });
+    const text = buildAutoCancelResultTextV313(result);
+    await editTelegramMessage(env, chatId, messageId, text, buildOrderDashboardMarkupV313());
+    return stop(env, cq, result.cancelledCount ? "已自動取消 " + result.cancelledCount + " 張" : "沒有需要取消的訂單");
+  }
+  if (data === "orders_home") {
+    await editTelegramMessage(env, chatId, messageId, buildOrderDashboardHomeTextV313(), buildOrderDashboardMarkupV313());
+    return stop(env, cq, "訂單管理");
+  }
+  return stop(env, cq, "未知訂單操作");
+}
+
+function buildOrderDashboardHomeTextV313() {
+  return [
+    "📋 SKY31 訂單管理",
+    "",
+    "可快速查看今天店員需要製作的飲品，或檢查 24 小時未完成訂單。",
+    "",
+    "自動取消規則：",
+    "下單超過 24 小時仍未完成的訂單，會自動取消，並在 Telegram 顯示提示。",
+    "已完成、已領取、已取消的訂單不會再自動取消。"
+  ].join("\n");
+}
+
+function buildOrderDashboardMarkupV313() {
+  return {
+    inline_keyboard: [
+      [{ text: "☕ 今日需製作飲品", callback_data: "orders_today" }],
+      [{ text: "📦 未完成訂單", callback_data: "orders_open" }],
+      [{ text: "🕒 檢查24小時未完成", callback_data: "orders_auto_cancel" }],
+      [{ text: "🏠 訂單管理首頁", callback_data: "orders_home" }]
+    ]
+  };
+}
+
+async function autoCancelExpiredOrdersV313(env, options = {}) {
+  const nowMs = Date.now();
+  const cutoffMs = nowMs - 24 * 60 * 60 * 1000;
+  const cancelled = [];
+  const scanned = [];
+  let cursor = undefined;
+  let checked = 0;
+
+  do {
+    const page = await env.ORDERS.list({ prefix: "order:", cursor, limit: 1000 });
+    const keys = (page && page.keys) || [];
+    for (const k of keys) {
+      checked += 1;
+      if (checked > 5000) break;
+      const raw = await env.ORDERS.get(k.name);
+      if (!raw) continue;
+      let order = null;
+      try { order = JSON.parse(raw); } catch (_) { continue; }
+      if (!order || !order.orderNo) continue;
+      scanned.push(order);
+      if (!shouldAutoCancelOrderV313(order, cutoffMs)) continue;
+
+      const before = normalizeStatus(order.status || "pending");
+      const nowIso = new Date(nowMs).toISOString();
+      order._syncMemberRewardsNowV295 = true;
+      order.statusBeforeCancel = before;
+      order.confirmedAtBeforeCancel = order.confirmedAt || null;
+      order.makingAtBeforeCancel = order.makingAt || null;
+      order.completedAtBeforeCancel = order.completedAt || null;
+      order.pickedUpAtBeforeCancel = order.pickedUpAt || null;
+      order.status = "cancelled";
+      order.cancelledAt = nowIso;
+      order.autoCancelledAt = nowIso;
+      order.cancelReason = "24小時未完成自動取消";
+      order.updatedAt = nowIso;
+      order.statusUpdatedAt = nowIso;
+
+      await env.ORDERS.put("order:" + order.orderNo, JSON.stringify(order), { expirationTtl: 60 * 60 * 24 * 3650 });
+      try { await recalcMemberFromOrdersV199(env, order); } catch (_) {}
+      try {
+        if (order.telegramMessageId && env.TELEGRAM_CHAT_ID) {
+          await editTelegramMessage(env, env.TELEGRAM_CHAT_ID, order.telegramMessageId, buildTelegramText(order), buildReplyMarkup(order));
+        }
+      } catch (_) {}
+      cancelled.push(order);
+    }
+    cursor = page && page.cursor;
+    if (!page || page.list_complete !== false) break;
+  } while (cursor && checked <= 5000);
+
+  const result = { ok: true, checked, cancelledCount: cancelled.length, cancelled, scannedAt: new Date(nowMs).toISOString() };
+  if (options.notify && cancelled.length && env.TELEGRAM_CHAT_ID) {
+    try { await sendTelegramMessage(env, env.TELEGRAM_CHAT_ID, buildAutoCancelResultTextV313(result), buildOrderDashboardMarkupV313()); } catch (_) {}
+  }
+  return result;
+}
+
+function shouldAutoCancelOrderV313(order, cutoffMs) {
+  const s = normalizeStatus(order.status || "pending");
+  if (s === "cancelled" || s === "completed" || s === "picked_up") return false;
+  const createdMs = new Date(order.createdAt || order.updatedAt || order.statusUpdatedAt || 0).getTime();
+  return Number.isFinite(createdMs) && createdMs > 0 && createdMs <= cutoffMs;
+}
+
+function buildAutoCancelResultTextV313(result) {
+  const lines = [];
+  lines.push("🕒 24小時未完成訂單檢查");
+  lines.push("");
+  lines.push("已檢查訂單：" + Number(result.checked || 0));
+  lines.push("自動取消：" + Number(result.cancelledCount || 0));
+  if (Array.isArray(result.cancelled) && result.cancelled.length) {
+    lines.push("");
+    lines.push("已取消訂單：");
+    result.cancelled.slice(0, 20).forEach(order => {
+      lines.push("#" + (order.orderNo || "-") + "｜" + (order.customerName || "-") + "｜" + (order.pickupTime || order.pickup || "-"));
+    });
+    if (result.cancelled.length > 20) lines.push("⋯ 還有 " + (result.cancelled.length - 20) + " 張");
+  }
+  return lines.join("\n").trim();
+}
+
+async function buildTodayProductionTextV313(env) {
+  const orders = await listOrdersForDashboardV313(env);
+  const today = macauDateKeyV313(new Date());
+  const todayOrders = orders.filter(order => orderBelongsToDateV313(order, today));
+  const activeOrders = todayOrders.filter(order => {
+    const s = normalizeStatus(order.status || "pending");
+    return s !== "cancelled" && s !== "picked_up";
+  });
+  const makeOrders = activeOrders.filter(order => {
+    const s = normalizeStatus(order.status || "pending");
+    return s === "pending" || s === "confirmed" || s === "making";
+  });
+  const completedWaiting = activeOrders.filter(order => normalizeStatus(order.status || "pending") === "completed");
+  const drinkMap = new Map();
+
+  makeOrders.forEach(order => {
+    (Array.isArray(order.cart) ? order.cart : []).forEach(item => {
+      const qty = Math.max(1, Number(item.qty || item.quantity || 1));
+      const label = drinkLabelForDashboardV313(item);
+      drinkMap.set(label, (drinkMap.get(label) || 0) + qty);
+    });
+  });
+
+  const lines = [];
+  lines.push("☕ 今日需製作飲品");
+  lines.push("日期：" + today);
+  lines.push("");
+  lines.push("未完成訂單：" + makeOrders.length + " 張");
+  lines.push("已完成待領取：" + completedWaiting.length + " 張");
+  lines.push("");
+  if (!drinkMap.size) {
+    lines.push("目前沒有需要製作的飲品。");
+  } else {
+    lines.push("飲品合計：");
+    Array.from(drinkMap.entries()).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "zh-Hant")).forEach(([label, qty]) => {
+      lines.push("• " + label + " × " + qty);
+    });
+  }
+
+  if (makeOrders.length) {
+    lines.push("");
+    lines.push("訂單明細：");
+    makeOrders.slice(0, 30).forEach(order => {
+      lines.push("#" + (order.orderNo || "-") + "｜" + statusLabelV313(order.status) + "｜" + (order.pickupTime || order.pickup || "-") + "｜" + (order.customerName || "-"));
+    });
+    if (makeOrders.length > 30) lines.push("⋯ 還有 " + (makeOrders.length - 30) + " 張");
+  }
+  return lines.join("\n").trim();
+}
+
+async function buildOpenOrdersTextV313(env) {
+  const orders = await listOrdersForDashboardV313(env);
+  const open = orders.filter(order => {
+    const s = normalizeStatus(order.status || "pending");
+    return s !== "cancelled" && s !== "picked_up" && s !== "completed";
+  }).sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+
+  const lines = [];
+  lines.push("📦 未完成訂單");
+  lines.push("");
+  if (!open.length) {
+    lines.push("目前沒有未完成訂單。");
+  } else {
+    open.slice(0, 50).forEach(order => {
+      const age = orderAgeTextV313(order);
+      lines.push("#" + (order.orderNo || "-") + "｜" + statusLabelV313(order.status) + "｜" + age + "｜" + (order.pickupTime || order.pickup || "-") + "｜" + (order.customerName || "-"));
+    });
+    if (open.length > 50) lines.push("⋯ 還有 " + (open.length - 50) + " 張");
+  }
+  return lines.join("\n").trim();
+}
+
+async function listOrdersForDashboardV313(env) {
+  const orders = [];
+  let cursor = undefined;
+  let checked = 0;
+  do {
+    const page = await env.ORDERS.list({ prefix: "order:", cursor, limit: 1000 });
+    const keys = (page && page.keys) || [];
+    for (const k of keys) {
+      checked += 1;
+      if (checked > 5000) break;
+      const raw = await env.ORDERS.get(k.name);
+      if (!raw) continue;
+      try { const order = JSON.parse(raw); if (order && order.orderNo) orders.push(order); } catch (_) {}
+    }
+    cursor = page && page.cursor;
+    if (!page || page.list_complete !== false) break;
+  } while (cursor && checked <= 5000);
+  return orders;
+}
+
+function orderBelongsToDateV313(order, dateKey) {
+  const pickupText = String(order.pickupTime || order.pickup || "");
+  const m = pickupText.match(/(20\d{2}-\d{2}-\d{2})/);
+  if (m) return m[1] === dateKey;
+  return macauDateKeyV313(order.createdAt || order.updatedAt || new Date()) === dateKey;
+}
+
+function drinkLabelForDashboardV313(item) {
+  const parts = [];
+  parts.push(String(item.name || item.cn || "飲品").trim());
+  const temp = String(item.temp || "").trim();
+  if (temp) parts.push(temp.includes("Hot") || temp.includes("熱") ? "熱" : "凍");
+  const bean = cleanBeanName(item.bean || "");
+  if (bean) parts.push(bean.replace("（限定豆子 +MOP 5）", ""));
+  const ice = String(item.ice || "").trim();
+  if (ice && ice !== "不適用") parts.push(ice);
+  const milk = String(item.milk || "").trim();
+  if (milk) parts.push(milk);
+  const note = String(item.note || "").trim();
+  if (note && note !== "無備註") parts.push("備註:" + note);
+  return parts.join(" / ");
+}
+
+function statusLabelV313(status) {
+  const s = normalizeStatus(status || "pending");
+  if (s === "pending") return "未確認";
+  if (s === "confirmed") return "已確認";
+  if (s === "making") return "製作中";
+  if (s === "completed") return "已完成待領取";
+  if (s === "picked_up") return "已領取";
+  if (s === "cancelled") return "已取消";
+  return s;
+}
+
+function orderAgeTextV313(order) {
+  const ms = Date.now() - (new Date(order.createdAt || order.updatedAt || 0).getTime() || Date.now());
+  const h = Math.max(0, Math.floor(ms / (60 * 60 * 1000)));
+  if (h < 1) return "不足1小時";
+  if (h < 24) return h + "小時";
+  const d = Math.floor(h / 24);
+  return d + "日" + (h % 24 ? (h % 24) + "小時" : "");
+}
+
+function macauDateKeyV313(dateLike) {
+  const d = new Date(dateLike || Date.now());
+  try {
+    const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Macau", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(d);
+    const obj = {};
+    parts.forEach(p => { obj[p.type] = p.value; });
+    if (obj.year && obj.month && obj.day) return obj.year + "-" + obj.month + "-" + obj.day;
+  } catch (_) {}
+  return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate());
+}
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json; charset=utf-8" } });
 }
