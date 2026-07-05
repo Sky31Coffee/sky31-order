@@ -9,7 +9,7 @@ export async function onRequest(context) {
     return json({
       ok: true,
       endpoint: "telegram-webhook",
-      version: "V315-OrderDashboardClickableOrders",
+      version: "V318-UniversalTelegramNavigation",
       method,
       message: "Webhook endpoint reachable. Telegram sends POST updates here."
     });
@@ -1214,9 +1214,113 @@ function cartTotalForMemberQuery(cart) {
   }, 0);
 }
 
+
+
+// V318: Universal Telegram navigation row.
+// Add a consistent "上一頁 / 功能列表" row to management pages without changing the business logic.
+function enhanceTelegramReplyMarkupV318(replyMarkup, text) {
+  try {
+    if (!replyMarkup || !Array.isArray(replyMarkup.inline_keyboard)) return replyMarkup;
+    const title = String(text || "").trim();
+    const sourceRows = replyMarkup.inline_keyboard;
+
+    // The function list itself is the home page; keep it clean.
+    if (title.indexOf("Sky31 Bot 功能列表") === 0) return replyMarkup;
+
+    const callbacks = [];
+    const flatButtons = [];
+    sourceRows.forEach(row => {
+      (Array.isArray(row) ? row : []).forEach(btn => {
+        if (!btn || typeof btn !== "object") return;
+        flatButtons.push(btn);
+        if (btn.callback_data) callbacks.push(String(btn.callback_data));
+      });
+    });
+
+    // Do not add navigation to external URL-only buttons.
+    if (!callbacks.length) return replyMarkup;
+
+    // Avoid duplicate bottom navigation if it was already added.
+    if (flatButtons.some(btn => String(btn.callback_data || "") === "limited_cmd_menu:x" && String(btn.text || "").includes("功能列表")) &&
+        flatButtons.some(btn => String(btn.text || "").includes("上一頁"))) {
+      return replyMarkup;
+    }
+
+    let back = inferTelegramBackCallbackV318(callbacks, flatButtons, title);
+    const home = "limited_cmd_menu:x";
+
+    // Clean old single "返回功能列表" rows to prevent duplicated navigation rows.
+    const rows = [];
+    sourceRows.forEach(row => {
+      const arr = Array.isArray(row) ? row : [];
+      if (arr.length === 1) {
+        const b = arr[0] || {};
+        const t = String(b.text || "");
+        const cb = String(b.callback_data || "");
+        if ((t === "返回功能列表" || t === "🔄 重新顯示功能列表") && cb === home) return;
+        if ((t === "🏠 功能列表" || t === "功能列表首頁") && cb === home) return;
+      }
+      rows.push(arr);
+    });
+
+    // On top-level pages, the previous page is the function list; do not show two identical buttons.
+    if (!back || back === home) {
+      rows.push([{ text: "🏠 功能列表", callback_data: home }]);
+    } else {
+      rows.push([
+        { text: "⬅️ 上一頁", callback_data: back },
+        { text: "🏠 功能列表", callback_data: home }
+      ]);
+    }
+
+    return { ...replyMarkup, inline_keyboard: rows };
+  } catch (_) {
+    return replyMarkup;
+  }
+}
+
+function inferTelegramBackCallbackV318(callbacks, buttons, title) {
+  const cbs = Array.isArray(callbacks) ? callbacks : [];
+  const btns = Array.isArray(buttons) ? buttons : [];
+
+  // Prefer an existing explicit back/list button if present.
+  const explicitBack = btns.find(btn => {
+    const t = String(btn && btn.text || "");
+    const cb = String(btn && btn.callback_data || "");
+    if (!cb) return false;
+    return t.includes("返回豆子列表") || t.includes("返回用戶列表") || t.includes("返回會員列表") || t.includes("取消，返回") || t.includes("取消，回到");
+  });
+  if (explicitBack && explicitBack.callback_data) return String(explicitBack.callback_data);
+
+  const has = prefix => cbs.some(cb => cb.indexOf(prefix) === 0);
+  const hasExact = val => cbs.some(cb => cb === val);
+
+  // Order pages.
+  if (has("orders_view:")) return "orders_home";
+  if (hasExact("orders_today") || hasExact("orders_open") || hasExact("orders_all") || hasExact("orders_auto_cancel")) return "limited_cmd_menu:x";
+  if (has("confirm:") || has("make:") || has("complete:") || has("pickup:") || has("cancel:") || has("restore:") || has("undo_")) return "orders_home";
+
+  // Limited bean pages.
+  if (has("limited_detail:") || has("limited_wizard_edit:") || has("limited_wizard_add:")) return "limited_list:all";
+  if (has("limited_delete") || has("limited_restore") || has("limited_set_current") || has("limited_shelf") || has("limited_toggle")) return "limited_list:all";
+  if (String(title || "").includes("限定豆子")) return "limited_list:all";
+
+  // Member pages.
+  if (has("member_view_active:") || has("member_view_deleted:")) return "member_list:active:0";
+  if (has("member_delete:") || has("member_restore:") || has("member_tier_") || has("member_edit_")) return "member_list:active:0";
+  if (has("member_list:")) return "limited_cmd_menu:x";
+
+  // Voucher and maintenance pages.
+  if (has("gift_voucher_")) return "gift_voucher_menu:x";
+  if (has("maint_")) return "limited_cmd_menu:x";
+  if (has("member_merge_")) return "limited_cmd_menu:x";
+
+  return "limited_cmd_menu:x";
+}
+
 async function sendTelegramMessage(env, chatId, text, replyMarkup) {
   const body = { chat_id: chatId, text };
-  if (replyMarkup) body.reply_markup = replyMarkup;
+  if (replyMarkup) body.reply_markup = enhanceTelegramReplyMarkupV318(replyMarkup, text);
 
   await fetch("https://api.telegram.org/bot" + env.TELEGRAM_BOT_TOKEN + "/sendMessage", {
     method: "POST",
@@ -1833,7 +1937,7 @@ async function editTelegramMessage(env, chatId, messageId, text, replyMarkup) {
     if (!env.TELEGRAM_BOT_TOKEN || !chatId || !messageId) return null;
 
     const body = { chat_id: chatId, message_id: messageId, text };
-    if (replyMarkup) body.reply_markup = replyMarkup;
+    if (replyMarkup) body.reply_markup = enhanceTelegramReplyMarkupV318(replyMarkup, text);
 
     const res = await fetch("https://api.telegram.org/bot" + env.TELEGRAM_BOT_TOKEN + "/editMessageText", {
       method: "POST",
@@ -6547,7 +6651,7 @@ async function saveLimitedPanelMessageIdV310(env, chatId, messageId) {
 async function sendTelegramMessageV310(env, chatId, text, replyMarkup) {
   try {
     const body = { chat_id: chatId, text };
-    if (replyMarkup) body.reply_markup = replyMarkup;
+    if (replyMarkup) body.reply_markup = enhanceTelegramReplyMarkupV318(replyMarkup, text);
     const res = await fetch("https://api.telegram.org/bot" + env.TELEGRAM_BOT_TOKEN + "/sendMessage", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
