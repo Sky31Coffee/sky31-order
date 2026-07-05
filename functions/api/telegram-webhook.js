@@ -9,7 +9,7 @@ export async function onRequest(context) {
     return json({
       ok: true,
       endpoint: "telegram-webhook",
-      version: "V318-UniversalTelegramNavigation",
+      version: "V321-OrderDashboardNoSpam-BuildPathFix",
       method,
       message: "Webhook endpoint reachable. Telegram sends POST updates here."
     });
@@ -29,11 +29,8 @@ async function handleTelegramPost(context) {
   if (typeof context.waitUntil === "function") {
     env.__SKY31_WAIT_UNTIL = context.waitUntil.bind(context);
   }
-  // V313: opportunistic 24-hour auto-cancel. Runs in background whenever Telegram is used.
-  try {
-    const autoCancelJobV313 = autoCancelExpiredOrdersV313(env, { notify: true, source: "telegram_background" }).catch(function(){});
-    if (typeof context.waitUntil === "function") context.waitUntil(autoCancelJobV313);
-  } catch (_) {}
+  // V320: Keep Telegram quiet. Manual 24-hour check edits only the current dashboard message.
+  // It does not send per-order messages or refresh continuously.
   const update = await request.json();
 
   if (!update.callback_query) {
@@ -1214,113 +1211,9 @@ function cartTotalForMemberQuery(cart) {
   }, 0);
 }
 
-
-
-// V318: Universal Telegram navigation row.
-// Add a consistent "上一頁 / 功能列表" row to management pages without changing the business logic.
-function enhanceTelegramReplyMarkupV318(replyMarkup, text) {
-  try {
-    if (!replyMarkup || !Array.isArray(replyMarkup.inline_keyboard)) return replyMarkup;
-    const title = String(text || "").trim();
-    const sourceRows = replyMarkup.inline_keyboard;
-
-    // The function list itself is the home page; keep it clean.
-    if (title.indexOf("Sky31 Bot 功能列表") === 0) return replyMarkup;
-
-    const callbacks = [];
-    const flatButtons = [];
-    sourceRows.forEach(row => {
-      (Array.isArray(row) ? row : []).forEach(btn => {
-        if (!btn || typeof btn !== "object") return;
-        flatButtons.push(btn);
-        if (btn.callback_data) callbacks.push(String(btn.callback_data));
-      });
-    });
-
-    // Do not add navigation to external URL-only buttons.
-    if (!callbacks.length) return replyMarkup;
-
-    // Avoid duplicate bottom navigation if it was already added.
-    if (flatButtons.some(btn => String(btn.callback_data || "") === "limited_cmd_menu:x" && String(btn.text || "").includes("功能列表")) &&
-        flatButtons.some(btn => String(btn.text || "").includes("上一頁"))) {
-      return replyMarkup;
-    }
-
-    let back = inferTelegramBackCallbackV318(callbacks, flatButtons, title);
-    const home = "limited_cmd_menu:x";
-
-    // Clean old single "返回功能列表" rows to prevent duplicated navigation rows.
-    const rows = [];
-    sourceRows.forEach(row => {
-      const arr = Array.isArray(row) ? row : [];
-      if (arr.length === 1) {
-        const b = arr[0] || {};
-        const t = String(b.text || "");
-        const cb = String(b.callback_data || "");
-        if ((t === "返回功能列表" || t === "🔄 重新顯示功能列表") && cb === home) return;
-        if ((t === "🏠 功能列表" || t === "功能列表首頁") && cb === home) return;
-      }
-      rows.push(arr);
-    });
-
-    // On top-level pages, the previous page is the function list; do not show two identical buttons.
-    if (!back || back === home) {
-      rows.push([{ text: "🏠 功能列表", callback_data: home }]);
-    } else {
-      rows.push([
-        { text: "⬅️ 上一頁", callback_data: back },
-        { text: "🏠 功能列表", callback_data: home }
-      ]);
-    }
-
-    return { ...replyMarkup, inline_keyboard: rows };
-  } catch (_) {
-    return replyMarkup;
-  }
-}
-
-function inferTelegramBackCallbackV318(callbacks, buttons, title) {
-  const cbs = Array.isArray(callbacks) ? callbacks : [];
-  const btns = Array.isArray(buttons) ? buttons : [];
-
-  // Prefer an existing explicit back/list button if present.
-  const explicitBack = btns.find(btn => {
-    const t = String(btn && btn.text || "");
-    const cb = String(btn && btn.callback_data || "");
-    if (!cb) return false;
-    return t.includes("返回豆子列表") || t.includes("返回用戶列表") || t.includes("返回會員列表") || t.includes("取消，返回") || t.includes("取消，回到");
-  });
-  if (explicitBack && explicitBack.callback_data) return String(explicitBack.callback_data);
-
-  const has = prefix => cbs.some(cb => cb.indexOf(prefix) === 0);
-  const hasExact = val => cbs.some(cb => cb === val);
-
-  // Order pages.
-  if (has("orders_view:")) return "orders_home";
-  if (hasExact("orders_today") || hasExact("orders_open") || hasExact("orders_all") || hasExact("orders_auto_cancel")) return "limited_cmd_menu:x";
-  if (has("confirm:") || has("make:") || has("complete:") || has("pickup:") || has("cancel:") || has("restore:") || has("undo_")) return "orders_home";
-
-  // Limited bean pages.
-  if (has("limited_detail:") || has("limited_wizard_edit:") || has("limited_wizard_add:")) return "limited_list:all";
-  if (has("limited_delete") || has("limited_restore") || has("limited_set_current") || has("limited_shelf") || has("limited_toggle")) return "limited_list:all";
-  if (String(title || "").includes("限定豆子")) return "limited_list:all";
-
-  // Member pages.
-  if (has("member_view_active:") || has("member_view_deleted:")) return "member_list:active:0";
-  if (has("member_delete:") || has("member_restore:") || has("member_tier_") || has("member_edit_")) return "member_list:active:0";
-  if (has("member_list:")) return "limited_cmd_menu:x";
-
-  // Voucher and maintenance pages.
-  if (has("gift_voucher_")) return "gift_voucher_menu:x";
-  if (has("maint_")) return "limited_cmd_menu:x";
-  if (has("member_merge_")) return "limited_cmd_menu:x";
-
-  return "limited_cmd_menu:x";
-}
-
 async function sendTelegramMessage(env, chatId, text, replyMarkup) {
   const body = { chat_id: chatId, text };
-  if (replyMarkup) body.reply_markup = enhanceTelegramReplyMarkupV318(replyMarkup, text);
+  if (replyMarkup) body.reply_markup = replyMarkup;
 
   await fetch("https://api.telegram.org/bot" + env.TELEGRAM_BOT_TOKEN + "/sendMessage", {
     method: "POST",
@@ -1937,7 +1830,7 @@ async function editTelegramMessage(env, chatId, messageId, text, replyMarkup) {
     if (!env.TELEGRAM_BOT_TOKEN || !chatId || !messageId) return null;
 
     const body = { chat_id: chatId, message_id: messageId, text };
-    if (replyMarkup) body.reply_markup = enhanceTelegramReplyMarkupV318(replyMarkup, text);
+    if (replyMarkup) body.reply_markup = replyMarkup;
 
     const res = await fetch("https://api.telegram.org/bot" + env.TELEGRAM_BOT_TOKEN + "/editMessageText", {
       method: "POST",
@@ -2023,7 +1916,18 @@ async function handleOrderDashboardActionV313(env, cq, data) {
     return stop(env, cq, "已刷新最近訂單");
   }
   if (data === "orders_auto_cancel") {
-    const result = await autoCancelExpiredOrdersV313(env, { notify: false, source: "manual_button" });
+    const lockKey = "telegram:orders:auto_cancel_check_lock:" + String(chatId || "default");
+    const existingLock = await env.ORDERS.get(lockKey).catch(() => null);
+    if (existingLock) {
+      return stop(env, cq, "正在檢查，請稍候");
+    }
+    await env.ORDERS.put(lockKey, String(Date.now()), { expirationTtl: 15 }).catch(() => null);
+    let result;
+    try {
+      result = await autoCancelExpiredOrdersV313(env, { notify: false, source: "manual_button", updateOrderMessages: false });
+    } finally {
+      await env.ORDERS.delete(lockKey).catch(() => null);
+    }
     const text = buildAutoCancelResultTextV313(result);
     await editTelegramMessage(env, chatId, messageId, text, buildOrderDashboardMarkupV313());
     return stop(env, cq, result.cancelledCount ? "已自動取消 " + result.cancelledCount + " 張" : "沒有需要取消的訂單");
@@ -2039,11 +1943,10 @@ function buildOrderDashboardHomeTextV313() {
   return [
     "📋 SKY31 訂單管理",
     "",
-    "可快速查看今天店員需要製作的飲品，或檢查 24 小時未完成訂單。",
+    "簡單查看今天需要製作的飲品，或點入訂單繼續操作。",
     "",
-    "自動取消規則：",
-    "下單超過 24 小時仍未完成的訂單，會自動取消，並在 Telegram 顯示提示。",
-    "已完成、已領取、已取消的訂單不會再自動取消。"
+    "提示：點選下方訂單即可進入原本訂單操作界面。",
+    "24 小時未完成訂單可按下方按鈕手動檢查。"
   ].join("\n");
 }
 
@@ -2258,11 +2161,16 @@ async function autoCancelExpiredOrdersV313(env, options = {}) {
 
       await env.ORDERS.put("order:" + order.orderNo, JSON.stringify(order), { expirationTtl: 60 * 60 * 24 * 3650 });
       try { await recalcMemberFromOrdersV199(env, order); } catch (_) {}
-      try {
-        if (order.telegramMessageId && env.TELEGRAM_CHAT_ID) {
-          await editTelegramMessage(env, env.TELEGRAM_CHAT_ID, order.telegramMessageId, buildTelegramText(order), buildReplyMarkup(order));
-        }
-      } catch (_) {}
+      // Keep the 24-hour check quiet: do not update each old order message one by one.
+      // The dashboard shows one summary after a manual check. Order status is still saved to D1,
+      // and opening the order from the dashboard will show the latest cancelled state.
+      if (options.updateOrderMessages === true) {
+        try {
+          if (order.telegramMessageId && env.TELEGRAM_CHAT_ID) {
+            await editTelegramMessage(env, env.TELEGRAM_CHAT_ID, order.telegramMessageId, buildTelegramText(order), buildReplyMarkup(order));
+          }
+        } catch (_) {}
+      }
       cancelled.push(order);
     }
     cursor = page && page.cursor;
@@ -2285,13 +2193,13 @@ function shouldAutoCancelOrderV313(order, cutoffMs) {
 
 function buildAutoCancelResultTextV313(result) {
   const lines = [];
-  lines.push("🕒 24小時未完成訂單檢查");
+  lines.push("🕒 24小時未完成訂單檢查結果");
   lines.push("");
   lines.push("已檢查訂單：" + Number(result.checked || 0));
   lines.push("自動取消：" + Number(result.cancelledCount || 0));
   if (Array.isArray(result.cancelled) && result.cancelled.length) {
     lines.push("");
-    lines.push("已取消訂單：");
+    lines.push("本次自動取消：");
     result.cancelled.slice(0, 20).forEach(order => {
       lines.push("#" + (order.orderNo || "-") + "｜" + (order.customerName || "-") + "｜" + (order.pickupTime || order.pickup || "-"));
     });
@@ -6651,7 +6559,7 @@ async function saveLimitedPanelMessageIdV310(env, chatId, messageId) {
 async function sendTelegramMessageV310(env, chatId, text, replyMarkup) {
   try {
     const body = { chat_id: chatId, text };
-    if (replyMarkup) body.reply_markup = enhanceTelegramReplyMarkupV318(replyMarkup, text);
+    if (replyMarkup) body.reply_markup = replyMarkup;
     const res = await fetch("https://api.telegram.org/bot" + env.TELEGRAM_BOT_TOKEN + "/sendMessage", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
