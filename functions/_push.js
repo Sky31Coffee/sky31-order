@@ -1,293 +1,155 @@
-// Sky31 Web Push helpers
-// V304: cleaner professional notification wording. Uses D1-only env.ORDERS store.
+// Sky31 D1-only KV-compatible store
+// V294: D1 is mandatory. The app will NOT fall back to the old Cloudflare KV ORDERS binding.
 
-const DEFAULT_VAPID_PUBLIC_KEY = "BH6_njul0KgPix_FVFwoLh1Si87hWlINKA4FuFBM-uXJO68zj_ln7A2nsfi8wTwzQhjDAmQSygeH12cnk8iZsbc";
-const DEFAULT_VAPID_PRIVATE_KEY = "kKSXGlZlIDiUbc2cryMiU6Nu0wmhvXU5Ssthm3MOYDI";
-const DEFAULT_VAPID_SUBJECT = "mailto:sky31@example.com";
+let schemaPromise = null;
 
-export function getVapidPublicKey(env) {
-  return String((env && env.VAPID_PUBLIC_KEY) || DEFAULT_VAPID_PUBLIC_KEY).trim();
-}
+export function withD1Store(env) {
+  if (!env || env.__SKY31_D1_WRAPPED) return env;
 
-function getVapidPrivateKey(env) {
-  return String((env && env.VAPID_PRIVATE_KEY) || DEFAULT_VAPID_PRIVATE_KEY).trim();
-}
-
-function getVapidSubject(env) {
-  return String((env && env.VAPID_SUBJECT) || DEFAULT_VAPID_SUBJECT).trim();
-}
-
-export function webPushStatus(env) {
-  return {
-    enabled: !!(getVapidPublicKey(env) && getVapidPrivateKey(env)),
-    publicKey: getVapidPublicKey(env),
-    subject: getVapidSubject(env),
-    mode: (env && env.VAPID_PRIVATE_KEY) ? "ENV_VAPID" : "BUILT_IN_TEST_VAPID"
-  };
-}
-
-export async function savePushSubscriptionV301(env, phone, subscription, meta = {}) {
-  phone = normalizePhone(phone);
-  if (!phone) throw new Error("missing phone");
-  if (!subscription || !subscription.endpoint) throw new Error("missing subscription endpoint");
-  const endpointHash = await shortHash(subscription.endpoint);
-  const now = new Date().toISOString();
-  const record = {
-    type: "push_subscription",
-    phone,
-    name: String(meta.name || "").trim(),
-    endpointHash,
-    endpoint: subscription.endpoint,
-    subscription,
-    userAgent: String(meta.userAgent || "").slice(0, 300),
-    platform: String(meta.platform || "").slice(0, 80),
-    createdAt: meta.createdAt || now,
-    updatedAt: now,
-    enabled: true,
-    version: "v304"
-  };
-  await env.ORDERS.put(pushKey(phone, endpointHash), JSON.stringify(record), { expirationTtl: 60 * 60 * 24 * 3650 });
-  await env.ORDERS.put("push_endpoint:" + endpointHash, JSON.stringify({ phone, key: pushKey(phone, endpointHash), updatedAt: now }), { expirationTtl: 60 * 60 * 24 * 3650 });
-  return { ok: true, phone, endpointHash, key: pushKey(phone, endpointHash) };
-}
-
-export async function sendOrderReadyPushV301(env, order) {
-  const no = String((order && order.orderNo) || "").trim();
-  const msg = no
-    ? "可以取餐啦。你的訂單 #" + no + " 已完成，請到店取餐。"
-    : "可以取餐啦。你的訂單已完成，請到店取餐。";
-  return sendOrderStatusPushV303(env, order, msg, "ready");
-}
-
-export async function sendOrderConfirmedPushV303(env, order) {
-  const no = String((order && order.orderNo) || "").trim();
-  const msg = no
-    ? "訂單已確認。店家已接收你的訂單 #" + no + "，會按取餐時間準備。"
-    : "訂單已確認。店家已接收你的訂單，會按取餐時間準備。";
-  return sendOrderStatusPushV303(env, order, msg, "confirmed");
-}
-
-export async function sendOrderStatusPushV303(env, order, message, kind = "status") {
-  const phone = normalizePhone(order && (order.phone || order.memberPhone || order.customerPhone));
-  if (!phone || !env || !env.ORDERS) return { ok: false, sent: 0, reason: "missing phone/store" };
-  const subs = await listPushSubscriptionsForPhone(env, phone);
-  if (!subs.length) return { ok: true, sent: 0, reason: "no subscriptions" };
-
-  let sent = 0;
-  let failed = 0;
-  const staleKeys = [];
-  const payload = String(message || "你的訂單狀態已更新。");
-  await Promise.all(subs.map(async rec => {
-    try {
-      const res = await sendRawPush(env, rec.subscription || rec, payload);
-      if (res && (res.status === 404 || res.status === 410)) {
-        failed += 1;
-        staleKeys.push(rec.__key);
-      } else if (res && res.ok) {
-        sent += 1;
-      } else {
-        failed += 1;
-      }
-    } catch (_) {
-      failed += 1;
-    }
-  }));
-  await Promise.all(staleKeys.filter(Boolean).map(k => env.ORDERS.delete(k).catch(() => {})));
-  return { ok: true, phone, kind, sent, failed, staleRemoved: staleKeys.length };
-}
-
-export async function sendTestPushToPhoneV301(env, phone) {
-  phone = normalizePhone(phone);
-  const subs = await listPushSubscriptionsForPhone(env, phone);
-  let sent = 0;
-  let failed = 0;
-  for (const rec of subs) {
-    try {
-      const res = await sendRawPush(env, rec.subscription || rec, "Sky31 測試通知：如果你收到這條訊息，代表取餐通知已成功開啟。");
-      if (res && res.ok) sent += 1; else failed += 1;
-    } catch (_) { failed += 1; }
+  const db = env.SKY31_DB || env.DB || env.ORDERS_DB;
+  if (!db || typeof db.prepare !== "function") {
+    return {
+      ...env,
+      __SKY31_D1_WRAPPED: true,
+      ORDERS: createMissingD1Store()
+    };
   }
-  return { ok: true, phone, subscriptions: subs.length, sent, failed };
+
+  return {
+    ...env,
+    __SKY31_D1_WRAPPED: true,
+    ORDERS: createD1KVStore(db)
+  };
 }
 
-async function listPushSubscriptionsForPhone(env, phone) {
-  phone = normalizePhone(phone);
-  const out = [];
-  let cursor;
-  do {
-    const page = await env.ORDERS.list({ prefix: "push:" + phone + ":", cursor, limit: 1000 });
-    const keys = Array.isArray(page && page.keys) ? page.keys : [];
-    for (const item of keys) {
-      const key = item && item.name;
-      if (!key) continue;
-      try {
-        const raw = await env.ORDERS.get(key);
-        if (!raw) continue;
-        const rec = JSON.parse(raw);
-        if (rec && rec.enabled !== false && rec.endpoint && rec.subscription) {
-          rec.__key = key;
-          out.push(rec);
-        }
-      } catch (_) {}
+export function sky31D1Status(env) {
+  const db = env && (env.SKY31_DB || env.DB || env.ORDERS_DB);
+  return {
+    enabled: !!(db && typeof db.prepare === "function"),
+    binding: env && env.SKY31_DB ? "SKY31_DB" : (env && env.DB ? "DB" : (env && env.ORDERS_DB ? "ORDERS_DB" : "")),
+    mode: "D1_ONLY_NO_KV_FALLBACK"
+  };
+}
+
+function createMissingD1Store() {
+  const error = () => new Error("Sky31 D1 binding not found. Please bind SKY31_DB. KV fallback is disabled in this version.");
+  return {
+    async get() { throw error(); },
+    async put() { throw error(); },
+    async delete() { throw error(); },
+    async list() { throw error(); }
+  };
+}
+
+function createD1KVStore(db) {
+  return {
+    async get(key) {
+      key = normalizeKey(key);
+      if (!key) return null;
+      await ensureSchema(db);
+      const now = unixNow();
+      const row = await db.prepare(
+        "SELECT value, expires_at FROM kv_store WHERE key = ?"
+      ).bind(key).first();
+      if (!row) return null;
+      const expiresAt = row.expires_at == null ? null : Number(row.expires_at);
+      if (expiresAt && expiresAt <= now) {
+        try { await this.delete(key); } catch (_) {}
+        return null;
+      }
+      return row.value == null ? null : String(row.value);
+    },
+
+    async put(key, value, options = {}) {
+      key = normalizeKey(key);
+      if (!key) return;
+      await ensureSchema(db);
+      const now = unixNow();
+      const expiresAt = resolveExpiresAt(options, now);
+      await db.prepare(
+        "INSERT INTO kv_store (key, value, expires_at, updated_at) VALUES (?, ?, ?, ?) " +
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value, expires_at = excluded.expires_at, updated_at = excluded.updated_at"
+      ).bind(key, String(value == null ? "" : value), expiresAt, now).run();
+    },
+
+    async delete(key) {
+      key = normalizeKey(key);
+      if (!key) return;
+      await ensureSchema(db);
+      await db.prepare("DELETE FROM kv_store WHERE key = ?").bind(key).run();
+    },
+
+    async list(options = {}) {
+      await ensureSchema(db);
+      const prefix = String(options.prefix || "");
+      const limitRaw = Number(options.limit || 1000);
+      const limit = Math.max(1, Math.min(Number.isFinite(limitRaw) ? limitRaw : 1000, 1000));
+      const offsetRaw = Number(options.cursor || 0);
+      const offset = Math.max(0, Number.isFinite(offsetRaw) ? Math.floor(offsetRaw) : 0);
+      const now = unixNow();
+      const like = escapeLike(prefix) + "%";
+
+      const result = await db.prepare(
+        "SELECT key FROM kv_store " +
+        "WHERE key LIKE ? ESCAPE '\\' AND (expires_at IS NULL OR expires_at > ?) " +
+        "ORDER BY key ASC LIMIT ? OFFSET ?"
+      ).bind(like, now, limit + 1, offset).all();
+
+      const rows = Array.isArray(result && result.results) ? result.results : [];
+      const visible = rows.slice(0, limit);
+      const hasMore = rows.length > limit;
+
+      return {
+        keys: visible.map(row => ({ name: String(row.key || "") })).filter(k => k.name),
+        list_complete: !hasMore,
+        cursor: hasMore ? String(offset + limit) : undefined
+      };
     }
-    cursor = page && page.cursor;
-    if (page && page.list_complete !== false) break;
-  } while (cursor);
-  return out;
+  };
 }
 
-async function sendRawPush(env, subscription, payloadText) {
-  if (!subscription || !subscription.endpoint) throw new Error("missing endpoint");
-  const endpoint = String(subscription.endpoint);
-  const aud = new URL(endpoint).origin;
-  const jwt = await createVapidJWT(env, aud);
-  const publicKey = getVapidPublicKey(env);
-
-  // If the browser subscription includes encryption keys, send a real payload so
-  // the service worker can show different messages for confirmed vs ready.
-  const keys = subscription.keys || {};
-  if (keys.p256dh && keys.auth && payloadText) {
-    const encrypted = await encryptWebPushPayload(subscription, String(payloadText));
-    return fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "TTL": "300",
-        "Urgency": "high",
-        "Authorization": "vapid t=" + jwt + ", k=" + publicKey,
-        "Content-Encoding": "aes128gcm",
-        "Content-Type": "application/octet-stream"
-      },
-      body: encrypted
+async function ensureSchema(db) {
+  if (!schemaPromise) {
+    schemaPromise = (async () => {
+      await db.prepare(
+        "CREATE TABLE IF NOT EXISTS kv_store (" +
+        "key TEXT PRIMARY KEY NOT NULL, " +
+        "value TEXT, " +
+        "expires_at INTEGER, " +
+        "updated_at INTEGER NOT NULL" +
+        ")"
+      ).run();
+      await db.prepare("CREATE INDEX IF NOT EXISTS idx_kv_store_expires ON kv_store(expires_at)").run();
+      await db.prepare("CREATE INDEX IF NOT EXISTS idx_kv_store_updated ON kv_store(updated_at)").run();
+    })().catch(err => {
+      schemaPromise = null;
+      throw err;
     });
   }
-
-  // Fallback for unusual subscriptions. The SW will show its default pickup message.
-  return fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "TTL": "300",
-      "Urgency": "high",
-      "Authorization": "vapid t=" + jwt + ", k=" + publicKey,
-      "Content-Length": "0"
-    }
-  });
+  return schemaPromise;
 }
 
-async function encryptWebPushPayload(subscription, payloadText) {
-  const uaPublic = base64UrlDecode(subscription.keys.p256dh);
-  const authSecret = base64UrlDecode(subscription.keys.auth);
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const asKeyPair = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveBits"]);
-  const asPublic = new Uint8Array(await crypto.subtle.exportKey("raw", asKeyPair.publicKey));
-  const uaPublicKey = await crypto.subtle.importKey("raw", uaPublic, { name: "ECDH", namedCurve: "P-256" }, false, []);
-  const ecdhSecret = new Uint8Array(await crypto.subtle.deriveBits({ name: "ECDH", public: uaPublicKey }, asKeyPair.privateKey, 256));
-
-  const ikmPre = await hmacSha256(authSecret, ecdhSecret);
-  const keyInfo = concatBytes(textBytes("WebPush: info"), new Uint8Array([0]), uaPublic, asPublic);
-  const ikm = await hkdfExpand(ikmPre, keyInfo, 32);
-  const prk = await hmacSha256(salt, ikm);
-  const cek = await hkdfExpand(prk, concatBytes(textBytes("Content-Encoding: aes128gcm"), new Uint8Array([0])), 16);
-  const nonce = await hkdfExpand(prk, concatBytes(textBytes("Content-Encoding: nonce"), new Uint8Array([0])), 12);
-
-  const payload = textBytes(payloadText);
-  const record = concatBytes(payload, new Uint8Array([2]));
-  const aesKey = await crypto.subtle.importKey("raw", cek, { name: "AES-GCM" }, false, ["encrypt"]);
-  const ciphertext = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv: nonce, tagLength: 128 }, aesKey, record));
-
-  const rs = 4096;
-  const header = new Uint8Array(16 + 4 + 1 + asPublic.length);
-  header.set(salt, 0);
-  header[16] = (rs >>> 24) & 255;
-  header[17] = (rs >>> 16) & 255;
-  header[18] = (rs >>> 8) & 255;
-  header[19] = rs & 255;
-  header[20] = asPublic.length;
-  header.set(asPublic, 21);
-  return concatBytes(header, ciphertext);
-}
-
-async function hmacSha256(keyBytes, dataBytes) {
-  const key = await crypto.subtle.importKey("raw", keyBytes, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  return new Uint8Array(await crypto.subtle.sign("HMAC", key, dataBytes));
-}
-
-async function hkdfExpand(prk, info, length) {
-  const block = await hmacSha256(prk, concatBytes(info, new Uint8Array([1])));
-  return block.slice(0, length);
-}
-
-function textBytes(s) {
-  return new TextEncoder().encode(String(s || ""));
-}
-
-function concatBytes(...parts) {
-  const total = parts.reduce((n, p) => n + (p ? p.length : 0), 0);
-  const out = new Uint8Array(total);
-  let offset = 0;
-  for (const p of parts) {
-    if (!p) continue;
-    out.set(p, offset);
-    offset += p.length;
+function resolveExpiresAt(options, now) {
+  if (!options || typeof options !== "object") return null;
+  if (options.expiration != null) {
+    const n = Number(options.expiration);
+    return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
   }
-  return out;
+  if (options.expirationTtl != null) {
+    const ttl = Number(options.expirationTtl);
+    return Number.isFinite(ttl) && ttl > 0 ? now + Math.floor(ttl) : null;
+  }
+  return null;
 }
 
-async function createVapidJWT(env, audience) {
-  const header = { typ: "JWT", alg: "ES256" };
-  const payload = {
-    aud: audience,
-    exp: Math.floor(Date.now() / 1000) + 12 * 60 * 60,
-    sub: getVapidSubject(env)
-  };
-  const signingInput = base64UrlJson(header) + "." + base64UrlJson(payload);
-  const key = await importVapidPrivateKey(env);
-  const sig = await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, key, new TextEncoder().encode(signingInput));
-  return signingInput + "." + base64UrlEncode(new Uint8Array(sig));
+function normalizeKey(key) {
+  return String(key == null ? "" : key).trim();
 }
 
-async function importVapidPrivateKey(env) {
-  const publicRaw = base64UrlDecode(getVapidPublicKey(env));
-  if (publicRaw.length !== 65 || publicRaw[0] !== 4) throw new Error("invalid VAPID public key");
-  const jwk = {
-    kty: "EC",
-    crv: "P-256",
-    x: base64UrlEncode(publicRaw.slice(1, 33)),
-    y: base64UrlEncode(publicRaw.slice(33, 65)),
-    d: getVapidPrivateKey(env),
-    ext: true
-  };
-  return crypto.subtle.importKey("jwk", jwk, { name: "ECDSA", namedCurve: "P-256" }, false, ["sign"]);
+function unixNow() {
+  return Math.floor(Date.now() / 1000);
 }
 
-function pushKey(phone, endpointHash) {
-  return "push:" + normalizePhone(phone) + ":" + endpointHash;
-}
-
-function normalizePhone(phone) {
-  return String(phone || "").replace(/\D/g, "");
-}
-
-async function shortHash(value) {
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(value || "")));
-  return base64UrlEncode(new Uint8Array(buf)).slice(0, 32);
-}
-
-function base64UrlJson(obj) {
-  return base64UrlEncode(new TextEncoder().encode(JSON.stringify(obj)));
-}
-
-function base64UrlEncode(bytes) {
-  let binary = "";
-  const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-  for (let i = 0; i < arr.length; i++) binary += String.fromCharCode(arr[i]);
-  return btoa(binary).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
-}
-
-function base64UrlDecode(str) {
-  str = String(str || "").replace(/-/g, "+").replace(/_/g, "/");
-  while (str.length % 4) str += "=";
-  const binary = atob(str);
-  const out = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
-  return out;
+function escapeLike(value) {
+  return String(value || "").replace(/[\\%_]/g, ch => "\\" + ch);
 }
