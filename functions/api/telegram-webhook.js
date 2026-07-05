@@ -2079,8 +2079,7 @@ function buildTodayProductionTextFromOrdersV315(orders) {
     });
     if (activeOrders.length > 30) lines.push("⋯ 還有 " + (activeOrders.length - 30) + " 張");
   }
-  return lines.join("
-").trim();
+  return lines.join("\n").trim();
 }
 
 function buildOpenOrdersTextFromOrdersV315(orders) {
@@ -2097,8 +2096,7 @@ function buildOpenOrdersTextFromOrdersV315(orders) {
     });
     if (open.length > 50) lines.push("⋯ 還有 " + (open.length - 50) + " 張");
   }
-  return lines.join("
-").trim();
+  return lines.join("\n").trim();
 }
 
 function buildAllOrdersTextV315(orders) {
@@ -2114,8 +2112,7 @@ function buildAllOrdersTextV315(orders) {
     });
     if (orders.length > 50) lines.push("⋯ 只顯示最近 50 張");
   }
-  return lines.join("
-").trim();
+  return lines.join("\n").trim();
 }
 
 async function autoCancelExpiredOrdersV313(env, options = {}) {
